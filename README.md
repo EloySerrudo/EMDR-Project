@@ -1,4 +1,4 @@
-# emdr
+# EMDR
 
 Do It Yourself EMDR equipment (lightbar, buzzers and headphones). Firmware and controller app. 
 
