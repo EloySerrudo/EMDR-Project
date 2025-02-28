@@ -34,16 +34,16 @@ LED strip.
 
 amount|article|example order link
 ---|----|----
-1|WS2812 LED strip, 1m, 60 LEDs|https://www.amazon.de/gp/product/B01CDTED80
-1|Teensy LC microcontroller|https://www.amazon.de/gp/product/B07CXMMP1T
-1|aluminium profile for led strips|https://www.amazon.de/gp/product/B06XFT5X4T
-2|end caps for led stip profile|https://www.amazon.de/gp/product/B06XGDJPG8
-1|reduceer bushing 1/4" to 3/8"|https://www.amazon.de/gp/product/B01MT77RHN
-1|mini tripod|https://www.amazon.de/gp/product/B001IXSIE8
+1|WS2812 LED strip, 1m, 60 LEDs|https://www.amazon.com/gp/product/B01CDTED80
+1|Teensy LC microcontroller|https://www.amazon.com/gp/product/B07CXMMP1T
+1|aluminium profile for led strips|https://www.amazon.com/gp/product/B06XFT5X4T
+2|end caps for led stip profile|https://www.amazon.com/gp/product/B06XGDJPG8
+1|reduceer bushing 1/4" to 3/8"|https://www.amazon.com/gp/product/B01MT77RHN
+1|mini tripod|https://www.amazon.com/gp/product/B001IXSIE8
 950 mm|square wooden staff 19x19 mm|hardware store
 1|Teensy case|[www.thingiverse.com/thing:2841269](https://www.thingiverse.com/thing:2841269)
 6|countersunk screw 3.0x12 mm|hardware store
-1|micro USB cable 1.8m|https://www.amazon.de/dp/B01GGKYE4U
+1|micro USB cable 1.8m|https://www.amazon.com/dp/B01GGKYE4U
 
 #### Teensy LC replacement
 
