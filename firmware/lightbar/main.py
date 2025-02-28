@@ -8,12 +8,14 @@ ID = 'EMDR Lightbar'
 
 machine = uname().machine
 pin_no = 0
-if machine.startswith('Teensy 4.0'):
+if 'Teensy 4.0' in machine:
     pin_no = 'D1'
-elif machine.startswith('ESP module'):
+elif 'ESP32 module' in machine:
     pin_no = 5
-elif machine.startswith('Raspberry Pi Pico'):
+elif 'Raspberry Pi Pico'  in machine:
     pin_no = 16
+else:
+    raise Exception('Unsupported platform')
 
 np = NeoPixel(Pin(pin_no), NUMLED, bpp=3)
 
