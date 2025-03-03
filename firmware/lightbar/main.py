@@ -3,25 +3,28 @@ from machine import Pin
 from neopixel import NeoPixel
 from time import sleep_ms
 
-NUMLED = 57
+NUMLED = 60 # Number of LEDs. Actually 61, but the last one is not used
 ID = 'EMDR Lightbar'
 
 machine = uname().machine
 pin_no = 0
 if 'Teensy 4.0' in machine:
     pin_no = 'D1'
-elif 'ESP32 module' in machine:
+elif 'ESP module' in machine:
     pin_no = 5
 elif 'Raspberry Pi Pico'  in machine:
     pin_no = 16
+elif 'ESP32 module' in machine:
+    pin_no = 13
 else:
     raise Exception('Unsupported platform')
 
-np = NeoPixel(Pin(pin_no), NUMLED, bpp=3)
+pin = Pin(pin_no, Pin.OUT)
+np = NeoPixel(pin, NUMLED, bpp=3)
 
 def clear():
     np.fill([0] * len(np))
-    
+
 def test():
     global np
     clear()
@@ -65,6 +68,4 @@ def loop():
             print('error')
 
 test()
-loop()
-            
-            
+loop()         

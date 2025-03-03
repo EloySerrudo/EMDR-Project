@@ -22,7 +22,7 @@ class Note(pygame.mixer.Sound):
         return samples
 
 class Devices():
-    led_num = 57
+    led_num = 60
     _buzzer_duration = 100
     pygame.mixer.pre_init(44100, -16, 2, 1024)
     pygame.init()
@@ -62,10 +62,10 @@ class Devices():
                             cls._buzzer = (d, ser)
                         else:
                             ser.close()
-                    except:
+                    except Exception as e:
                         if ser:
                             ser.close()
-                        pass
+                        print(f"Error abriendo puerto serial: {e}")
 
     @classmethod
     def lightbar_plugged_in(cls):
