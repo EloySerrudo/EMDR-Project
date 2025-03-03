@@ -1,3 +1,4 @@
+from time import sleep
 from serial import Serial
 from serial.tools.list_ports import comports
 import pygame
@@ -51,6 +52,7 @@ class Devices():
                     ser = None
                     try:
                         ser = Serial(p.device, baudrate=d['baud'], timeout=0.1)
+                        sleep(2)
                         ser.write(b'i\r\n')
                         ser.flush()
                         if d['echo']:
