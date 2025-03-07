@@ -7,27 +7,14 @@ from math import log
 import time
 
 # Importar componentes convertidos a Qt
-from custom_button import CustomButton
-from container_qt import Container
-from selector_qt_2 import Selector
-from switch_qt import Switch
-from events_qt import event_system
+from pyside6_gui.custom_button_2 import CustomButton
+from pyside6_gui.container_qt_2 import Container
+from pyside6_gui.selector_qt_2 import Selector
+from pyside6_gui.switch_qt import Switch
+from pyside6_gui.events_qt import event_system
 from devices import Devices  # Podemos seguir usando esta clase
 from config import Config    # Podemos seguir usando esta clase
 from hiperf_timer import HighPerfTimer  # Podemos seguir usando esta clase o reemplazarla con QTimer
-
-from PySide6.QtGui import QPalette, QColor
-
-class Color(QWidget):
-    def __init__(self, nuevo_color):
-        super().__init__()
-        # Indicamos que se puede agregar un color de fondo
-        self.setAutoFillBackground(True)
-        paletaColores = self.palette()
-        # Creamos el componente de color de fondo aplicando el nuevo color
-        paletaColores.setColor(QPalette.Window, QColor(nuevo_color))
-        # Aplicamos el nuevo color al componente
-        self.setPalette(paletaColores)
 
 
 class MyQtApp:
@@ -53,7 +40,7 @@ class MyQtApp:
             self._center_window()
         
         # Establecer icono
-        if icon:  # "thorpy" era el valor predeterminado
+        if icon is not None:  # "thorpy" era el valor predeterminado
             self._set_icon(icon)
         
         # Modo de pantalla completa
@@ -100,7 +87,7 @@ class Controller(QMainWindow):
         self.stopping = False
         
         # Crear aplicación Qt usando la app existente si se proporciona
-        self.app = MyQtApp(app=app, size=(480, 320), title="EMDR Controller", icon='imgs/icon.png', 
+        self.app = MyQtApp(app=app, size=(480, 320), title="EMDR Controller", icon='imgs/emdr.png', 
                            flags=1 if fullscreen else 0)  # 1 = pantalla completa
         
         # Configurar ventana principal
@@ -108,18 +95,19 @@ class Controller(QMainWindow):
         self.app.window = self  # La ventana principal es este controlador
         self.resize(*self.app.size)
         self.setWindowTitle(self.app.title)
+        self.setWindowIcon(QIcon('imgs/emdr.png'))
         # Layout Grid
         self.main_layout = QGridLayout()
 
         # Crear QStackedLayout
         self.stacked_layout = QStackedLayout()
+        # Diccionario de áreas para el QStackedLayout
+        self.areas = {'speed':0, 'lightbar':1, 'buzzer':2, 'headphone':3}
         # Crear contenedor para el QStackedLayout
         stacked_widget = QWidget()
         stacked_widget.setLayout(self.stacked_layout)
         # Añadir el widget al QGridLayout, posición (1,1), abarcando 3 filas y 3 columnas
         self.main_layout.addWidget(stacked_widget, 1, 1, 3, 3)  # From (1,1) to (3,3)
-        # Seleccionar la página visible inicial (opcional)
-        self.stacked_layout.setCurrentIndex(0)
         
         # Widget central. Creamos un componente generico para poder publicar el layout
         self.central_widget = QWidget()
@@ -131,119 +119,137 @@ class Controller(QMainWindow):
             self.setCursor(Qt.BlankCursor)
         
         # Crear botones principales
-        self.btn_start = self.button(0, 0, 'Play', self.start_click)
-        self.btn_start24 = self.button(1, 0, 'Play24', self.start24_click)
-        self.btn_stop = self.button(2, 0, 'Stop', self.stop_click)
-        self.btn_pause = self.button(3, 0, 'Pause', self.pause_click, togglable=True)
-        self.btn_lightbar = self.button(0, 1, 'Light', self.lightbar_click, togglable=True)
+        self.btn_start = CustomButton('Play', self.start_click)
+        self.btn_start24 = CustomButton('Play24', self.start24_click)
+        self.btn_stop = CustomButton('Stop', self.stop_click)
+        self.btn_pause = CustomButton('Pause', self.pause_click, togglable=True)
+        self.btn_lightbar = CustomButton('Light', self.lightbar_click, togglable=True)
         self.btn_lightbar.setActive(False)
-        self.btn_buzzer = self.button(0, 2, 'Buzzer', self.buzzer_click, togglable=True)
+        self.btn_buzzer = CustomButton('Buzzer', self.buzzer_click, togglable=True)
         self.btn_buzzer.setActive(False)
-        self.btn_headphone = self.button(0, 3, 'Sound', self.headphone_click, togglable=True)
+        self.btn_headphone = CustomButton('Sound', self.headphone_click, togglable=True)
         
-        # # Área de velocidad
-        self.stacked_layout.addWidget(Color('red')) # Index 0
-        # self.sel_counter = Selector(2, 1, 'Counter', None, '{0:d}', None, None, parent=self)
-        # self.sel_counter.set_value(0)
-        # self.btn_speed_plus = self.button(3, 2, '+')
-        # self.btn_speed_minus = self.button(1, 2, '-')
-        # self.sel_speed = Selector(2, 2, 'Speed.', Config.speeds, '{0:d}/min', 
-        #                          self.btn_speed_plus, self.btn_speed_minus, 
-        #                          self.update_speed, parent=self)
+        # Posicionar botones principales: Columna,Fila
+        self.layout_position(0, 0, self.btn_start, self.main_layout)
+        self.layout_position(1, 0, self.btn_start24, self.main_layout)
+        self.layout_position(2, 0, self.btn_stop, self.main_layout)
+        self.layout_position(3, 0, self.btn_pause, self.main_layout)
+        self.layout_position(0, 1, self.btn_lightbar, self.main_layout)
+        self.layout_position(0, 2, self.btn_buzzer, self.main_layout)
+        self.layout_position(0, 3, self.btn_headphone, self.main_layout)
         
-        # self.box_speed = Container(elements=[
-        #     self.sel_counter,
-        #     self.btn_speed_plus,
-        #     self.sel_speed,
-        #     self.btn_speed_minus
-        # ], parent=self)
+        # Área de velocidad
+        self.sel_counter = Selector('Counter', None, '{0:d}', None, None, parent=self)
+        self.sel_counter.set_value(0)
+        self.btn_speed_plus = CustomButton('+')
+        self.btn_speed_minus = CustomButton('-')
+        self.sel_speed = Selector('Speed.', Config.speeds, '{0:d}/min', 
+                                 self.btn_speed_plus, self.btn_speed_minus, 
+                                 self.update_speed, parent=self)
         
-        # # Área de barra de luz
-        self.stacked_layout.addWidget(Color('yellow')) # Index 1
-        # self.btn_light_on = self.button(1, 1, 'On', togglable=True)
-        # self.btn_light_off = self.button(2, 1, 'Off', togglable=True)
-        # self.switch_light = Switch(self.btn_light_on, self.btn_light_off, self.update_light)
-        # self.btn_light_test = self.button(3, 1, 'Test', self.light_test_click, togglable=True)
+        # Este es el equivalente de: self.box_speed = Container(elements=[])
+        self.speed_layout = QGridLayout()
+        self.layout_position(1, 0, self.sel_counter, self.speed_layout)
+        self.layout_position(0, 1, self.btn_speed_minus, self.speed_layout)
+        self.layout_position(1, 1, self.sel_speed, self.speed_layout)
+        self.layout_position(2, 1, self.btn_speed_plus, self.speed_layout)
+        box_speed = QWidget()
+        box_speed.setLayout(self.speed_layout)
         
-        # self.btn_light_color_plus = self.button(3, 2, '+')
-        # self.btn_light_color_minus = self.button(1, 2, '-')
-        # self.sel_light_color = Selector(2, 2, 'Colour', Config.colors, '{0}', 
-        #                               self.btn_light_color_plus, self.btn_light_color_minus, 
-        #                               self.update_light, cyclic=True, parent=self)
+        self.stacked_layout.addWidget(box_speed) # Index 0
         
-        # self.btn_light_intens_plus = self.button(3, 3, '+')
-        # self.btn_light_intens_minus = self.button(1, 3, '-')
-        # self.sel_light_intens = Selector(2, 3, 'Brightness', Config.intensities, '{0:d}%', 
-        #                                self.btn_light_intens_plus, self.btn_light_intens_minus, 
-        #                                self.update_light, parent=self)
+        # Área de barra de luz
+        self.btn_light_on = CustomButton('On', togglable=True)
+        self.btn_light_off = CustomButton('Off', togglable=True)
+        self.switch_light = Switch(self.btn_light_on, self.btn_light_off, self.update_light)
+        self.btn_light_test = CustomButton('Test', self.light_test_click, togglable=True)
         
-        # self.box_lightbar = Container(elements=[
-        #     self.btn_light_on,
-        #     self.btn_light_off,
-        #     self.btn_light_test,
-        #     self.btn_light_color_plus,
-        #     self.sel_light_color,
-        #     self.btn_light_color_minus,
-        #     self.btn_light_intens_plus,
-        #     self.sel_light_intens,
-        #     self.btn_light_intens_minus
-        # ], parent=self)
+        self.btn_light_color_plus = CustomButton('+')
+        self.btn_light_color_minus = CustomButton('-')
+        self.sel_light_color = Selector('Colour', Config.colors, '{0}',
+                                        self.btn_light_color_plus, self.btn_light_color_minus,
+                                        self.update_light, cyclic=True, parent=self)
         
-        # # Área de buzzer - Continuar con el resto de la interfaz
-        self.stacked_layout.addWidget(Color('green')) # Index 2
-        # self.btn_buzzer_on = self.button(1, 1, 'On', togglable=True)
-        # self.btn_buzzer_off = self.button(2, 1, 'Off', togglable=True)
-        # self.switch_buzzer = Switch(self.btn_buzzer_on, self.btn_buzzer_off, self.update_buzzer)
-        # self.btn_buzzer_test = self.button(3, 1, 'Test', self.buzzer_test_click)
+        self.btn_light_intens_plus = CustomButton('+')
+        self.btn_light_intens_minus = CustomButton('-')
+        self.sel_light_intens = Selector('Brightness', Config.intensities, '{0:d}%',
+                                         self.btn_light_intens_plus, self.btn_light_intens_minus,
+                                         self.update_light, parent=self)
         
-        # self.btn_buzzer_duration_plus = self.button(3, 2, '+')
-        # self.btn_buzzer_duration_minus = self.button(1, 2, '-')
-        # self.sel_buzzer_duration = Selector(2, 2, 'Duration', Config.durations, '{0:d} ms', 
-        #                                   self.btn_buzzer_duration_plus, self.btn_buzzer_duration_minus, 
-        #                                   self.update_buzzer, parent=self)
+        self.lightbar_layout = QGridLayout()
+        self.layout_position(0, 0, self.btn_light_on, self.lightbar_layout)
+        self.layout_position(1, 0, self.btn_light_off, self.lightbar_layout)
+        self.layout_position(2, 0, self.btn_light_test, self.lightbar_layout)
+        self.layout_position(0, 1, self.btn_light_color_minus, self.lightbar_layout)
+        self.layout_position(1, 1, self.sel_light_color, self.lightbar_layout)
+        self.layout_position(2, 1, self.btn_light_color_plus, self.lightbar_layout)
+        self.layout_position(0, 2, self.btn_light_intens_minus, self.lightbar_layout)
+        self.layout_position(1, 2, self.sel_light_intens, self.lightbar_layout)
+        self.layout_position(2, 2, self.btn_light_intens_plus, self.lightbar_layout)
+        box_lightbar = QWidget()
+        box_lightbar.setLayout(self.lightbar_layout)
         
-        # self.box_buzzer = Container(elements=[
-        #     self.btn_buzzer_on,
-        #     self.btn_buzzer_off,
-        #     self.btn_buzzer_test,
-        #     self.btn_buzzer_duration_plus,
-        #     self.sel_buzzer_duration,
-        #     self.btn_buzzer_duration_minus
-        # ], parent=self)
+        self.stacked_layout.addWidget(box_lightbar) # Index 1
         
-        # # Área de auriculares
-        self.stacked_layout.addWidget(Color('blue')) # Index 3
-        # self.btn_headphone_on = self.button(1, 1, 'On', togglable=True)
-        # self.btn_headphone_off = self.button(2, 1, 'Off', togglable=True)
-        # self.switch_headphone = Switch(self.btn_headphone_on, self.btn_headphone_off, self.update_sound)
-        # self.btn_headphone_test = self.button(3, 1, 'Test', self.headphone_test_click)
+        # Área de buzzer - Continuar con el resto de la interfaz
+        self.btn_buzzer_on = CustomButton('On', togglable=True)
+        self.btn_buzzer_off = CustomButton('Off', togglable=True)
+        self.switch_buzzer = Switch(self.btn_buzzer_on, self.btn_buzzer_off, self.update_buzzer)
+        self.btn_buzzer_test = CustomButton('Test', self.buzzer_test_click)
         
-        # self.btn_headphone_volume_plus = self.button(3, 2, '+')
-        # self.btn_headphone_volume_minus = self.button(1, 2, '-')
-        # self.sel_headphone_volume = Selector(2, 2, 'Volume', Config.volumes, '{0:d}%', 
-        #                                    self.btn_headphone_volume_plus, self.btn_headphone_volume_minus, 
-        #                                    self.update_sound, parent=self)
+        self.btn_buzzer_duration_plus = CustomButton('+')
+        self.btn_buzzer_duration_minus = CustomButton('-')
+        self.sel_buzzer_duration = Selector('Duration', Config.durations, '{0:d} ms', 
+                                           self.btn_buzzer_duration_plus, self.btn_buzzer_duration_minus, 
+                                           self.update_buzzer, parent=self)
         
-        # self.btn_headphone_tone_plus = self.button(3, 3, '+')
-        # self.btn_headphone_tone_minus = self.button(1, 3, '-')
-        # self.sel_headphone_tone = Selector(2, 3, 'Sound', Config.tones, '{0}', 
-        #                                  self.btn_headphone_tone_plus, self.btn_headphone_tone_minus, 
-        #                                  self.update_sound, cyclic=True, parent=self)
+        self.buzzer_layout = QGridLayout()
+        self.layout_position(0, 0, self.btn_buzzer_on, self.buzzer_layout)
+        self.layout_position(1, 0, self.btn_buzzer_off, self.buzzer_layout)
+        self.layout_position(2, 0, self.btn_buzzer_test, self.buzzer_layout)
+        self.layout_position(0, 1, self.btn_buzzer_duration_minus, self.buzzer_layout)
+        self.layout_position(1, 1, self.sel_buzzer_duration, self.buzzer_layout)
+        self.layout_position(2, 1, self.btn_buzzer_duration_plus, self.buzzer_layout)
+        box_buzzer = QWidget()
+        box_buzzer.setLayout(self.buzzer_layout)
         
-        # self.box_headphone = Container(elements=[
-        #     self.btn_headphone_on,
-        #     self.btn_headphone_off,
-        #     self.btn_headphone_test,
-        #     self.btn_headphone_volume_plus,
-        #     self.sel_headphone_volume,
-        #     self.btn_headphone_volume_minus,
-        #     self.btn_headphone_tone_plus,
-        #     self.sel_headphone_tone,
-        #     self.btn_headphone_tone_minus
-        # ], parent=self)
+        self.stacked_layout.addWidget(box_buzzer) # Index 2
+        
+        # Área de auriculares
+        self.btn_headphone_on = CustomButton('On', togglable=True)
+        self.btn_headphone_off = CustomButton('Off', togglable=True)
+        self.switch_headphone = Switch(self.btn_headphone_on, self.btn_headphone_off, self.update_sound)
+        self.btn_headphone_test = CustomButton('Test', self.headphone_test_click)
+        
+        self.btn_headphone_volume_plus = CustomButton('+')
+        self.btn_headphone_volume_minus = CustomButton('-')
+        self.sel_headphone_volume = Selector('Volume', Config.volumes, '{0:d}%',
+                                             self.btn_headphone_volume_plus, self.btn_headphone_volume_minus, 
+                                             self.update_sound, parent=self)
+        
+        self.btn_headphone_tone_plus = CustomButton('+')
+        self.btn_headphone_tone_minus = CustomButton('-')
+        self.sel_headphone_tone = Selector('Sound', Config.tones, '{0}',
+                                           self.btn_headphone_tone_plus, self.btn_headphone_tone_minus, 
+                                           self.update_sound, cyclic=True, parent=self)
+        
+        self.headphone_layout = QGridLayout()
+        self.layout_position(0, 0, self.btn_headphone_on, self.headphone_layout)
+        self.layout_position(1, 0, self.btn_headphone_off, self.headphone_layout)
+        self.layout_position(2, 0, self.btn_headphone_test, self.headphone_layout)
+        self.layout_position(0, 1, self.btn_headphone_volume_minus, self.headphone_layout)
+        self.layout_position(1, 1, self.sel_headphone_volume, self.headphone_layout)
+        self.layout_position(2, 1, self.btn_headphone_volume_plus, self.headphone_layout)
+        self.layout_position(0, 2, self.btn_headphone_tone_minus, self.headphone_layout)
+        self.layout_position(1, 2, self.sel_headphone_tone, self.headphone_layout)
+        self.layout_position(2, 2, self.btn_headphone_tone_plus, self.headphone_layout)
+        box_headphone = QWidget()
+        box_headphone.setLayout(self.headphone_layout)
+        
+        self.stacked_layout.addWidget(box_headphone) # Index 3
         
         # Configurar fondo
-        # self.central_widget.setStyleSheet("background-color: white;")
+        self.central_widget.setStyleSheet("background-color: white;")
         
         # Conectar eventos
         self.probe_timer = QTimer(self)
@@ -261,12 +267,9 @@ class Controller(QMainWindow):
         self.deactivate(self.btn_buzzer)
         self.check_usb()
     
-    def button(self, y, x, title, callback=None, togglable=False):
-        """Crea un botón personalizado con imagen"""
-        btn = CustomButton(title, callback, togglable, self)
-        self.main_layout.addWidget(btn, x, y)
-        
-        return btn
+    def layout_position(self, y, x, widget, layout):
+        """Posiciona el widget en un layout determinado"""
+        layout.addWidget(widget, x, y)
     
     def activate(self, elem):
         """Activa un elemento de la UI"""
@@ -355,20 +358,7 @@ class Controller(QMainWindow):
     
     def set_area(self, area):
         """Cambia el área visible"""
-        # self.box_speed.set_visible(area == 'speed')
-        # self.box_lightbar.set_visible(area == 'lightbar')
-        # self.box_buzzer.set_visible(area == 'buzzer')
-        # self.box_headphone.set_visible(area == 'headphone')
-        
-        if area == 'speed':
-            self.stacked_layout.setCurrentIndex(0)
-        elif area == 'lightbar':
-            self.stacked_layout.setCurrentIndex(1)
-        elif area == 'buzzer':
-            self.stacked_layout.setCurrentIndex(2)
-        elif area == 'headphone':
-            self.stacked_layout.setCurrentIndex(3)
-        
+        self.stacked_layout.setCurrentIndex(self.areas[area])
         
         # Gestionar botones togglables
         if self.btn_lightbar.isChecked() and area != 'lightbar':
@@ -539,7 +529,7 @@ class Controller(QMainWindow):
         self.led_pos = int(Devices.led_num / 2) + 1  # start in the middle
         self.direction = -1
         self.decay = False
-        # Devices.set_led(self.led_pos if self.switch_light.get_value() else 0) <------EDITADO
+        Devices.set_led(self.led_pos if self.switch_light.get_value() else 0)
 
     def action(self):
         """Maneja un paso en la secuencia EMDR"""
@@ -605,7 +595,7 @@ if __name__ == "__main__":
     
     controller = Controller(app=app, fullscreen=fullscreen, touchscreen=touchscreen)
     controller.load_config()
-    # controller.set_area('speed')
+    controller.set_area('speed')
     controller.show()
     
     sys.exit(app.exec())

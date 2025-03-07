@@ -5,6 +5,7 @@ import os
 
 class CustomButton(QPushButton):
     def __init__(self, title, callback=None, togglable=False, parent=None):
+        """Crea un botón personalizado con imagen"""
         super().__init__(parent)
         self.title = title
         self.active = True
