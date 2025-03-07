@@ -6,15 +6,20 @@ ID = 'EMDR Buzzer'
 
 machine = uname().machine
 pin_no = 0
-if machine.startswith('Teensy 4.0'):
+if 'Teensy 4.0' in machine:
     pin_no_left = 'D23'
     pin_no_right = 'D22'
-elif machine.startswith('ESP module'):
+elif 'ESP module' in machine:
     pin_no_left = 12  
     pin_no_right = 14
-elif machine.startswith('Raspberry Pi Pico'):
+elif 'Raspberry Pi Pico' in machine:
     pin_no_left = 19
     pin_no_right = 18
+elif 'ESP32 module' in machine:
+    pin_no_left = 25 
+    pin_no_right = 26
+else:
+    raise Exception('Unsupported platform')
     
 pin_left = Pin(pin_no_left, Pin.OUT)
 pin_right = Pin(pin_no_right, Pin.OUT)
