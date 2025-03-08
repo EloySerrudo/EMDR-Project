@@ -1,17 +1,12 @@
 import sys
 from PySide6.QtWidgets import QMainWindow, QWidget, QGridLayout, QApplication, QStackedLayout
-from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon
-import os
-from math import log
+from numpy import log
 import time
 
 # Importar componentes convertidos a Qt
-from pyside6_gui.custom_button_2 import CustomButton
-from pyside6_gui.container_qt_2 import Container
-from pyside6_gui.selector_qt_2 import Selector
-from pyside6_gui.switch_qt import Switch
-from pyside6_gui.events_qt import event_system
+from components import Container, Selector, CustomButton, Switch, event_system
 from devices import Devices  # Podemos seguir usando esta clase
 from config import Config    # Podemos seguir usando esta clase
 from hiperf_timer import HighPerfTimer  # Podemos seguir usando esta clase o reemplazarla con QTimer

@@ -40,9 +40,6 @@ class Selector(QWidget):
         self.updater = updater
         self.cyclic = cyclic
         
-        # # Mostrar valor inicial SIN llamar al updater durante la inicialización
-        # self.show_value(call_updater=False)
-        
         # Conectar botones si se proporcionaron
         if btn_plus:
             btn_plus.clicked.connect(self.next_value)
