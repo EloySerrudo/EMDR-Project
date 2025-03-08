@@ -47,16 +47,6 @@ class Devices():
             ser.close()
         cls._buzzer = (None, None)
         
-        # DEBUUGING
-        puertos = comports()
-        print("Puertos disponibles:")
-        for puerto in puertos:
-            print(puerto.device)
-            print(puerto.vid)
-            print(puerto.pid)
-            print("----------------")
-        ###########
-        
         for p in comports():
             for d in DEVICE_CONFIG.values():
                 if (p.vid, p.pid) == (d['vid'], d['pid']):

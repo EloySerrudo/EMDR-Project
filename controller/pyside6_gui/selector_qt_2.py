@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from PySide6.QtCore import Qt
 
 class Selector(QWidget):
-    def __init__(self, title, values, format_str, btn_plus, btn_minus, updater=None, cyclic=False, parent=None):
+    def __init__(self, x, y, title, values, format_str, btn_plus, btn_minus, updater=None, cyclic=False, parent=None):
         super().__init__(parent=parent)
         
         # Crear widgets para reemplazar los elementos thorpy
@@ -26,6 +26,9 @@ class Selector(QWidget):
         
         # Tamaño del widget
         self.setFixedSize(120, 60)
+        # Posición del widget
+        self.pos_x = x
+        self.pos_y = y
         
         # Almacenar datos
         self.updater = None

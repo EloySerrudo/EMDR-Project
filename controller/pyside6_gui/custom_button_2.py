@@ -4,7 +4,7 @@ from PySide6.QtCore import QSize, Qt
 import os
 
 class CustomButton(QPushButton):
-    def __init__(self, title, callback=None, togglable=False, parent=None):
+    def __init__(self, x, y, title, callback=None, togglable=False, parent=None):
         """Crea un botón personalizado con imagen"""
         super().__init__(parent)
         self.title = title
@@ -18,6 +18,8 @@ class CustomButton(QPushButton):
         # Configurar apariencia
         self.setStyleSheet("QPushButton { border: none; background-color: transparent; }")
         self.setFixedSize(100, 60)  # Ajusta según el tamaño de tus imágenes
+        self.pos_x = x
+        self.pos_y = y
         
         # Configurar comportamiento
         self.setCheckable(togglable)
