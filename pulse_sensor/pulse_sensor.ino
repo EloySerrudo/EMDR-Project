@@ -2,7 +2,7 @@
 #include "freertos/task.h"
 
 #define ADC_PIN 36        // GPIO donde está conectado el HW-827
-#define SAMPLE_RATE 100   // Frecuencia de muestreo en Hz
+#define SAMPLE_RATE 256   // Frecuencia de muestreo en Hz (modificado de 100 a 256)
 
 // Variables compartidas entre núcleos
 volatile bool capturing = false;
@@ -11,7 +11,7 @@ TaskHandle_t serialTaskHandle = NULL;
 
 // Tarea para el Core 1: Lectura del ADC y envío por Serial
 void adcTask(void * parameter) {
-  const TickType_t xDelay = 1000 / SAMPLE_RATE / portTICK_PERIOD_MS; // Para 100Hz
+  const TickType_t xDelay = 1000 / SAMPLE_RATE / portTICK_PERIOD_MS; // Para 256Hz
   
   while(1) {
     if (capturing) {
@@ -50,7 +50,7 @@ void serialTask(void * parameter) {
 
 void setup() {
   // Inicializar Serial a 9600 baudios
-  Serial.begin(9600);
+  Serial.begin(115200);
   delay(1000);  // Tiempo para que Serial se estabilice
   
   // Configurar resolución del ADC (12 bits)

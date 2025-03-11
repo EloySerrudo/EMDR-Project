@@ -12,8 +12,8 @@ from collections import deque
 DEFAULT_PORT = 'COM4'  # Cambiar según el puerto que use tu ESP32
 DEFAULT_BAUDRATE = 115200
 BUFFER_SIZE = 512  # Debe coincidir con el BUFFER_SIZE del Arduino
-SAMPLE_RATE = 1000  # Hz (debe coincidir con I2S_SAMPLE_RATE del Arduino)
-DISPLAY_TIME = 10  # Segundos de datos a mostrar en la gráfica
+SAMPLE_RATE = 256  # Hz (debe coincidir con SAMPLE_RATE del Arduino)
+DISPLAY_TIME = 5  # Segundos de datos a mostrar en la gráfica
 
 class PulseMonitor:
     def __init__(self, port=DEFAULT_PORT, baudrate=DEFAULT_BAUDRATE, display_time=DISPLAY_TIME):
@@ -25,11 +25,16 @@ class PulseMonitor:
         
         # Para almacenar los datos
         self.display_size = display_time * SAMPLE_RATE
-        self.times = deque(maxlen=self.display_size)
-        self.values = deque(maxlen=self.display_size)
+        sample_interval = 1.0 / SAMPLE_RATE
+
+        # Inicializar deques con valores cero
+        initial_times = [-display_time + i * sample_interval for i in range(self.display_size)]
+        initial_values = [1700] * self.display_size
+
+        self.times = deque(initial_times, maxlen=self.display_size)
+        self.values = deque(initial_values, maxlen=self.display_size)
         self.start_time = None
-        self.last_timestamp = 0
-        
+        self.last_timestamp = -sample_interval  # Isample_intervaliar Para que la primera muestra sea exactamente en 0        
         # Configuración de la gráfica
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
         self.line, = self.ax.plot([], [], lw=1)
@@ -38,8 +43,8 @@ class PulseMonitor:
         self.ax.set_xlabel('Tiempo (s)')
         self.ax.set_ylabel('Valor ADC')
         self.ax.set_title('Monitor de Pulso Cardiaco en Tiempo Real')
-        self.ax.set_ylim(0, 8191)  # ADC de 12 bits (0-4095)
-        self.ax.set_xlim(0, display_time)
+        self.ax.set_ylim(0, 1500)  # ADC de 12-bits (0-4095)
+        self.ax.set_xlim(-display_time, 0)
         self.ax.grid(True)
         
     def connect(self):
@@ -56,9 +61,9 @@ class PulseMonitor:
         """Iniciar la adquisición de datos"""
         if self.serial and not self.running:
             # Limpiar buffers anteriores
-            self.times.clear()
-            self.values.clear()
-            self.last_timestamp = 0
+            # self.times.clear()
+            # self.values.clear()
+            # self.last_timestamp = -sample_interval
             
             # Enviar comando al ESP32 para iniciar la captura
             self.serial.write(b'S')
@@ -88,8 +93,9 @@ class PulseMonitor:
     def _read_data(self):
         """Función que se ejecuta en un hilo separado para leer datos"""
         sample_interval = 1.0 / SAMPLE_RATE  # Intervalo de tiempo entre muestras
-        
-        while self.running:
+        read_event = threading.Event()
+        while self.running and not read_event.wait(timeout=0.001):
+            # Pequeña pausa para no saturar la CPU
             available = self.serial.in_waiting
             if available >= 2:  # Al menos un valor de 16 bits (2 bytes)
                 # Determinar cuántas muestras completas podemos leer
@@ -99,47 +105,36 @@ class PulseMonitor:
                     # Leer muestras completas
                     data = self.serial.read(samples_to_read * 2)
                     
-                    # Convertir bytes a valores enteros (uint16)
-                    values = []
+                    # Leer y procesar los datos en un solo ciclo
                     for i in range(0, len(data), 2):
                         if i + 1 < len(data):
+                            # Convertir bytes a valor entero (uint16)
                             value = struct.unpack('<H', data[i:i+2])[0]
                             # Ya no necesitamos hacer la operación AND con 0x0FFF 
                             # porque el ESP32 ya envía valores de 12 bits
-                            values.append(value)
-                    
-                    # Agregar valores a las colas con tiempos precisos
-                    for value in values:
-                        # Incrementar el tiempo exactamente según la frecuencia de muestreo
-                        self.last_timestamp += sample_interval
-                        self.times.append(self.last_timestamp)
-                        self.values.append(value)
-            
-            # Pequeña pausa para no saturar la CPU
-            time.sleep(0.01)
-    
+                            
+                            # Incrementar el tiempo exactamente según la frecuencia de muestreo
+                            self.last_timestamp += sample_interval
+                            self.times.append(self.last_timestamp)
+                            self.values.append(value)
+
     def update_plot(self, frame):
         """Actualizar la gráfica (llamada por FuncAnimation)"""
         if len(self.times) > 0:
             # Convertir deques a listas para la graficación
-            x_data = list(self.times)
-            y_data = list(self.values)
+            x_data = np.array(self.times)
+            y_data = np.array(self.values) - 1500
             
             # Actualizar datos de la gráfica
             self.line.set_data(x_data, y_data)
             
-            # Ajustar el eje X para mostrar la ventana de tiempo correcta
-            latest_time = x_data[-1]
-            earliest_time = max(0, latest_time - DISPLAY_TIME)
+            # Obtener el tiempo actual (último punto de datos)
+            current_time = x_data[-1]
             
-            # Establecer límites con un pequeño margen para mejor visualización
-            self.ax.set_xlim(earliest_time, latest_time)
-            
-            # Ajustar límites de Y dinámicamente si es necesario
-            if len(y_data) > 10:  # Asegurar que haya suficientes datos
-                min_val = max(0, min(y_data[-int(self.display_size/2):]) - 100)
-                max_val = min(4095, max(y_data[-int(self.display_size/2):]) + 100)
-                self.ax.set_ylim(min_val, max_val)
+            # Establecer ventana fija de ancho DISPLAY_TIME que se desliza con los datos
+            window_start = current_time - DISPLAY_TIME
+            window_end = current_time
+            self.ax.set_xlim(window_start, window_end)
         
         return self.line,
     
@@ -176,6 +171,7 @@ class PulseMonitor:
         # Limpiar al salir
         self.stop_acquisition()
         if self.serial:
+            print(f"Puerto {self.port} cerrado")
             self.serial.close()
 
 if __name__ == "__main__":
