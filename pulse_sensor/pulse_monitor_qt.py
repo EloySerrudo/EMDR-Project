@@ -57,7 +57,6 @@ class PulseMonitorQt(QMainWindow):
         
         # Create plot widget
         self.plot_widget = pg.PlotWidget()
-        # self.plot_widget.setBackground('w')  # white background
         self.plot_widget.setLabel('left', 'Valor ADC')
         self.plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.plot_widget.showGrid(x=True, y=True)
