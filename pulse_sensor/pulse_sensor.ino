@@ -12,11 +12,11 @@ TaskHandle_t serialTaskHandle = NULL;
 // Tarea para el Core 1: Lectura del ADC y envío por Serial
 void adcTask(void * parameter) {
   const TickType_t xDelay = 1000 / SAMPLE_RATE / portTICK_PERIOD_MS; // Para 256Hz
-  
+  uint16_t adc_value = 0;
   while(1) {
     if (capturing) {
       // Leer valor del ADC
-      uint16_t adc_value = analogRead(ADC_PIN);
+      adc_value = analogRead(ADC_PIN);
       
       // Enviar los 2 bytes del valor leído
       Serial.write((uint8_t*)&adc_value, 2);
@@ -44,7 +44,7 @@ void serialTask(void * parameter) {
     }
     
     // Pequeña espera para no saturar la CPU
-    vTaskDelay(20 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
 

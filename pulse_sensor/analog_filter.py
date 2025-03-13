@@ -39,12 +39,12 @@ def main(freq=DEFAULT_FREQ, resistor=DEFAULT_RES):
 
 if __name__ == "__main__":
     K = 1E3
-    resistors = [100*K, 150*K, 200*K, 220*K, 240*K, 300*K, 360*K, 470*K, 
-                 510*K, 620*K, 680*K, 750*K, 820*K, 910*K]
-    
-    resistors = [100*K, 220*K, 300*K, 470*K, 680*K]
+    # resistors = [100*K, 150*K, 200*K, 220*K, 240*K, 300*K, 360*K, 470*K, 
+    #              510*K, 620*K, 680*K, 750*K, 820*K, 910*K]
     # resistors = [100*K]
-    
+    # resistors = [100*K, 220*K, 300*K, 470*K, 680*K]
+    resistors = [220*K, 300*K]
+
     freq = 30.0
     for resistor in resistors:
         main(freq=freq, resistor=resistor)

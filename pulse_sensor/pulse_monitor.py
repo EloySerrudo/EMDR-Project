@@ -9,7 +9,7 @@ import argparse
 from collections import deque
 
 # Configuración por defecto
-DEFAULT_PORT = 'COM4'  # Cambiar según el puerto que use tu ESP32
+DEFAULT_PORT = 'COM6'  # Cambiar según el puerto que use tu ESP32. En la laptop es COM6, en la PC es COM4
 DEFAULT_BAUDRATE = 115200
 BUFFER_SIZE = 512  # Debe coincidir con el BUFFER_SIZE del Arduino
 SAMPLE_RATE = 256  # Hz (debe coincidir con SAMPLE_RATE del Arduino)
