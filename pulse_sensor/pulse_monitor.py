@@ -29,7 +29,7 @@ class PulseMonitor:
 
         # Inicializar deques con valores cero
         initial_times = [-display_time + i * sample_interval for i in range(self.display_size)]
-        initial_values = [1700] * self.display_size
+        initial_values = [1922] * self.display_size
 
         self.times = deque(initial_times, maxlen=self.display_size)
         self.values = deque(initial_values, maxlen=self.display_size)
@@ -43,7 +43,7 @@ class PulseMonitor:
         self.ax.set_xlabel('Tiempo (s)')
         self.ax.set_ylabel('Valor ADC')
         self.ax.set_title('Monitor de Pulso Cardiaco en Tiempo Real')
-        self.ax.set_ylim(0, 1500)  # ADC de 12-bits (0-4095)
+        self.ax.set_ylim(-1000, 1000)  # ADC de 12-bits (0-4095)
         self.ax.set_xlim(-display_time, 0)
         self.ax.grid(True)
         
@@ -123,7 +123,7 @@ class PulseMonitor:
         if len(self.times) > 0:
             # Convertir deques a listas para la graficación
             x_data = np.array(self.times)
-            y_data = np.array(self.values) - 1500
+            y_data = np.array(self.values) - 1922
             
             # Actualizar datos de la gráfica
             self.line.set_data(x_data, y_data)
