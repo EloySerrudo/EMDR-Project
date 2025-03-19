@@ -36,7 +36,7 @@ class PulseMonitorQt(QMainWindow):
         
         # Initialize deques with zeros
         initial_times = [-display_time + i * self.sample_interval for i in range(self.display_size)]
-        initial_values = [1700] * self.display_size
+        initial_values = [1922] * self.display_size
         
         self.times = deque(initial_times, maxlen=self.display_size)
         self.values = deque(initial_values, maxlen=self.display_size)
@@ -60,7 +60,7 @@ class PulseMonitorQt(QMainWindow):
         self.plot_widget.setLabel('left', 'Valor ADC')
         self.plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.plot_widget.showGrid(x=True, y=True)
-        self.plot_widget.setYRange(0, 1500)  # ADC de 12-bits (0-4095)
+        self.plot_widget.setYRange(-1000, 1000)  # ADC de 12-bits (0-4095)
         self.plot_widget.setXRange(-display_time, 0)
         
         # Create curve for data
@@ -149,7 +149,7 @@ class PulseMonitorQt(QMainWindow):
         if len(self.times) > 0:
             # Convert deques to numpy arrays for plotting
             x_data = np.array(self.times)
-            y_data = np.array(self.values) - 1500
+            y_data = np.array(self.values) - 1922
             
             # Update plot data
             self.curve.setData(x_data, y_data)
