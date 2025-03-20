@@ -11,8 +11,8 @@ from collections import deque
 # Configuración por defecto
 DEFAULT_PORT = 'COM6'  # Cambiar según el puerto que use tu ESP32. En la laptop es COM6, en la PC es COM4
 DEFAULT_BAUDRATE = 115200
-BUFFER_SIZE = 512  # Debe coincidir con el BUFFER_SIZE del Arduino
-SAMPLE_RATE = 256  # Hz (debe coincidir con SAMPLE_RATE del Arduino)
+BUFFER_SIZE = 512  # Máximo número de muestras a leer de una vez, para control de flujo de datos
+SAMPLE_RATE = 250  # Hz (actualizado para coincidir con SAMPLE_RATE del Arduino = 250Hz)
 DISPLAY_TIME = 5  # Segundos de datos a mostrar en la gráfica
 
 class PulseMonitor:
@@ -29,21 +29,23 @@ class PulseMonitor:
 
         # Inicializar deques con valores cero
         initial_times = [-display_time + i * sample_interval for i in range(self.display_size)]
-        initial_values = [1922] * self.display_size
+        initial_values = [0] * self.display_size
 
         self.times = deque(initial_times, maxlen=self.display_size)
         self.values = deque(initial_values, maxlen=self.display_size)
         self.start_time = None
-        self.last_timestamp = -sample_interval  # Isample_intervaliar Para que la primera muestra sea exactamente en 0        
+        self.last_timestamp = -sample_interval  # Inicializar para que la primera muestra sea exactamente en 0        
+        
         # Configuración de la gráfica
         self.fig, self.ax = plt.subplots(figsize=(10, 6))
         self.line, = self.ax.plot([], [], lw=1)
         
         # Configurar ejes y títulos
         self.ax.set_xlabel('Tiempo (s)')
-        self.ax.set_ylabel('Valor ADC')
-        self.ax.set_title('Monitor de Pulso Cardiaco en Tiempo Real')
-        self.ax.set_ylim(-1000, 1000)  # ADC de 12-bits (0-4095)
+        self.ax.set_ylabel('Valor ADS1115')
+        self.ax.set_title('Monitor de Pulso Cardiaco en Tiempo Real (ADS1115)')
+        # Ajuste de límites para el ADS1115 en modo diferencial con GAIN_ONE
+        self.ax.set_ylim(-20000, 20000)  # Ajustado para el rango del ADS1115
         self.ax.set_xlim(-display_time, 0)
         self.ax.grid(True)
         
@@ -108,10 +110,8 @@ class PulseMonitor:
                     # Leer y procesar los datos en un solo ciclo
                     for i in range(0, len(data), 2):
                         if i + 1 < len(data):
-                            # Convertir bytes a valor entero (uint16)
-                            value = struct.unpack('<H', data[i:i+2])[0]
-                            # Ya no necesitamos hacer la operación AND con 0x0FFF 
-                            # porque el ESP32 ya envía valores de 12 bits
+                            # Convertir bytes a valor entero (int16_t porque los datos son diferenciales)
+                            value = struct.unpack('<h', data[i:i+2])[0]
                             
                             # Incrementar el tiempo exactamente según la frecuencia de muestreo
                             self.last_timestamp += sample_interval
@@ -123,7 +123,7 @@ class PulseMonitor:
         if len(self.times) > 0:
             # Convertir deques a listas para la graficación
             x_data = np.array(self.times)
-            y_data = np.array(self.values) - 1922
+            y_data = np.array(self.values)
             
             # Actualizar datos de la gráfica
             self.line.set_data(x_data, y_data)
@@ -135,7 +135,7 @@ class PulseMonitor:
             window_start = current_time - DISPLAY_TIME
             window_end = current_time
             self.ax.set_xlim(window_start, window_end)
-        
+                    
         return self.line,
     
     def run(self):

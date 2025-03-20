@@ -1,22 +1,26 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h>
 
-#define ADC_PIN 36        // GPIO donde está conectado el HW-827
-#define SAMPLE_RATE 256   // Frecuencia de muestreo en Hz (modificado de 100 a 256)
+#define SAMPLE_RATE 250   // Frecuencia de muestreo en Hz (cambiado a 250Hz)
+
+// Objeto ADS1115
+Adafruit_ADS1115 ads;
 
 // Variables compartidas entre núcleos
 volatile bool capturing = false;
 TaskHandle_t adcTaskHandle = NULL;
 TaskHandle_t serialTaskHandle = NULL;
 
-// Tarea para el Core 1: Lectura del ADC y envío por Serial
+// Tarea para el Core 1: Lectura del ADS1115 y envío por Serial
 void adcTask(void * parameter) {
-  const TickType_t xDelay = 1000 / SAMPLE_RATE / portTICK_PERIOD_MS; // Para 256Hz
-  uint16_t adc_value = 0;
+  const TickType_t xDelay = 1000 / SAMPLE_RATE / portTICK_PERIOD_MS; // Para 250Hz
+  int16_t adc_value = 0;
   while(1) {
     if (capturing) {
-      // Leer valor del ADC
-      adc_value = analogRead(ADC_PIN);
+      // Leer valor del ADS1115 en modo diferencial entre canales 0 y 1
+      adc_value = ads.readADC_Differential_0_1();
       
       // Enviar los 2 bytes del valor leído
       Serial.write((uint8_t*)&adc_value, 2);
@@ -49,12 +53,22 @@ void serialTask(void * parameter) {
 }
 
 void setup() {
-  // Inicializar Serial a 9600 baudios
+  // Inicializar Serial a 115200 baudios
   Serial.begin(115200);
   delay(1000);  // Tiempo para que Serial se estabilice
   
-  // Configurar resolución del ADC (12 bits)
-  analogReadResolution(12);
+  // Inicializar I2C para comunicación con el ADS1115
+  Wire.begin();
+  
+  // Inicializar ADS1115
+  if (!ads.begin()) {
+    Serial.println("Error al inicializar el ADS1115!");
+    while (1);
+  }
+  
+  // Configurar el ADS1115
+  ads.setGain(GAIN_ONE);        // Ganancia de 1
+  ads.setDataRate(RATE_ADS1115_475SPS); // 250 muestras por segundo
   
   // Crear tarea para manejar la captura ADC en el Core 1
   xTaskCreatePinnedToCore(
