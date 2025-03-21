@@ -62,12 +62,18 @@ void setup() {
   
   // Inicializar ADS1115
   if (!ads.begin()) {
-    Serial.println("Error al inicializar el ADS1115!");
-    while (1);
+    pinMode(23, OUTPUT);
+    // Si no responde el ADS1115, indicar con led
+    while(1){
+      delay(500);
+      digitalWrite(23, HIGH);
+      delay(500);
+      digitalWrite(23, LOW);
+    }
   }
   
   // Configurar el ADS1115
-  ads.setGain(GAIN_ONE);        // Ganancia de 1
+  ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
   ads.setDataRate(RATE_ADS1115_475SPS); // 250 muestras por segundo
   
   // Crear tarea para manejar la captura ADC en el Core 1

@@ -45,7 +45,7 @@ class PulseMonitor:
         self.ax.set_ylabel('Valor ADS1115')
         self.ax.set_title('Monitor de Pulso Cardiaco en Tiempo Real (ADS1115)')
         # Ajuste de límites para el ADS1115 en modo diferencial con GAIN_ONE
-        self.ax.set_ylim(-20000, 20000)  # Ajustado para el rango del ADS1115
+        self.ax.set_ylim(-30000, 30000)  # Ajustado para el rango del ADS1115
         self.ax.set_xlim(-display_time, 0)
         self.ax.grid(True)
         
