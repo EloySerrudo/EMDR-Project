@@ -19,6 +19,10 @@ BUFFER_SIZE = 512  # Debe coincidir con el BUFFER_SIZE del Arduino
 SAMPLE_RATE = 256  # Hz (debe coincidir con SAMPLE_RATE del Arduino)
 DISPLAY_TIME = 5  # Segundos de datos a mostrar en la gráfica
 
+# Constantes para el protocolo binario
+PACKET_HEADER = 0xAA55  # Debe coincidir con el header en el código Arduino
+PACKET_SIZE = 12        # Tamaño en bytes de cada paquete
+
 class PulseMonitorQt(QMainWindow):
     def __init__(self, port=DEFAULT_PORT, baudrate=DEFAULT_BAUDRATE, display_time=DISPLAY_TIME):
         super().__init__()
@@ -36,12 +40,20 @@ class PulseMonitorQt(QMainWindow):
         
         # Initialize deques with zeros
         initial_times = [-display_time + i * self.sample_interval for i in range(self.display_size)]
-        initial_values = [1922] * self.display_size
+        initial_values = [0] * self.display_size
         
         self.times = deque(initial_times, maxlen=self.display_size)
         self.values = deque(initial_values, maxlen=self.display_size)
-        self.start_time = None
-        self.last_timestamp = -self.sample_interval
+        
+        # Stats tracking
+        self.samples_received = 0
+        self.packets_received = 0
+        self.invalid_packets = 0
+        self.duplicate_packets = 0
+        self.samples_per_second = 0
+        self.last_samples_count = 0
+        self.last_rate_update = time.time()
+        self.last_packet_id = -1  # Para detectar paquetes duplicados
         
         # Setup UI
         self.setup_ui(display_time)
@@ -60,14 +72,19 @@ class PulseMonitorQt(QMainWindow):
         self.plot_widget.setLabel('left', 'Valor ADC')
         self.plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.plot_widget.showGrid(x=True, y=True)
-        self.plot_widget.setYRange(-1000, 1000)  # ADC de 12-bits (0-4095)
+        self.plot_widget.setYRange(-30000, 20000)  # Ajustado para valores ADS1115
         self.plot_widget.setXRange(-display_time, 0)
         
         # Create curve for data
-        self.curve = self.plot_widget.plot(pen=pg.mkPen('b', width=1))
+        self.curve = self.plot_widget.plot(pen=pg.mkPen('b', width=1.5))
+        
+        # Add stats display
+        self.stats_label = QLabel("Esperando datos...")
+        self.stats_label.setStyleSheet("background-color: rgba(255, 255, 200, 180); padding: 5px;")
         
         # Add plot to layout
         layout.addWidget(self.plot_widget)
+        layout.addWidget(self.stats_label)
         
         # Add instructions label
         instructions = QLabel("Controles: Espacio = Iniciar/Detener, Q = Salir")
@@ -84,8 +101,9 @@ class PulseMonitorQt(QMainWindow):
     def connect(self):
         """Connect to serial port"""
         try:
-            self.serial = serial.Serial(self.port, self.baudrate)
+            self.serial = serial.Serial(self.port, self.baudrate, timeout=1)
             print(f"Conectado a {self.port} a {self.baudrate} baudios")
+            self.serial.reset_input_buffer()  # Clear any pending data
             return True
         except serial.SerialException as e:
             print(f"Error al conectar al puerto {self.port}: {e}")
@@ -94,12 +112,28 @@ class PulseMonitorQt(QMainWindow):
     def start_acquisition(self):
         """Start data acquisition"""
         if self.serial and not self.running:
+            # Reset stats
+            self.samples_received = 0
+            self.packets_received = 0
+            self.invalid_packets = 0
+            self.duplicate_packets = 0
+            self.last_samples_count = 0
+            self.last_rate_update = time.time()
+            self.last_packet_id = -1
+
+            # Clear and reset data buffers
+            self.times.clear()
+            self.values.clear()
+            initial_times = [-DISPLAY_TIME + i * self.sample_interval for i in range(self.display_size)]
+            initial_values = [0] * self.display_size
+            self.times.extend(initial_times)
+            self.values.extend(initial_values)
+            
             # Send command to ESP32 to start capture
             self.serial.write(b'S')
             
             # Start capture
             self.running = True
-            self.start_time = time.time()
             
             # Start reading thread
             self.reading_thread = threading.Thread(target=self._read_data)
@@ -117,50 +151,141 @@ class PulseMonitorQt(QMainWindow):
             self.running = False
             if self.reading_thread:
                 self.reading_thread.join(timeout=1.0)
-            print("Adquisición detenida")
+            print(f"Adquisición detenida. Total paquetes: {self.packets_received}")
+
+    def _find_packet_start(self, buffer):
+        """Find the start of a packet in the buffer"""
+        if len(buffer) < 2:
+            return -1
+            
+        for i in range(len(buffer) - 1):
+            # Look for the header byte sequence (Little Endian: 0x55, 0xAA)
+            if buffer[i] == (PACKET_HEADER & 0xFF) and buffer[i + 1] == (PACKET_HEADER >> 8) & 0xFF:
+                return i
+                
+        return -1
 
     def _read_data(self):
-        """Function that runs in a separate thread to read data"""
-        read_event = threading.Event()
-        while self.running and not read_event.wait(timeout=0.001):
-            # Small pause to not saturate CPU
-            available = self.serial.in_waiting
-            if available >= 2:  # At least one 16-bit value (2 bytes)
-                # Determine how many complete samples we can read
-                samples_to_read = min(available // 2, BUFFER_SIZE)
+        """Function that runs in a separate thread to read binary data"""
+        data_buffer = bytearray()
+        
+        while self.running:
+            try:
+                # Read available data
+                available = self.serial.in_waiting
                 
-                if samples_to_read > 0:
-                    # Read complete samples
-                    data = self.serial.read(samples_to_read * 2)
+                if available > 0:
+                    # Read available data
+                    new_data = self.serial.read(min(available, BUFFER_SIZE * PACKET_SIZE))
+                    data_buffer.extend(new_data)
                     
-                    # Read and process data in a single cycle
-                    for i in range(0, len(data), 2):
-                        if i + 1 < len(data):
-                            # Convert bytes to integer value (uint16)
-                            value = struct.unpack('<H', data[i:i+2])[0]
+                    # Process while we have enough data for a complete packet
+                    while len(data_buffer) >= PACKET_SIZE:
+                        # Look for packet start
+                        packet_start = self._find_packet_start(data_buffer)
+                        
+                        if packet_start < 0:
+                            # No valid header found, keep only the last byte
+                            if len(data_buffer) > 1:
+                                data_buffer = data_buffer[-1:]
+                            break
                             
-                            # Increment time exactly according to sample rate
-                            self.last_timestamp += self.sample_interval
-                            self.times.append(self.last_timestamp)
-                            self.values.append(value)
+                        # If packet doesn't start at buffer beginning, discard preceding bytes
+                        if packet_start > 0:
+                            data_buffer = data_buffer[packet_start:]
+                            
+                        # Check if we have a complete packet
+                        if len(data_buffer) < PACKET_SIZE:
+                            break
+                            
+                        # Extract packet data
+                        try:
+                            # Header (2 bytes)
+                            header = struct.unpack('<H', data_buffer[0:2])[0]
+                            
+                            if header == PACKET_HEADER:
+                                # ID (4 bytes)
+                                packet_id = struct.unpack('<I', data_buffer[2:6])[0]
+                                
+                                # Check for duplicate packets
+                                if packet_id <= self.last_packet_id:
+                                    self.duplicate_packets += 1
+                                    # Remove processed packet from buffer and continue
+                                    data_buffer = data_buffer[PACKET_SIZE:]
+                                    continue
+                                
+                                # Update last processed ID
+                                self.last_packet_id = packet_id
+                                
+                                # Timestamp (4 bytes)
+                                timestamp_ms = struct.unpack('<I', data_buffer[6:10])[0]
+                                timestamp_s = timestamp_ms / 1000.0  # Convert to seconds
+                                
+                                # Value (2 bytes)
+                                value = struct.unpack('<h', data_buffer[10:12])[0]
+                                
+                                # Add to deques
+                                self.times.append(timestamp_s)
+                                self.values.append(value)
+                                
+                                # Update counters
+                                self.samples_received += 1
+                                self.packets_received += 1
+                            else:
+                                # Invalid header, discard initial byte and continue
+                                self.invalid_packets += 1
+                                data_buffer = data_buffer[1:]
+                                continue
+                                
+                            # Remove processed packet from buffer
+                            data_buffer = data_buffer[PACKET_SIZE:]
+                        except Exception as e:
+                            print(f"Error processing packet: {e}")
+                            # On error, discard initial byte and continue
+                            data_buffer = data_buffer[1:]
+                
+                # Update stats every second
+                current_time = time.time()
+                if current_time - self.last_rate_update >= 1.0:
+                    elapsed = current_time - self.last_rate_update
+                    new_samples = self.samples_received - self.last_samples_count
+                    self.samples_per_second = int(new_samples / elapsed)
+                    
+                    self.last_samples_count = self.samples_received
+                    self.last_rate_update = current_time
+                
+                # Small pause to not saturate CPU
+                time.sleep(0.001)
+                
+            except Exception as e:
+                print(f"Error reading data: {e}")
+                time.sleep(0.1)  # Longer pause on error
 
     def update_plot(self):
         """Update the plot with new data"""
         if len(self.times) > 0:
             # Convert deques to numpy arrays for plotting
             x_data = np.array(self.times)
-            y_data = np.array(self.values) - 1922
+            y_data = np.array(self.values)
             
             # Update plot data
             self.curve.setData(x_data, y_data)
             
             # Get current time (last data point)
-            current_time = x_data[-1]
+            current_time = x_data[-1] if len(x_data) > 0 else 0
             
             # Set fixed window of width DISPLAY_TIME that slides with data
-            window_start = current_time - DISPLAY_TIME
-            window_end = current_time
-            self.plot_widget.setXRange(window_start, window_end)
+            if len(x_data) > 0 and self.running:
+                window_start = current_time - DISPLAY_TIME
+                window_end = current_time
+                self.plot_widget.setXRange(window_start, window_end)
+            
+            # Update stats label
+            stats_str = (f"Paquetes: {self.packets_received} | "
+                        f"Muestras/s: {self.samples_per_second} | "
+                        f"Inválidos: {self.invalid_packets} | "
+                        f"Duplicados: {self.duplicate_packets}")
+            self.stats_label.setText(stats_str)
     
     def keyPressEvent(self, event):
         """Handle key press events"""

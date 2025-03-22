@@ -8,6 +8,10 @@
 #define SAMPLE_RATE 250  // Frecuencia de muestreo en SPS (muestras por segundo)
 #define BUFFER_SIZE 256  // Tamaño del buffer circular (ajustable)
 
+// Definición de protocolo binario
+#define PACKET_HEADER 0xAA55  // Marker para inicio de paquete
+#define PACKET_SIZE 12        // Tamaño del paquete binario en bytes
+
 // Pin para la interrupción ALERT/RDY del ADS1115
 constexpr int READY_PIN = 32;
 
@@ -61,6 +65,34 @@ void adcTask(void *parameter) {
   }
 }
 
+// Función para enviar un paquete en formato binario
+void sendBinaryPacket(const DataPacket& packet) {
+  uint8_t binaryPacket[PACKET_SIZE];
+  
+  // Header del paquete (2 bytes)
+  binaryPacket[0] = PACKET_HEADER & 0xFF;         // LSB
+  binaryPacket[1] = (PACKET_HEADER >> 8) & 0xFF;  // MSB
+  
+  // ID (4 bytes)
+  binaryPacket[2] = packet.id & 0xFF;
+  binaryPacket[3] = (packet.id >> 8) & 0xFF;
+  binaryPacket[4] = (packet.id >> 16) & 0xFF;
+  binaryPacket[5] = (packet.id >> 24) & 0xFF;
+  
+  // Timestamp (4 bytes)
+  binaryPacket[6] = packet.timestamp & 0xFF;
+  binaryPacket[7] = (packet.timestamp >> 8) & 0xFF;
+  binaryPacket[8] = (packet.timestamp >> 16) & 0xFF;
+  binaryPacket[9] = (packet.timestamp >> 24) & 0xFF;
+  
+  // Valor (2 bytes)
+  binaryPacket[10] = packet.value & 0xFF;
+  binaryPacket[11] = (packet.value >> 8) & 0xFF;
+  
+  // Enviar el paquete completo en una sola operación
+  Serial.write(binaryPacket, PACKET_SIZE);
+}
+
 // Tarea para manejar comunicación serial (Núcleo 1)
 void serialTask(void *parameter) {
   DataPacket packet;
@@ -85,14 +117,8 @@ void serialTask(void *parameter) {
     if (capturing && adcBuffer.available() > 0) {
       // Obtener datos del buffer
       while (adcBuffer.read(&packet)) {
-        // Enviar como JSON para facilitar parseo en el receptor
-        Serial.print("{\"id\":");
-        Serial.print(packet.id);
-        Serial.print(",\"timestamp\":");
-        Serial.print(packet.timestamp);
-        Serial.print(",\"value\":");
-        Serial.print(packet.value);
-        Serial.println("}");
+        // Enviar paquete en formato binario
+        sendBinaryPacket(packet);
       }
     }
 
