@@ -42,7 +42,7 @@ TaskHandle_t adcTaskHandle = NULL;
 TaskHandle_t transmitTaskHandle = NULL;
 
 // MAC Address del ESP32 receptor (MODIFICAR CON LA DIRECCIÓN MAC DE TU RECEPTOR)
-uint8_t receiverMacAddress[] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
+uint8_t receiverMacAddress[] = {0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4};
 
 // Estructura para enviar datos por ESP-NOW (debe coincidir con el receptor)
 typedef struct esp_now_packet {
@@ -58,7 +58,7 @@ volatile bool lastSendStatus = true;
 // Callback cuando se envía un paquete ESP-NOW
 void onSentEspNowData(const uint8_t *mac_addr, esp_now_send_status_t status) {
     lastSendStatus = (status == ESP_NOW_SEND_SUCCESS);
-    digitalWrite(STATUS_LED, lastSendStatus ? HIGH : LOW);  // LED encendido = éxito, apagado = error
+    // digitalWrite(STATUS_LED, lastSendStatus ? HIGH : LOW);  // LED encendido = éxito, apagado = error
 }
 
 // Rutina de servicio de interrupción (ISR)
@@ -68,7 +68,7 @@ void IRAM_ATTR readyISR() {
     portEXIT_CRITICAL_ISR(&dataMux);
 }
 
-// Tarea para leer el ADS1115 (Núcleo 0)
+// Tarea para leer el ADS1115 (Núcleo 1)
 void adcTask(void *parameter) {
     int16_t adcValue = 0;
     uint32_t time = 0;
@@ -94,7 +94,7 @@ void adcTask(void *parameter) {
     }
 }
 
-// Tarea para transmitir datos por ESP-NOW (Núcleo 1)
+// Tarea para transmitir datos por ESP-NOW (Núcleo 0)
 void transmitTask(void *parameter) {
     DataPacket packet;
     esp_now_packet_t espPacket;
@@ -108,11 +108,11 @@ void transmitTask(void *parameter) {
                 capturing = true;
                 // Configurar el ADS1115 en modo de conversión continua en el canal 0
                 ads.setMeasureMode(ADS1115_CONTINUOUS);
-                Serial.println("Captura iniciada");
+                // Serial.println("Captura iniciada");
             } else if (cmd == 'P' || cmd == 'p') {
                 capturing = false;
                 ads.setMeasureMode(ADS1115_SINGLE);
-                Serial.println("Captura detenida");
+                // Serial.println("Captura detenida");
             }
         }
 
@@ -131,16 +131,16 @@ void transmitTask(void *parameter) {
                                                (uint8_t *)&espPacket, 
                                                sizeof(esp_now_packet_t));
                 
-                if (result != ESP_OK) {
-                    digitalWrite(STATUS_LED, LOW);  // Indicar error
-                    // Pequeña pausa antes de reintentar
-                    vTaskDelay(1);
-                }
+                // if (result != ESP_OK) {
+                //     digitalWrite(STATUS_LED, LOW);  // Indicar error
+                //     // Pequeña pausa antes de reintentar
+                //     vTaskDelay(1);
+                // }
             }
         }
 
         // Pequeña espera para no saturar el CPU
-        vTaskDelay(5);
+        vTaskDelay(2);
     }
 }
 
@@ -152,6 +152,36 @@ void setup() {
     // Configurar el LED de estado
     pinMode(STATUS_LED, OUTPUT);
     digitalWrite(STATUS_LED, LOW);
+
+    // Inicializar WiFi en modo STA para ESP-NOW
+    WiFi.mode(WIFI_STA);
+
+    // Inicializar ESP-NOW
+    if (esp_now_init() != ESP_OK) {
+        // Serial.println("Error inicializando ESP-NOW");
+        return;
+    }
+
+    // Registrar callback de envío
+    esp_now_register_send_cb(onSentEspNowData);
+    
+    // Registrar el dispositivo receptor
+    esp_now_peer_info_t peerInfo;
+    memcpy(peerInfo.peer_addr, receiverMacAddress, 6);
+    peerInfo.channel = 0;  
+    peerInfo.encrypt = false;
+    
+    // Agregar peer        
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+        // Serial.println("Error al agregar peer");
+        return;
+    }
+    
+    // Indicar que ESP-NOW está listo
+    espNowConnected = true;
+    digitalWrite(STATUS_LED, HIGH);
+    // Serial.println("ESP-NOW inicializado correctamente");
+    // Serial.println("Dispositivo listo. Envía 'S' para iniciar y 'P' para detener la captura.");
 
     // Inicializar I2C para comunicación con el ADS1115
     Wire.begin(I2C_SDA, I2C_SCL);
@@ -184,50 +214,7 @@ void setup() {
     // Adjuntar la interrupción al pin READY
     attachInterrupt(digitalPinToInterrupt(READY_PIN), readyISR, FALLING);
 
-    // Inicializar WiFi en modo STA para ESP-NOW
-    WiFi.mode(WIFI_STA);
-    
-    // Imprimir MAC Address para configuración
-    Serial.print("MAC Address: ");
-    Serial.println(WiFi.macAddress());
-
-    // Inicializar ESP-NOW
-    if (esp_now_init() != ESP_OK) {
-        Serial.println("Error inicializando ESP-NOW");
-        return;
-    }
-
-    // Registrar callback de envío
-    esp_now_register_send_cb(onSentEspNowData);
-    
-    // Registrar el dispositivo receptor
-    esp_now_peer_info_t peerInfo;
-    memcpy(peerInfo.peer_addr, receiverMacAddress, 6);
-    peerInfo.channel = 0;  
-    peerInfo.encrypt = false;
-    
-    // Agregar peer        
-    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-        Serial.println("Error al agregar peer");
-        return;
-    }
-    
-    // Indicar que ESP-NOW está listo
-    espNowConnected = true;
-    digitalWrite(STATUS_LED, HIGH);
-    Serial.println("ESP-NOW inicializado correctamente");
-    Serial.println("Dispositivo listo. Envía 'S' para iniciar y 'P' para detener la captura.");
-
     // Crear tareas en cada núcleo
-    xTaskCreatePinnedToCore(
-        adcTask,             // Función de tarea
-        "ADC_Task",          // Nombre de tarea
-        4096,                // Tamaño de stack (palabras)
-        NULL,                // Parámetros
-        1,                   // Prioridad
-        &adcTaskHandle,      // Handle de tarea
-        0);                  // Núcleo 0
-
     xTaskCreatePinnedToCore(
         transmitTask,          // Función de tarea
         "Transmit_Task",       // Nombre de tarea
@@ -235,7 +222,16 @@ void setup() {
         NULL,                  // Parámetros
         1,                     // Prioridad
         &transmitTaskHandle,   // Handle de tarea
-        1);                    // Núcleo 1
+        0);                    // Núcleo 0 (donde suele ejecutarse el controlador WiFi)
+
+    xTaskCreatePinnedToCore(
+        adcTask,             // Función de tarea
+        "ADC_Task",          // Nombre de tarea
+        4096,                // Tamaño de stack (palabras)
+        NULL,                // Parámetros
+        1,                   // Prioridad
+        &adcTaskHandle,      // Handle de tarea
+        1);                  // Núcleo 1
 }
 
 void loop() {

@@ -11,8 +11,6 @@
 
 // Variables globales
 bool forwarding = true;       // Indicador de si se reenvían los datos al PC
-uint32_t packetsReceived = 0; // Contador de paquetes recibidos
-uint32_t lastReportTime = 0;  // Tiempo del último reporte de estado
 
 // Estructura para recibir datos por ESP-NOW (debe coincidir con el transmisor)
 typedef struct esp_now_packet {
@@ -34,11 +32,8 @@ void onReceivedEspNowData(const uint8_t *mac_addr, const uint8_t *data, int data
         
         // Verificar header del paquete
         if (packet->header == PACKET_HEADER) {
-            // Incrementar contador de paquetes
-            packetsReceived++;
-            
             // Parpadear LED para indicar recepción
-            digitalWrite(STATUS_LED, HIGH);
+            // digitalWrite(STATUS_LED, HIGH);
             
             // Reenviar datos por serial en formato binario si está habilitado
             if (forwarding) {
@@ -67,7 +62,7 @@ void onReceivedEspNowData(const uint8_t *mac_addr, const uint8_t *data, int data
                 Serial.write(serialPacket, PACKET_SIZE);
             }
             
-            digitalWrite(STATUS_LED, LOW);
+            // digitalWrite(STATUS_LED, LOW);
         }
     }
 }
@@ -81,31 +76,10 @@ void serialTask(void *parameter) {
             
             if (cmd == 'S' || cmd == 's') {
                 forwarding = true;
-                Serial.println("Renvío de datos activado");
+                // Serial.println("Renvío de datos activado");
             } else if (cmd == 'P' || cmd == 'p') {
                 forwarding = false;
-                Serial.println("Renvío de datos desactivado");
-            } else if (cmd == 'I' || cmd == 'i') {
-                // Imprimir información de estado
-                Serial.println("=== Estado del Receptor ===");
-                Serial.print("Paquetes recibidos: ");
-                Serial.println(packetsReceived);
-                Serial.print("Reenvío de datos: ");
-                Serial.println(forwarding ? "Activado" : "Desactivado");
-                Serial.print("Dirección MAC: ");
-                Serial.println(WiFi.macAddress());
-                Serial.println("=========================");
-            }
-        }
-        
-        // Reportar estado cada 5 segundos si hay actividad
-        uint32_t currentTime = millis();
-        if (currentTime - lastReportTime > 5000) {
-            lastReportTime = currentTime;
-            // Solo reportar si ha habido actividad
-            if (packetsReceived > 0) {
-                Serial.print("Paquetes recibidos: ");
-                Serial.println(packetsReceived);
+                // Serial.println("Renvío de datos desactivado");
             }
         }
         
@@ -120,33 +94,21 @@ void setup() {
     delay(1000);
     
     // Configurar el LED de estado
-    pinMode(STATUS_LED, OUTPUT);
-    digitalWrite(STATUS_LED, LOW);
+    // pinMode(STATUS_LED, OUTPUT);
+    // digitalWrite(STATUS_LED, LOW);
     
     // Inicializar WiFi en modo STA para ESP-NOW
     WiFi.mode(WIFI_STA);
     
-    // Imprimir MAC Address para configuración
-    Serial.print("MAC Address del receptor: ");
-    Serial.println(WiFi.macAddress());
-    Serial.println("¡Importante! Configura esta dirección MAC en el dispositivo transmisor.");
-    
     // Inicializar ESP-NOW
     if (esp_now_init() != ESP_OK) {
-        Serial.println("Error inicializando ESP-NOW");
+        // Serial.println("Error inicializando ESP-NOW");
         return;
     }
     
     // Registrar callback para recepción de datos
     esp_now_register_recv_cb(onReceivedEspNowData);
     
-    // Mostrar que está listo
-    Serial.println("Receptor ESP-NOW inicializado correctamente.");
-    Serial.println("Comandos disponibles:");
-    Serial.println("  S - Iniciar reenvío de datos al PC");
-    Serial.println("  P - Detener reenvío de datos al PC");
-    Serial.println("  I - Mostrar información de estado");
-
     // Crear tarea para manejar comandos seriales y reportar estado
     TaskHandle_t serialTaskHandle = NULL;
     xTaskCreatePinnedToCore(
