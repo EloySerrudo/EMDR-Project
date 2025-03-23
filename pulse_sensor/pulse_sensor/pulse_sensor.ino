@@ -41,26 +41,31 @@ CircularBuffer adcBuffer(BUFFER_SIZE);
 TaskHandle_t adcTaskHandle = NULL;
 TaskHandle_t transmitTaskHandle = NULL;
 
-// MAC Address del ESP32 receptor (MODIFICAR CON LA DIRECCIÓN MAC DE TU RECEPTOR)
-uint8_t receiverMacAddress[] = {0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4};
+// REPLACE WITH YOUR RECEIVER MAC Address
+uint8_t broadcastAddress[] = {0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4};
 
-// Estructura para enviar datos por ESP-NOW (debe coincidir con el receptor)
-typedef struct esp_now_packet {
-    uint16_t header;
-    uint32_t id;
-    uint32_t timestamp;
-    int16_t value;
-} esp_now_packet_t;
+// Structure example to send data
+// Must match the receiver structure
+typedef struct struct_message {
+  uint16_t header;
+  uint32_t id;
+  uint32_t timestamp;
+  int16_t value;
+} struct_message;
+
+// Create a struct_message called myData
+struct_message myData;
+
+esp_now_peer_info_t peerInfo;
 
 // Variable para el último estado de envío ESP-NOW
 volatile bool lastSendStatus = true;
 
-// Callback cuando se envía un paquete ESP-NOW
-void onSentEspNowData(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    lastSendStatus = (status == ESP_NOW_SEND_SUCCESS);
-    // digitalWrite(STATUS_LED, lastSendStatus ? HIGH : LOW);  // LED encendido = éxito, apagado = error
+// callback when data is sent
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  lastSendStatus = (status == ESP_NOW_SEND_SUCCESS);
 }
-
+ 
 // Rutina de servicio de interrupción (ISR)
 void IRAM_ATTR readyISR() {
     portENTER_CRITICAL_ISR(&dataMux);
@@ -97,7 +102,6 @@ void adcTask(void *parameter) {
 // Tarea para transmitir datos por ESP-NOW (Núcleo 0)
 void transmitTask(void *parameter) {
     DataPacket packet;
-    esp_now_packet_t espPacket;
 
     while (1) {
         // Procesar comandos seriales
@@ -121,15 +125,15 @@ void transmitTask(void *parameter) {
             // Obtener datos del buffer
             while (adcBuffer.read(&packet)) {
                 // Preparar el paquete ESP-NOW
-                espPacket.header = PACKET_HEADER;
-                espPacket.id = packet.id;
-                espPacket.timestamp = packet.timestamp;
-                espPacket.value = packet.value;
-                
+                myData.header = PACKET_HEADER;
+                myData.id = packet.id;
+                myData.timestamp = packet.timestamp;
+                myData.value = packet.value;
+
                 // Enviar por ESP-NOW
-                esp_err_t result = esp_now_send(receiverMacAddress, 
-                                               (uint8_t *)&espPacket, 
-                                               sizeof(esp_now_packet_t));
+                esp_err_t result = esp_now_send(broadcastAddress, 
+                                                (uint8_t *) &myData, 
+                                                sizeof(myData));
                 
                 // if (result != ESP_OK) {
                 //     digitalWrite(STATUS_LED, LOW);  // Indicar error
@@ -145,43 +149,43 @@ void transmitTask(void *parameter) {
 }
 
 void setup() {
-    // Inicializar Serial a 115200 baudios
-    Serial.begin(115200);
-    delay(1000);
-    
-    // Configurar el LED de estado
-    pinMode(STATUS_LED, OUTPUT);
-    digitalWrite(STATUS_LED, LOW);
+  // Inicializar Serial a 115200 baudios
+  Serial.begin(115200);
+  delay(1000);
+ 
+  // Configurar el LED de estado
+  pinMode(STATUS_LED, OUTPUT);
+  digitalWrite(STATUS_LED, LOW);
 
-    // Inicializar WiFi en modo STA para ESP-NOW
-    WiFi.mode(WIFI_STA);
+  // Inicializar WiFi en modo STA para ESP-NOW
+  WiFi.mode(WIFI_STA);
 
-    // Inicializar ESP-NOW
-    if (esp_now_init() != ESP_OK) {
-        // Serial.println("Error inicializando ESP-NOW");
-        return;
-    }
+  // Init ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
 
-    // Registrar callback de envío
-    esp_now_register_send_cb(onSentEspNowData);
-    
-    // Registrar el dispositivo receptor
-    esp_now_peer_info_t peerInfo;
-    memcpy(peerInfo.peer_addr, receiverMacAddress, 6);
-    peerInfo.channel = 0;  
-    peerInfo.encrypt = false;
-    
-    // Agregar peer        
-    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-        // Serial.println("Error al agregar peer");
-        return;
-    }
-    
-    // Indicar que ESP-NOW está listo
+  // Once ESPNow is successfully Init, we will register for Send CB to
+  // get the status of Trasnmitted packet
+  esp_now_register_send_cb(OnDataSent);
+  
+  // Register peer
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+  
+  // Add peer        
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer");
+    return;
+  }
+
+  // Indicar que ESP-NOW está listo
     espNowConnected = true;
     digitalWrite(STATUS_LED, HIGH);
-    // Serial.println("ESP-NOW inicializado correctamente");
-    // Serial.println("Dispositivo listo. Envía 'S' para iniciar y 'P' para detener la captura.");
+    Serial.println("ESP-NOW inicializado correctamente");
+    Serial.println("Dispositivo listo. Envía 'S' para iniciar y 'P' para detener la captura.");
 
     // Inicializar I2C para comunicación con el ADS1115
     Wire.begin(I2C_SDA, I2C_SCL);
@@ -233,8 +237,8 @@ void setup() {
         &adcTaskHandle,      // Handle de tarea
         1);                  // Núcleo 1
 }
-
+ 
 void loop() {
-    // El loop principal queda vacío ya que todo se maneja en las tareas
-    delay(1000);
+  // El loop principal queda vacío ya que todo se maneja en las tareas
+  delay(1000);
 }
