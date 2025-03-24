@@ -7,8 +7,6 @@
 #include <WiFi.h>
 
 #define I2C_ADDRESS 0x48
-#define I2C_SDA 23
-#define I2C_SCL 19
 
 #define SAMPLE_RATE 250  // Frecuencia de muestreo en SPS (muestras por segundo)
 #define BUFFER_SIZE 256  // Tamaño del buffer circular (ajustable)
@@ -21,7 +19,7 @@
 constexpr int READY_PIN = 32;
 
 // LED para indicar estado de la transmisión ESP-NOW
-constexpr int STATUS_LED = 22;  // LED integrado del ESP32 (puede variar según la placa)
+constexpr int STATUS_LED = 23;  // LED integrado del ESP32 (puede variar según la placa)
 
 // Objeto ADS1115
 ADS1115_WE ads = ADS1115_WE(I2C_ADDRESS);
@@ -42,7 +40,7 @@ TaskHandle_t adcTaskHandle = NULL;
 TaskHandle_t transmitTaskHandle = NULL;
 
 // REPLACE WITH YOUR RECEIVER MAC Address
-uint8_t broadcastAddress[] = {0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4};
+uint8_t broadcastAddress[] = {0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30};
 
 // Structure example to send data
 // Must match the receiver structure
@@ -188,7 +186,7 @@ void setup() {
     Serial.println("Dispositivo listo. Envía 'S' para iniciar y 'P' para detener la captura.");
 
     // Inicializar I2C para comunicación con el ADS1115
-    Wire.begin(I2C_SDA, I2C_SCL);
+    Wire.begin();
 
     // Configurar el pin READY como entrada para la interrupción
     pinMode(READY_PIN, INPUT_PULLUP);
