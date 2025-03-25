@@ -9,7 +9,7 @@ import argparse
 from collections import deque
 
 # Configuración por defecto
-DEFAULT_PORT = 'COM6'  # Cambiar según el puerto que use tu ESP32
+DEFAULT_PORT = 'COM4'  # Cambiar según el puerto que use tu ESP32
 DEFAULT_BAUDRATE = 115200
 BUFFER_SIZE = 512  # Máximo número de muestras a leer de una vez
 SAMPLE_RATE = 250  # Hz (coincide con SAMPLE_RATE del ESP32 = 250Hz)
@@ -61,7 +61,7 @@ class PulseMonitor:
         self.ax1.set_xlabel('Tiempo (s)')
         self.ax1.set_ylabel('Amplitud')
         self.ax1.set_title('Monitor de Señal Cruda ADS1115')
-        self.ax1.set_ylim(-30000, 20000)
+        self.ax1.set_ylim(-30000, 30000)
         self.ax1.set_xlim(-display_time, 0)
         self.ax1.grid(True)
         

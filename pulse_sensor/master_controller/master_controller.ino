@@ -5,9 +5,12 @@
 #include <esp_system.h>
 
 // Configuración de LED y botones
-#define STATUS_LED 2       // LED integrado del ESP32 (puede variar según la placa)
+#define STATUS_LED 18       // LED integrado del ESP32 (puede variar según la placa)
 #define PACKET_HEADER 0xAA55  // Debe coincidir con el header en el transmisor
 #define PACKET_SIZE 12        // Tamaño del paquete binario en bytes
+
+// Información del peer para ESP-NOW
+esp_now_peer_info_t peerInfo;
 
 // Variables globales
 bool forwarding = true;       // Indicador de si se reenvían los datos al PC
@@ -20,8 +23,29 @@ typedef struct esp_now_packet {
     int16_t value;
 } esp_now_packet_t;
 
+// Estructura para enviar comandos a los esclavos
+typedef struct command_packet {
+    uint8_t command;  // 'S': start, 'P': pause
+} command_packet_t;
+
+// Direcciones MAC de los dispositivos esclavos
+uint8_t slaveAddresses[][6] = {
+    {0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4}, // MAC del sensor de pulso
+    // Añadir más dispositivos aquí cuando sea necesario
+};
+
+#define NUM_SLAVES (sizeof(slaveAddresses) / sizeof(slaveAddresses[0]))
+
 // Buffer para reensamblar paquetes para serial
 uint8_t serialPacket[PACKET_SIZE];
+
+// Estado de envío de comandos
+volatile bool lastCommandSent = true;
+
+// Callback que se ejecuta cuando se envía un paquete por ESP-NOW
+void onSentEspNowData(const uint8_t *mac_addr, esp_now_send_status_t status) {
+    lastCommandSent = (status == ESP_NOW_SEND_SUCCESS);
+}
 
 // Callback que se ejecuta cuando se reciben datos por ESP-NOW
 void onReceivedEspNowData(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
@@ -67,6 +91,25 @@ void onReceivedEspNowData(const uint8_t *mac_addr, const uint8_t *data, int data
     }
 }
 
+// Función para enviar comandos a todos los esclavos
+void sendCommandToSlaves(uint8_t cmd) {
+    command_packet_t packet;
+    packet.command = cmd;
+    
+    for (int i = 0; i < NUM_SLAVES; i++) {
+        esp_err_t result = esp_now_send(slaveAddresses[i], (uint8_t *)&packet, sizeof(packet));
+        if (result == ESP_OK) {
+            // Serial.print("Comando ");
+            // Serial.print((char)cmd);
+            // Serial.println(" enviado a esclavo");
+        } else {
+            // Serial.println("Error enviando comando");
+        }
+        // Pequeña pausa entre envíos
+        delay(10);
+    }
+}
+
 // Tarea para manejar comandos y reportar estado
 void serialTask(void *parameter) {
     while (1) {
@@ -76,10 +119,14 @@ void serialTask(void *parameter) {
             
             if (cmd == 'S' || cmd == 's') {
                 forwarding = true;
-                // Serial.println("Renvío de datos activado");
+                // Enviar comando de inicio a los esclavos
+                sendCommandToSlaves('S');
+                // Serial.println("Reenvío de datos activado y comando enviado a esclavos");
             } else if (cmd == 'P' || cmd == 'p') {
                 forwarding = false;
-                // Serial.println("Renvío de datos desactivado");
+                // Enviar comando de pausa a los esclavos
+                sendCommandToSlaves('P');
+                // Serial.println("Reenvío de datos desactivado y comando enviado a esclavos");
             }
         }
         
@@ -94,8 +141,8 @@ void setup() {
     delay(1000);
     
     // Configurar el LED de estado
-    // pinMode(STATUS_LED, OUTPUT);
-    // digitalWrite(STATUS_LED, LOW);
+    pinMode(STATUS_LED, OUTPUT);
+    digitalWrite(STATUS_LED, LOW);
     
     // Inicializar WiFi en modo STA para ESP-NOW
     WiFi.mode(WIFI_STA);
@@ -108,6 +155,27 @@ void setup() {
     
     // Registrar callback para recepción de datos
     esp_now_register_recv_cb(onReceivedEspNowData);
+    // Registrar callback para envío de datos
+    esp_now_register_send_cb(onSentEspNowData);
+    
+    // Registrar todos los dispositivos esclavos como peers
+    for (uint8_t i = 0; i < NUM_SLAVES; i++) {
+        memcpy(peerInfo.peer_addr, slaveAddresses[i], 6);
+        peerInfo.channel = 0;
+        peerInfo.encrypt = false;
+        
+        if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+            // Serial.print("Error al registrar esclavo #");
+            // Serial.println(i);
+        } else {
+            // Serial.print("Esclavo #");
+            // Serial.print(i);
+            // Serial.println(" registrado con éxito");
+            digitalWrite(STATUS_LED, HIGH);
+        }
+    }
+
+    // Serial.println("Maestro listo. Envía 'S' para iniciar y 'P' para detener todos los esclavos.");
     
     // Crear tarea para manejar comandos seriales y reportar estado
     TaskHandle_t serialTaskHandle = NULL;

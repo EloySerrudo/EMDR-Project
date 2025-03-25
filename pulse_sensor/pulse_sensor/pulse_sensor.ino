@@ -19,10 +19,16 @@
 constexpr int READY_PIN = 32;
 
 // LED para indicar estado de la transmisión ESP-NOW
-constexpr int STATUS_LED = 23;  // LED integrado del ESP32 (puede variar según la placa)
+constexpr int STATUS_LED = 23;
+
+// LED para indicar error en el ADS1115
+constexpr int ERROR_LED = 19;
 
 // Objeto ADS1115
 ADS1115_WE ads = ADS1115_WE(I2C_ADDRESS);
+
+// Información del peer para ESP-NOW
+esp_now_peer_info_t peerInfo;
 
 // Variables compartidas entre núcleos
 volatile bool capturing = false;
@@ -39,8 +45,8 @@ CircularBuffer adcBuffer(BUFFER_SIZE);
 TaskHandle_t adcTaskHandle = NULL;
 TaskHandle_t transmitTaskHandle = NULL;
 
-// REPLACE WITH YOUR RECEIVER MAC Address
-uint8_t broadcastAddress[] = {0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30};
+// MAC del dispositivo maestro
+uint8_t masterAddress[] = {0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30};  // Reemplazar con la MAC real del maestro
 
 // Structure example to send data
 // Must match the receiver structure
@@ -51,10 +57,13 @@ typedef struct struct_message {
   int16_t value;
 } struct_message;
 
+// Estructura para recibir comandos del maestro
+typedef struct command_packet {
+    uint8_t command;  // 'S': start, 'P': pause
+} command_packet_t;
+
 // Create a struct_message called myData
 struct_message myData;
-
-esp_now_peer_info_t peerInfo;
 
 // Variable para el último estado de envío ESP-NOW
 volatile bool lastSendStatus = true;
@@ -62,6 +71,27 @@ volatile bool lastSendStatus = true;
 // callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   lastSendStatus = (status == ESP_NOW_SEND_SUCCESS);
+}
+
+// callback when data is received from master
+void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
+    // Verificar si los datos recibidos son del maestro
+    if (memcmp(mac_addr, masterAddress, 6) == 0 && data_len == sizeof(command_packet_t)) {
+        command_packet_t *cmd = (command_packet_t*)data;
+        
+        if (cmd->command == 'S' || cmd->command == 's') {
+            Serial.println("Captura iniciada por comando del maestro");
+            capturing = true;
+            // Configurar el ADS1115 en modo de conversión continua
+            ads.setMeasureMode(ADS1115_CONTINUOUS);
+            digitalWrite(STATUS_LED, HIGH);  // Indicar captura activa
+        } else if (cmd->command == 'P' || cmd->command == 'p') {
+            Serial.println("Captura detenida por comando del maestro");
+            capturing = false;
+            ads.setMeasureMode(ADS1115_SINGLE);
+            digitalWrite(STATUS_LED, LOW);  // Indicar captura inactiva
+        }
+    }
 }
  
 // Rutina de servicio de interrupción (ISR)
@@ -102,19 +132,21 @@ void transmitTask(void *parameter) {
     DataPacket packet;
 
     while (1) {
-        // Procesar comandos seriales
+        // Procesar comandos seriales (mantenido para debug y compatibilidad)
         if (Serial.available() > 0) {
             char cmd = Serial.read();
 
             if (cmd == 'S' || cmd == 's') {
+                Serial.println("Captura iniciada localmente");
                 capturing = true;
                 // Configurar el ADS1115 en modo de conversión continua en el canal 0
                 ads.setMeasureMode(ADS1115_CONTINUOUS);
-                // Serial.println("Captura iniciada");
+                digitalWrite(STATUS_LED, HIGH);
             } else if (cmd == 'P' || cmd == 'p') {
+                Serial.println("Captura detenida localmente");
                 capturing = false;
                 ads.setMeasureMode(ADS1115_SINGLE);
-                // Serial.println("Captura detenida");
+                digitalWrite(STATUS_LED, LOW);
             }
         }
 
@@ -128,8 +160,8 @@ void transmitTask(void *parameter) {
                 myData.timestamp = packet.timestamp;
                 myData.value = packet.value;
 
-                // Enviar por ESP-NOW
-                esp_err_t result = esp_now_send(broadcastAddress, 
+                // Enviar por ESP-NOW al maestro
+                esp_err_t result = esp_now_send(masterAddress, 
                                                 (uint8_t *) &myData, 
                                                 sizeof(myData));
                 
@@ -151,9 +183,11 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
  
-  // Configurar el LED de estado
+  // Configurar los LEDs
   pinMode(STATUS_LED, OUTPUT);
+  pinMode(ERROR_LED, OUTPUT);
   digitalWrite(STATUS_LED, LOW);
+  digitalWrite(ERROR_LED, LOW);
 
   // Inicializar WiFi en modo STA para ESP-NOW
   WiFi.mode(WIFI_STA);
@@ -164,76 +198,76 @@ void setup() {
     return;
   }
 
-  // Once ESPNow is successfully Init, we will register for Send CB to
-  // get the status of Trasnmitted packet
+  // Registrar callback para envío y recepción de datos
   esp_now_register_send_cb(OnDataSent);
+  esp_now_register_recv_cb(OnDataReceived);
   
-  // Register peer
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  // Registrar maestro como peer
+  memcpy(peerInfo.peer_addr, masterAddress, 6);
   peerInfo.channel = 0;  
   peerInfo.encrypt = false;
   
   // Add peer        
   if (esp_now_add_peer(&peerInfo) != ESP_OK){
-    Serial.println("Failed to add peer");
+    Serial.println("Failed to add master as peer");
     return;
   }
 
   // Indicar que ESP-NOW está listo
-    espNowConnected = true;
-    digitalWrite(STATUS_LED, HIGH);
-    Serial.println("ESP-NOW inicializado correctamente");
-    Serial.println("Dispositivo listo. Envía 'S' para iniciar y 'P' para detener la captura.");
+  espNowConnected = true;
+  digitalWrite(STATUS_LED, HIGH);
+  delay(500);
+  digitalWrite(STATUS_LED, LOW);
+  Serial.println("ESP-NOW inicializado correctamente");
+  Serial.println("Dispositivo esclavo listo. Esperando comandos del maestro.");
 
-    // Inicializar I2C para comunicación con el ADS1115
-    Wire.begin();
+  // Inicializar I2C para comunicación con el ADS1115
+  Wire.begin();
 
-    // Configurar el pin READY como entrada para la interrupción
-    pinMode(READY_PIN, INPUT_PULLUP);
+  // Configurar el pin READY como entrada para la interrupción
+  pinMode(READY_PIN, INPUT_PULLUP);
 
-    // Inicializar ADS1115
-    if (!ads.init()) {
-        pinMode(18, OUTPUT);
-        // Si no responde el ADS1115, indicar con led
-        while (1) {
-            delay(500);
-            digitalWrite(18, HIGH);
-            delay(500);
-            digitalWrite(18, LOW);
-        }
-    }
-    
-    // Configurar el ADS1115
-    ads.setVoltageRange_mV(ADS1115_RANGE_2048);  // 2x gain   +/- 2.048V  1 bit = 0.0625mV
-    // ADS1115 tiene tasas predefinidas, usamos 250SPS que es lo más cercano a 250Hz
-    ads.setConvRate(ADS1115_16_SPS);
-    
-    ads.setCompareChannels(ADS1115_COMP_0_1);
+  // Inicializar ADS1115
+  if (!ads.init()) {
+      // Si no responde el ADS1115, indicar con led
+      while (1) {
+          delay(500);
+          digitalWrite(ERROR_LED, HIGH);
+          delay(500);
+          digitalWrite(ERROR_LED, LOW);
+      }
+  }
+  
+  // Configurar el ADS1115
+  ads.setVoltageRange_mV(ADS1115_RANGE_2048);  // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+  ads.setConvRate(ADS1115_16_SPS);  // Usar 250SPS para mejor frecuencia de muestreo
+  
+  ads.setCompareChannels(ADS1115_COMP_0_1);
 
-    ads.setAlertPinMode(ADS1115_ASSERT_AFTER_1);
-    ads.setAlertPinToConversionReady();
-    
-    // Adjuntar la interrupción al pin READY
-    attachInterrupt(digitalPinToInterrupt(READY_PIN), readyISR, FALLING);
+  ads.setAlertPinMode(ADS1115_ASSERT_AFTER_1);
+  ads.setAlertPinToConversionReady();
+  
+  // Adjuntar la interrupción al pin READY
+  attachInterrupt(digitalPinToInterrupt(READY_PIN), readyISR, FALLING);
 
-    // Crear tareas en cada núcleo
-    xTaskCreatePinnedToCore(
-        transmitTask,          // Función de tarea
-        "Transmit_Task",       // Nombre de tarea
-        4096,                  // Tamaño de stack (palabras)
-        NULL,                  // Parámetros
-        1,                     // Prioridad
-        &transmitTaskHandle,   // Handle de tarea
-        0);                    // Núcleo 0 (donde suele ejecutarse el controlador WiFi)
+  // Crear tareas en cada núcleo
+  xTaskCreatePinnedToCore(
+      transmitTask,          // Función de tarea
+      "Transmit_Task",       // Nombre de tarea
+      4096,                  // Tamaño de stack (palabras)
+      NULL,                  // Parámetros
+      1,                     // Prioridad
+      &transmitTaskHandle,   // Handle de tarea
+      0);                    // Núcleo 0 (donde suele ejecutarse el controlador WiFi)
 
-    xTaskCreatePinnedToCore(
-        adcTask,             // Función de tarea
-        "ADC_Task",          // Nombre de tarea
-        4096,                // Tamaño de stack (palabras)
-        NULL,                // Parámetros
-        1,                   // Prioridad
-        &adcTaskHandle,      // Handle de tarea
-        1);                  // Núcleo 1
+  xTaskCreatePinnedToCore(
+      adcTask,             // Función de tarea
+      "ADC_Task",          // Nombre de tarea
+      4096,                // Tamaño de stack (palabras)
+      NULL,                // Parámetros
+      1,                   // Prioridad
+      &adcTaskHandle,      // Handle de tarea
+      1);                  // Núcleo 1
 }
  
 void loop() {
