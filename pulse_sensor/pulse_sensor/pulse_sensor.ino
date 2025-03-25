@@ -204,7 +204,7 @@ void setup() {
     }
     
     // Configurar el ADS1115
-    ads.setVoltageRange_mV(ADS1115_RANGE_1024);  // 4x gain   +/- 1.024V  1 bit = 0.03125mV
+    ads.setVoltageRange_mV(ADS1115_RANGE_2048);  // 2x gain   +/- 2.048V  1 bit = 0.0625mV
     // ADS1115 tiene tasas predefinidas, usamos 250SPS que es lo más cercano a 250Hz
     ads.setConvRate(ADS1115_16_SPS);
     
