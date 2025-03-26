@@ -6,6 +6,9 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
+// Identificador único de este dispositivo
+#define DEVICE_ID 1
+
 #define I2C_ADDRESS 0x48
 
 #define SAMPLE_RATE 250  // Frecuencia de muestreo en SPS (muestras por segundo)
@@ -13,7 +16,7 @@
 
 // Definición de protocolo binario
 #define PACKET_HEADER 0xAA55  // Marker para inicio de paquete
-#define PACKET_SIZE 12        // Tamaño del paquete binario en bytes
+#define PACKET_SIZE 13        // Tamaño del paquete binario en bytes. Esta constante es sólo para información, nunca se usa.
 
 // Pin para la interrupción ALERT/RDY del ADS1115
 constexpr int READY_PIN = 32;
@@ -48,19 +51,28 @@ TaskHandle_t transmitTaskHandle = NULL;
 // MAC del dispositivo maestro
 uint8_t masterAddress[] = {0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30};  // Reemplazar con la MAC real del maestro
 
-// Structure example to send data
-// Must match the receiver structure
+// Estructura para enviar los datos de la tarea ADC
+// Debe coincidir con una estructura receptora en el maestro
 typedef struct struct_message {
-  uint16_t header;
-  uint32_t id;
-  uint32_t timestamp;
-  int16_t value;
-} struct_message;
+  uint16_t header;      // 2 bytes
+  uint32_t id;          // 4 bytes
+  uint32_t timestamp;   // 4 bytes
+  int16_t value;        // 2 bytes
+  uint8_t device_id;    // 1 byte
+} struct_message;       // TOTAL: 13 bytes
 
 // Estructura para recibir comandos del maestro
 typedef struct command_packet {
-    uint8_t command;  // 'S': start, 'P': pause
+    uint8_t command;    // 'S': start, 'P': pause, 'C': check connection
+    uint8_t device_id;  // ID del dispositivo (útil para respuestas)
 } command_packet_t;
+
+// Estructura para enviar confirmación al maestro
+typedef struct ack_packet {
+    uint8_t command;    // 'A': acknowledge
+    uint8_t device_id;  // ID del dispositivo que responde
+    uint8_t status;     // Estado del dispositivo
+} ack_packet_t;
 
 // Create a struct_message called myData
 struct_message myData;
@@ -80,16 +92,30 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
         command_packet_t *cmd = (command_packet_t*)data;
         
         if (cmd->command == 'S' || cmd->command == 's') {
-            Serial.println("Captura iniciada por comando del maestro");
             capturing = true;
             // Configurar el ADS1115 en modo de conversión continua
             ads.setMeasureMode(ADS1115_CONTINUOUS);
             digitalWrite(STATUS_LED, HIGH);  // Indicar captura activa
         } else if (cmd->command == 'P' || cmd->command == 'p') {
-            Serial.println("Captura detenida por comando del maestro");
             capturing = false;
             ads.setMeasureMode(ADS1115_SINGLE);
             digitalWrite(STATUS_LED, LOW);  // Indicar captura inactiva
+        } else if (cmd->command == 'C') {
+            // Preparar respuesta
+            ack_packet_t response;
+            response.command = 'A';  // Acknowledge
+            response.device_id = DEVICE_ID;  // Usar el ID definido 
+            response.status = 1;     // 1 = OK
+            
+            // Enviar respuesta al maestro
+            esp_err_t result = esp_now_send(masterAddress, 
+                                          (uint8_t *) &response, 
+                                          sizeof(response));
+            
+            // Parpadear LED para indicar que respondimos
+            digitalWrite(STATUS_LED, HIGH);
+            delay(50);
+            digitalWrite(STATUS_LED, LOW);
         }
     }
 }
@@ -132,24 +158,6 @@ void transmitTask(void *parameter) {
     DataPacket packet;
 
     while (1) {
-        // Procesar comandos seriales (mantenido para debug y compatibilidad)
-        if (Serial.available() > 0) {
-            char cmd = Serial.read();
-
-            if (cmd == 'S' || cmd == 's') {
-                Serial.println("Captura iniciada localmente");
-                capturing = true;
-                // Configurar el ADS1115 en modo de conversión continua en el canal 0
-                ads.setMeasureMode(ADS1115_CONTINUOUS);
-                digitalWrite(STATUS_LED, HIGH);
-            } else if (cmd == 'P' || cmd == 'p') {
-                Serial.println("Captura detenida localmente");
-                capturing = false;
-                ads.setMeasureMode(ADS1115_SINGLE);
-                digitalWrite(STATUS_LED, LOW);
-            }
-        }
-
         // Enviar datos si estamos capturando y tenemos conexión ESP-NOW
         if (capturing && espNowConnected && adcBuffer.available() > 0) {
             // Obtener datos del buffer
@@ -159,17 +167,16 @@ void transmitTask(void *parameter) {
                 myData.id = packet.id;
                 myData.timestamp = packet.timestamp;
                 myData.value = packet.value;
+                myData.device_id = DEVICE_ID;  // Añadir el ID del dispositivo
 
                 // Enviar por ESP-NOW al maestro
                 esp_err_t result = esp_now_send(masterAddress, 
                                                 (uint8_t *) &myData, 
                                                 sizeof(myData));
                 
-                // if (result != ESP_OK) {
-                //     digitalWrite(STATUS_LED, LOW);  // Indicar error
-                //     // Pequeña pausa antes de reintentar
-                //     vTaskDelay(1);
-                // }
+                if (result != ESP_OK) {
+                    
+                }
             }
         }
 
@@ -179,10 +186,6 @@ void transmitTask(void *parameter) {
 }
 
 void setup() {
-  // Inicializar Serial a 115200 baudios
-  Serial.begin(115200);
-  delay(1000);
- 
   // Configurar los LEDs
   pinMode(STATUS_LED, OUTPUT);
   pinMode(ERROR_LED, OUTPUT);
@@ -194,7 +197,6 @@ void setup() {
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
     return;
   }
 
@@ -209,7 +211,6 @@ void setup() {
   
   // Add peer        
   if (esp_now_add_peer(&peerInfo) != ESP_OK){
-    Serial.println("Failed to add master as peer");
     return;
   }
 
@@ -218,9 +219,7 @@ void setup() {
   digitalWrite(STATUS_LED, HIGH);
   delay(500);
   digitalWrite(STATUS_LED, LOW);
-  Serial.println("ESP-NOW inicializado correctamente");
-  Serial.println("Dispositivo esclavo listo. Esperando comandos del maestro.");
-
+  
   // Inicializar I2C para comunicación con el ADS1115
   Wire.begin();
 

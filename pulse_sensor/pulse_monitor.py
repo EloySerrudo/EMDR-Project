@@ -17,7 +17,15 @@ DISPLAY_TIME = 5   # Segundos de datos a mostrar en la gráfica
 
 # Constantes para el protocolo binario
 PACKET_HEADER = 0xAA55  # Debe coincidir con el header en el código Arduino
-PACKET_SIZE = 12        # Tamaño en bytes de cada paquete
+PACKET_SIZE = 13        # Tamaño en bytes de cada paquete (12 original + 1 para device_id)
+
+# Diccionario de esclavos: {ID: (nombre, requerido_para_captura)}
+KNOWN_SLAVES = {
+    1: ("Sensor de pulso", True),  # ID 1: Sensor de pulso (requerido para captura)
+    # Aquí se pueden añadir más esclavos en el futuro
+    # 2: ("Sensor de temperatura", False),  # Ejemplo: ID 2 para un sensor que no es obligatorio
+    # 3: ("Sensor de luz", False),          # Ejemplo: ID 3 para otro sensor opcional
+}
 
 class PulseMonitor:
     def __init__(self, port=DEFAULT_PORT, baudrate=DEFAULT_BAUDRATE, display_time=DISPLAY_TIME):
@@ -66,6 +74,16 @@ class PulseMonitor:
         self.ax1.grid(True)
         
         plt.tight_layout()
+        
+        # Para mostrar dispositivos conectados
+        self.slave_count = 0
+        self.connection_thread = None
+        
+        # Diccionario para mantener estado de conexión por ID
+        self.slave_status = {slave_id: False for slave_id in KNOWN_SLAVES}
+        
+        # Flag para indicar si tenemos los dispositivos requeridos conectados
+        self.required_devices_connected = False
         
     def connect(self):
         """Conectar al puerto serial"""
@@ -133,6 +151,94 @@ class PulseMonitor:
                 
         return -1
 
+    def check_slave_connections(self):
+        """Envía comando para verificar conexiones de esclavos"""
+        if not self.serial:
+            print("No hay conexión serial establecida")
+            return
+            
+        print("Verificando dispositivos conectados...")
+        self.serial.write(b'C')  # Enviar comando para verificar conexiones
+        
+        # Resetear estado de conexión
+        self.slave_status = {slave_id: False for slave_id in KNOWN_SLAVES}
+        self.required_devices_connected = False
+        
+        # Leer respuesta en un hilo separado para no bloquear la interfaz
+        if self.connection_thread is None or not self.connection_thread.is_alive():
+            self.connection_thread = threading.Thread(target=self._read_connection_data)
+            self.connection_thread.daemon = True
+            self.connection_thread.start()
+    
+    def _read_connection_data(self):
+        """Lee datos de conexión en un hilo separado"""
+        # Limpiar buffer antes de leer
+        message_buffer = bytearray()
+        timeout = time.time() + 2.0  # 2 segundos de timeout
+        
+        # Limpiar buffer serial
+        self.serial.reset_input_buffer()
+        
+        while time.time() < timeout:
+            try:
+                if self.serial.in_waiting > 0:
+                    data = self.serial.read(self.serial.in_waiting)
+                    message_buffer.extend(data)
+                    
+                    # Verificar si tenemos suficientes bytes para procesar
+                    if len(message_buffer) >= 3:  # Al menos necesitamos '!', 'C' y slave_count
+                        marker = chr(message_buffer[0])
+                        command = chr(message_buffer[1])
+                        
+                        if marker == '!' and command == 'C':
+                            slave_count = message_buffer[2]
+                            # Verificar si tenemos todos los bytes necesarios
+                            if len(message_buffer) >= 3 + (slave_count * 2):
+                                self.slave_count = slave_count
+                                
+                                # Procesar la información de conexión
+                                for i in range(slave_count):
+                                    device_id = message_buffer[3 + (i * 2)]
+                                    status = message_buffer[4 + (i * 2)] == 1
+                                    
+                                    if device_id in self.slave_status:
+                                        self.slave_status[device_id] = status
+                                
+                                # Mostrar información y salir
+                                self._print_connection_status()
+                                break
+                    
+                time.sleep(0.05)
+            except Exception as e:
+                print(f"Error al leer datos de conexión: {e}")
+                break
+    
+    def _print_connection_status(self):
+        """Muestra en la terminal el estado de los esclavos conectados"""
+        print("\n--- Estado de conexión de esclavos ---")
+        
+        # Verificamos todos los esclavos conocidos
+        for slave_id, (name, required) in KNOWN_SLAVES.items():
+            connected = self.slave_status.get(slave_id, False)
+            status = "CONECTADO" if connected else "DESCONECTADO"
+            req_text = "(Requerido)" if required else "(Opcional)"
+            print(f"Esclavo ID:{slave_id} - {name} {req_text}: {status}")
+        
+        print("-------------------------------------\n")
+        
+        # Verificar si tenemos los dispositivos requeridos
+        self.required_devices_connected = all(
+            self.slave_status.get(slave_id, False) 
+            for slave_id, (_, required) in KNOWN_SLAVES.items() 
+            if required
+        )
+        
+        if self.required_devices_connected:
+            print("Todos los dispositivos requeridos están conectados.\n")
+        else:
+            print("ADVERTENCIA: Uno o más dispositivos requeridos no están conectados.")
+            print("La adquisición de datos está deshabilitada hasta que todos los dispositivos requeridos estén conectados.\n")
+
     def _read_data(self):
         """Función que se ejecuta en un hilo separado para leer datos binarios"""
         data_buffer = bytearray()
@@ -192,6 +298,9 @@ class PulseMonitor:
                                 # Valor (2 bytes)
                                 value = struct.unpack('<h', data_buffer[10:12])[0]
                                 
+                                # Device ID (1 byte)
+                                device_id = data_buffer[12]
+                                
                                 # Añadir a las colas
                                 self.times.append(timestamp_s)
                                 self.values.append(value)
@@ -199,6 +308,9 @@ class PulseMonitor:
                                 # Actualizar contadores
                                 self.samples_received += 1
                                 self.packets_received += 1
+                                
+                                # Actualizar estadísticas con el device_id si es necesario
+                                # Ejemplo: podrías mantener estadísticas por dispositivo
                             else:
                                 # Header inválido, descartar byte inicial y continuar
                                 self.invalid_packets += 1
@@ -269,16 +381,24 @@ class PulseMonitor:
             if event.key == ' ':  # Espacio para iniciar/detener
                 if self.running:
                     self.stop_acquisition()
-                else:
+                elif self.required_devices_connected:
+                    # Iniciar, solo si los dispositivos requeridos están conectados
                     self.start_acquisition()
+                else:
+                    print("\nNo se puede iniciar la adquisición: dispositivos requeridos no conectados.")
+                    print("Use la tecla 'C' para verificar conexiones.\n")
+            elif event.key == 'c':  # C para verificar conexiones
+                if not self.running:  # Solo verificar si no está capturando
+                    self.check_slave_connections()
             elif event.key == 'q':  # Q para salir
                 plt.close()
         
         self.fig.canvas.mpl_connect('key_press_event', on_key)
         
-        # Agregar instrucciones en la figura
+        # Actualizar instrucciones para reflejar el requisito de conexión
         plt.figtext(0.5, 0.01, 
-                   "Controles: Espacio = Iniciar/Detener, Q = Salir", 
+                   "Controles: Espacio = Iniciar/Detener (requiere dispositivos conectados), " +
+                   "C = Verificar Conexiones (solo cuando está detenido), Q = Salir", 
                    ha="center", fontsize=10)
         
         # Mostrar la gráfica

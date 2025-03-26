@@ -7,7 +7,7 @@
 // Configuración de LED y botones
 #define STATUS_LED 18       // LED integrado del ESP32 (puede variar según la placa)
 #define PACKET_HEADER 0xAA55  // Debe coincidir con el header en el transmisor
-#define PACKET_SIZE 12        // Tamaño del paquete binario en bytes
+#define PACKET_SIZE 13        // Tamaño del paquete binario en bytes
 
 // Información del peer para ESP-NOW
 esp_now_peer_info_t peerInfo;
@@ -21,12 +21,21 @@ typedef struct esp_now_packet {
     uint32_t id;
     uint32_t timestamp;
     int16_t value;
+    uint8_t device_id;  // Añadido para identificar el origen del mensaje
 } esp_now_packet_t;
 
 // Estructura para enviar comandos a los esclavos
 typedef struct command_packet {
-    uint8_t command;  // 'S': start, 'P': pause
+    uint8_t command;  // 'S': start, 'P': pause, 'C': check connection
+    uint8_t device_id; // ID del dispositivo (útil para respuestas)
 } command_packet_t;
+
+// Estructura para recibir confirmación de los esclavos
+typedef struct ack_packet {
+    uint8_t command;  // 'A': acknowledge
+    uint8_t device_id; // ID del dispositivo que responde
+    uint8_t status;    // Estado del dispositivo
+} ack_packet_t;
 
 // Direcciones MAC de los dispositivos esclavos
 uint8_t slaveAddresses[][6] = {
@@ -42,6 +51,9 @@ uint8_t serialPacket[PACKET_SIZE];
 // Estado de envío de comandos
 volatile bool lastCommandSent = true;
 
+// Control de estado de los esclavos
+bool slaveConnected[NUM_SLAVES] = {false};
+
 // Callback que se ejecuta cuando se envía un paquete por ESP-NOW
 void onSentEspNowData(const uint8_t *mac_addr, esp_now_send_status_t status) {
     lastCommandSent = (status == ESP_NOW_SEND_SUCCESS);
@@ -56,9 +68,6 @@ void onReceivedEspNowData(const uint8_t *mac_addr, const uint8_t *data, int data
         
         // Verificar header del paquete
         if (packet->header == PACKET_HEADER) {
-            // Parpadear LED para indicar recepción
-            // digitalWrite(STATUS_LED, HIGH);
-            
             // Reenviar datos por serial en formato binario si está habilitado
             if (forwarding) {
                 // Preparar paquete en el formato esperado por la aplicación Python
@@ -82,31 +91,91 @@ void onReceivedEspNowData(const uint8_t *mac_addr, const uint8_t *data, int data
                 serialPacket[10] = packet->value & 0xFF;
                 serialPacket[11] = (packet->value >> 8) & 0xFF;
                 
+                // Añadir device_id (1 byte)
+                serialPacket[12] = packet->device_id;
+                
                 // Enviar el paquete completo en una sola operación
                 Serial.write(serialPacket, PACKET_SIZE);
             }
-            
-            // digitalWrite(STATUS_LED, LOW);
         }
+    }
+    
+    // Verificar si es una confirmación de conexión
+    else if (data_len == sizeof(ack_packet_t)) {
+        ack_packet_t *ackPacket = (ack_packet_t*)data;
+        if (ackPacket->command == 'A') {
+            uint8_t deviceId = ackPacket->device_id;
+            // Buscar índice en slaveAddresses basado en deviceId
+            for (int i = 0; i < NUM_SLAVES; i++) {
+                // Si la MAC coincide o el índice es el mismo que el deviceId-1
+                if (memcmp(mac_addr, slaveAddresses[i], 6) == 0) {
+                    // Marcar el esclavo como conectado
+                    slaveConnected[i] = true;
+                    digitalWrite(STATUS_LED, HIGH);
+                    delay(50);
+                    digitalWrite(STATUS_LED, LOW);
+                    break;
+                }
+            }
+            return;
+        }
+    }
+}
+
+// Función para enviar comando a un esclavo específico
+void sendCommandToSlave(uint8_t slaveIndex, uint8_t cmd) {
+    if (slaveIndex >= NUM_SLAVES) return;
+    
+    command_packet_t packet;
+    packet.command = cmd;
+    packet.device_id = slaveIndex;
+    
+    esp_err_t result = esp_now_send(slaveAddresses[slaveIndex], (uint8_t *)&packet, sizeof(packet));
+    
+    if (result == ESP_OK) {
+        
+    } else {
+        
     }
 }
 
 // Función para enviar comandos a todos los esclavos
 void sendCommandToSlaves(uint8_t cmd) {
-    command_packet_t packet;
-    packet.command = cmd;
+    for (int i = 0; i < NUM_SLAVES; i++) {
+        sendCommandToSlave(i, cmd);
+        delay(10); // Pequeña pausa entre envíos
+    }
+}
+
+// Función para verificar la conexión de todos los esclavos
+void checkSlaveConnections() {
+    // Reiniciar estado de conexión
+    for (int i = 0; i < NUM_SLAVES; i++) {
+        slaveConnected[i] = false;
+    }
+    
+    // Enviar comando de verificación a todos los esclavos
+    for (int i = 0; i < NUM_SLAVES; i++) {
+        sendCommandToSlave(i, 'C');
+        delay(50); // Dar tiempo para respuesta
+    }
+    
+    // Esperar respuestas (las respuestas se procesan en el callback)
+    delay(500);
+    
+    // Calcular cuántos esclavos están conectados
+    uint8_t slaveCount = sizeof(slaveConnected) / sizeof(slaveConnected[0]);
+
+    // Enviar resultado al script Python
+    Serial.write('!'); // Marcador de inicio para mensaje especial
+    Serial.write('C'); // Tipo: Connection status
+    Serial.write(slaveCount); // Número de esclavos
     
     for (int i = 0; i < NUM_SLAVES; i++) {
-        esp_err_t result = esp_now_send(slaveAddresses[i], (uint8_t *)&packet, sizeof(packet));
-        if (result == ESP_OK) {
-            // Serial.print("Comando ");
-            // Serial.print((char)cmd);
-            // Serial.println(" enviado a esclavo");
-        } else {
-            // Serial.println("Error enviando comando");
-        }
-        // Pequeña pausa entre envíos
-        delay(10);
+        // Enviar el ID del dispositivo
+        Serial.write(i + 1);
+        // Enviar estado de cada esclavo
+        Serial.write(slaveConnected[i] ? 1 : 0);
     }
 }
 
@@ -118,15 +187,16 @@ void serialTask(void *parameter) {
             char cmd = Serial.read();
             
             if (cmd == 'S' || cmd == 's') {
+                // Iniciar todos los esclavos
                 forwarding = true;
-                // Enviar comando de inicio a los esclavos
                 sendCommandToSlaves('S');
-                // Serial.println("Reenvío de datos activado y comando enviado a esclavos");
             } else if (cmd == 'P' || cmd == 'p') {
+                // Detener todos los esclavos
                 forwarding = false;
-                // Enviar comando de pausa a los esclavos
                 sendCommandToSlaves('P');
-                // Serial.println("Reenvío de datos desactivado y comando enviado a esclavos");
+            } else if (cmd == 'C' || cmd == 'c') {
+                // Nuevo comando para verificar conexiones
+                checkSlaveConnections();
             }
         }
         
@@ -149,7 +219,6 @@ void setup() {
     
     // Inicializar ESP-NOW
     if (esp_now_init() != ESP_OK) {
-        // Serial.println("Error inicializando ESP-NOW");
         return;
     }
     
@@ -165,18 +234,14 @@ void setup() {
         peerInfo.encrypt = false;
         
         if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-            // Serial.print("Error al registrar esclavo #");
-            // Serial.println(i);
+            
         } else {
-            // Serial.print("Esclavo #");
-            // Serial.print(i);
-            // Serial.println(" registrado con éxito");
             digitalWrite(STATUS_LED, HIGH);
+            delay(500);
+            digitalWrite(STATUS_LED, LOW);
         }
     }
 
-    // Serial.println("Maestro listo. Envía 'S' para iniciar y 'P' para detener todos los esclavos.");
-    
     // Crear tarea para manejar comandos seriales y reportar estado
     TaskHandle_t serialTaskHandle = NULL;
     xTaskCreatePinnedToCore(
