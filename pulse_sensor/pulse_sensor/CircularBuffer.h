@@ -9,7 +9,8 @@
 struct DataPacket {
     uint32_t id;        // Identificador único del dato
     uint32_t timestamp; // Marca de tiempo en milisegundos
-    int16_t value;      // Valor del sensor (ej. ADS1115)
+    int16_t value_0;      // Valor del canal A0 del sensor (ej. ADS1115)
+    int16_t value_1;      // Valor del canal A1 del sensor (ej. ADS1115)
 };
 
 class CircularBuffer {
@@ -26,7 +27,7 @@ public:
     CircularBuffer(uint16_t size);  // Cambiado de int a uint16_t
     ~CircularBuffer();
 
-    bool write(int16_t value, uint32_t time); // Escribir valor con timestamp automático
+    bool write(uint32_t time, int16_t value_0, int16_t value_1); // Escribir valor con timestamp automático
     bool read(DataPacket* packet);     // Leer un paquete completo
     uint16_t available();              // Cantidad de elementos disponibles
 };

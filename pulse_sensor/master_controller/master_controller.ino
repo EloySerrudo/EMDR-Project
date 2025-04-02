@@ -7,7 +7,7 @@
 // Configuración de LED y botones
 #define STATUS_LED 18       // LED integrado del ESP32 (puede variar según la placa)
 #define PACKET_HEADER 0xAA55  // Debe coincidir con el header en el transmisor
-#define PACKET_SIZE 13        // Tamaño del paquete binario en bytes
+#define PACKET_SIZE 15        // Tamaño del paquete binario en bytes
 
 // Información del peer para ESP-NOW
 esp_now_peer_info_t peerInfo;
@@ -20,7 +20,8 @@ typedef struct esp_now_packet {
     uint16_t header;
     uint32_t id;
     uint32_t timestamp;
-    int16_t value;
+    int16_t value_0;
+    int16_t value_1;
     uint8_t device_id;  // Añadido para identificar el origen del mensaje
 } esp_now_packet_t;
 
@@ -87,12 +88,16 @@ void onReceivedEspNowData(const uint8_t *mac_addr, const uint8_t *data, int data
                 serialPacket[8] = (packet->timestamp >> 16) & 0xFF;
                 serialPacket[9] = (packet->timestamp >> 24) & 0xFF;
                 
-                // Valor (2 bytes)
-                serialPacket[10] = packet->value & 0xFF;
-                serialPacket[11] = (packet->value >> 8) & 0xFF;
+                // Valor A0 (2 bytes)
+                serialPacket[10] = packet->value_0 & 0xFF;
+                serialPacket[11] = (packet->value_0 >> 8) & 0xFF;
+                
+                // Valor A1 (2 bytes)
+                serialPacket[12] = packet->value_1 & 0xFF;
+                serialPacket[13] = (packet->value_1 >> 8) & 0xFF;
                 
                 // Añadir device_id (1 byte)
-                serialPacket[12] = packet->device_id;
+                serialPacket[14] = packet->device_id;
                 
                 // Enviar el paquete completo en una sola operación
                 Serial.write(serialPacket, PACKET_SIZE);

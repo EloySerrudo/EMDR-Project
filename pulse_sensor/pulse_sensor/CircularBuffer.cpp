@@ -9,14 +9,15 @@ CircularBuffer::~CircularBuffer() {
     delete[] buffer;
 }
 
-bool CircularBuffer::write(int16_t value, uint32_t time) {
+bool CircularBuffer::write(uint32_t time, int16_t value_0, int16_t value_1) {
     bool overflow = false;
     portENTER_CRITICAL(&mutex);
     
     // Crear un nuevo paquete de datos con ID y timestamp relativo
     buffer[head].id = ID;
     buffer[head].timestamp = time;  // Timestamp relativo al inicio de captura
-    buffer[head].value = value;
+    buffer[head].value_0 = value_0;
+    buffer[head].value_1 = value_1;
     
     // Actualizar índice de escritura
     head = (head + 1) % bufferSize;

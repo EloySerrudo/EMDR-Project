@@ -5,21 +5,19 @@
 #include "CircularBuffer.h"
 #include <esp_now.h>
 #include <WiFi.h>
+#include "esp_timer.h"  // Incluir para el timer
 
 // Identificador único de este dispositivo
 #define DEVICE_ID 1
 
 #define I2C_ADDRESS 0x48
 
-#define SAMPLE_RATE 250  // Frecuencia de muestreo en SPS (muestras por segundo)
+#define SAMPLE_RATE 125  // Frecuencia de muestreo en SPS (muestras por segundo)
 #define BUFFER_SIZE 256  // Tamaño del buffer circular (ajustable)
 
 // Definición de protocolo binario
 #define PACKET_HEADER 0xAA55  // Marker para inicio de paquete
-#define PACKET_SIZE 13        // Tamaño del paquete binario en bytes. Esta constante es sólo para información, nunca se usa.
-
-// Pin para la interrupción ALERT/RDY del ADS1115
-constexpr int READY_PIN = 32;
+#define PACKET_SIZE 15        // Tamaño del paquete binario en bytes. Esta constante es sólo para información, nunca se usa.
 
 // LED para indicar estado de la transmisión ESP-NOW
 constexpr int STATUS_LED = 23;
@@ -30,6 +28,9 @@ constexpr int ERROR_LED = 19;
 // Objeto ADS1115
 ADS1115_WE ads = ADS1115_WE(I2C_ADDRESS);
 
+// Handle para el timer
+esp_timer_handle_t timer_handle;
+
 // Información del peer para ESP-NOW
 esp_now_peer_info_t peerInfo;
 
@@ -37,6 +38,8 @@ esp_now_peer_info_t peerInfo;
 volatile bool capturing = false;
 volatile bool dataReady = false;
 volatile bool espNowConnected = false;
+volatile uint8_t channel = 1;
+volatile uint32_t startTime = 0;
 
 // Semáforo para sincronización entre la ISR y la tarea
 portMUX_TYPE dataMux = portMUX_INITIALIZER_UNLOCKED;
@@ -57,9 +60,10 @@ typedef struct struct_message {
   uint16_t header;      // 2 bytes
   uint32_t id;          // 4 bytes
   uint32_t timestamp;   // 4 bytes
-  int16_t value;        // 2 bytes
+  int16_t value_0;      // 2 bytes
+  int16_t value_1;      // 2 bytes
   uint8_t device_id;    // 1 byte
-} struct_message;       // TOTAL: 13 bytes
+} struct_message;       // TOTAL: 15 bytes
 
 // Estructura para recibir comandos del maestro
 typedef struct command_packet {
@@ -93,13 +97,24 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
         
         if (cmd->command == 'S' || cmd->command == 's') {
             capturing = true;
-            // Configurar el ADS1115 en modo de conversión continua
-            ads.setMeasureMode(ADS1115_CONTINUOUS);
+            ads.setCompareChannels(ADS1115_COMP_0_3);
+            ads.startSingleMeasurement();
             digitalWrite(STATUS_LED, HIGH);  // Indicar captura activa
+            // Iniciar el timer para muestreo periódico cada 4ms (250Hz), 4ms = 4000us
+            if (!esp_timer_is_active(timer_handle)) {
+                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handle, 4000));
+            }
         } else if (cmd->command == 'P' || cmd->command == 'p') {
             capturing = false;
-            ads.setMeasureMode(ADS1115_SINGLE);
+            portENTER_CRITICAL(&dataMux);
+            startTime = 0;  // Reset startTime when ending capture
+            channel = 1;
+            portEXIT_CRITICAL(&dataMux);
             digitalWrite(STATUS_LED, LOW);  // Indicar captura inactiva
+            // Detener el timer
+            if (esp_timer_is_active(timer_handle)) {
+                ESP_ERROR_CHECK(esp_timer_stop(timer_handle));
+            }
         } else if (cmd->command == 'C') {
             // Preparar respuesta
             ack_packet_t response;
@@ -120,8 +135,8 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
     }
 }
  
-// Rutina de servicio de interrupción (ISR)
-void IRAM_ATTR readyISR() {
+// Rutina de servicio de interrupción (ISR) para el timer
+void IRAM_ATTR timerCallback(void *arg) {
     portENTER_CRITICAL_ISR(&dataMux);
     dataReady = true;
     portEXIT_CRITICAL_ISR(&dataMux);
@@ -129,24 +144,31 @@ void IRAM_ATTR readyISR() {
 
 // Tarea para leer el ADS1115 (Núcleo 1)
 void adcTask(void *parameter) {
-    int16_t adcValue = 0;
+    int16_t adcValue_A0 = 0, adcValue_A1 = 0;
     uint32_t time = 0;
-    uint32_t startTime = 0;
     while (1) {
-        // Esperar a que los datos estén listos (indicado por la ISR)
+        // Esperar a que los datos estén listos (indicado por la interrupción del timer)
         if (dataReady && capturing) {
             portENTER_CRITICAL(&dataMux);
             dataReady = false;
+            channel ^= 1;  // Alternar entre canales A0 y A1
             portEXIT_CRITICAL(&dataMux);
 
             // Leer el valor del ADS1115
-            adcValue = ads.getRawResult();
-
-            if (startTime == 0) startTime = millis();
-            time = millis() - startTime;
-
-            // Almacenar en el buffer circular
-            adcBuffer.write(adcValue, time);
+            if (channel == 0) {
+                adcValue_A0 = ads.getRawResult();
+                if (startTime == 0) startTime = millis();
+                time = millis() - startTime;
+                ads.setCompareChannels(ADS1115_COMP_1_3);
+                ads.startSingleMeasurement();
+            } else {
+                adcValue_A1 = ads.getRawResult();
+                // Almacenar en el buffer circular
+                adcBuffer.write(time, adcValue_A0, adcValue_A1);
+                // Cambiar el canal para la próxima lectura
+                ads.setCompareChannels(ADS1115_COMP_0_3);
+                ads.startSingleMeasurement();
+            }
         }
         // Pequeña espera para no saturar el CPU
         vTaskDelay(1);
@@ -166,7 +188,8 @@ void transmitTask(void *parameter) {
                 myData.header = PACKET_HEADER;
                 myData.id = packet.id;
                 myData.timestamp = packet.timestamp;
-                myData.value = packet.value;
+                myData.value_0 = packet.value_0;
+                myData.value_1 = packet.value_1;
                 myData.device_id = DEVICE_ID;  // Añadir el ID del dispositivo
 
                 // Enviar por ESP-NOW al maestro
@@ -191,7 +214,7 @@ void setup() {
   pinMode(ERROR_LED, OUTPUT);
   digitalWrite(STATUS_LED, LOW);
   digitalWrite(ERROR_LED, LOW);
-
+  
   // Inicializar WiFi en modo STA para ESP-NOW
   WiFi.mode(WIFI_STA);
 
@@ -223,9 +246,6 @@ void setup() {
   // Inicializar I2C para comunicación con el ADS1115
   Wire.begin();
 
-  // Configurar el pin READY como entrada para la interrupción
-  pinMode(READY_PIN, INPUT_PULLUP);
-
   // Inicializar ADS1115
   if (!ads.init()) {
       // Si no responde el ADS1115, indicar con led
@@ -239,15 +259,18 @@ void setup() {
   
   // Configurar el ADS1115
   ads.setVoltageRange_mV(ADS1115_RANGE_2048);  // 2x gain   +/- 2.048V  1 bit = 0.0625mV
-  ads.setConvRate(ADS1115_16_SPS);  // Usar 250SPS para mejor frecuencia de muestreo
+  ads.setConvRate(ADS1115_475_SPS);  // Usar 475 SPS (muestras por segundo)
+  ads.setMeasureMode(ADS1115_SINGLE);
   
-  ads.setCompareChannels(ADS1115_COMP_0_1);
-
-  ads.setAlertPinMode(ADS1115_ASSERT_AFTER_1);
-  ads.setAlertPinToConversionReady();
-  
-  // Adjuntar la interrupción al pin READY
-  attachInterrupt(digitalPinToInterrupt(READY_PIN), readyISR, FALLING);
+  // Configurar el timer pero no iniciarlo todavía
+  const esp_timer_create_args_t timer_args = {
+      .callback = &timerCallback,
+      .arg = NULL,
+      .dispatch_method = ESP_TIMER_TASK,
+      .name = "adc_timer"
+  };
+  ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer_handle));
+  // El timer se iniciará cuando se reciba el comando 'S'
 
   // Crear tareas en cada núcleo
   xTaskCreatePinnedToCore(
