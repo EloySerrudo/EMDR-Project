@@ -7,17 +7,20 @@ import threading
 import time
 import argparse
 from collections import deque
+import pandas as pd  # Añadir pandas para guardado de datos
+import os
+from datetime import datetime
 
 # Configuración por defecto
 DEFAULT_PORT = 'COM4'  # Cambiar según el puerto que use tu ESP32
 DEFAULT_BAUDRATE = 115200
 BUFFER_SIZE = 512  # Máximo número de muestras a leer de una vez
-SAMPLE_RATE = 250  # Hz (coincide con SAMPLE_RATE del ESP32 = 250Hz)
+SAMPLE_RATE = 125  # Hz (tasa efectiva: 250 SPS ÷ 2 canales)
 DISPLAY_TIME = 5   # Segundos de datos a mostrar en la gráfica
 
 # Constantes para el protocolo binario
 PACKET_HEADER = 0xAA55  # Debe coincidir con el header en el código Arduino
-PACKET_SIZE = 13        # Tamaño en bytes de cada paquete (12 original + 1 para device_id)
+PACKET_SIZE = 15        # Tamaño en bytes de cada paquete (actualizado para incluir ambos canales)
 
 # Diccionario de esclavos: {ID: (nombre, requerido_para_captura)}
 KNOWN_SLAVES = {
@@ -41,10 +44,17 @@ class PulseMonitor:
 
         # Inicializar deques con valores cero
         initial_times = [-display_time + i * self.sample_interval for i in range(self.display_size)]
-        initial_values = [0] * self.display_size
+        initial_values_0 = [0] * self.display_size
+        initial_values_1 = [0] * self.display_size
 
         self.times = deque(initial_times, maxlen=self.display_size)
-        self.values = deque(initial_values, maxlen=self.display_size)
+        self.values_0 = deque(initial_values_0, maxlen=self.display_size)  # Canal A0
+        self.values_1 = deque(initial_values_1, maxlen=self.display_size)  # Canal A1
+        
+        self.idx = []
+        self.tiempos = []
+        self.valores_0 = []
+        self.valores_1 = []
         
         # Estadísticas
         self.samples_received = 0
@@ -56,22 +66,36 @@ class PulseMonitor:
         self.last_rate_update = time.time()
         self.last_packet_id = -1  # Inicializar con -1 para asegurar que procesemos el primer paquete
         
-        # Configuración de la gráfica - un solo eje ahora
-        self.fig, self.ax1 = plt.subplots(1, 1, figsize=(10, 6))
-        self.signal_line, = self.ax1.plot([], [], 'b-', lw=1.5, label='Señal cruda')
+        # Configuración de la gráfica - dos ejes separados que comparten el eje X
+        self.fig, (self.ax0, self.ax1) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
         
-        # Texto para mostrar estadísticas
-        self.stats_text = self.ax1.text(0.02, 0.95, '', transform=self.ax1.transAxes,
-                                      verticalalignment='top', bbox=dict(boxstyle='round', 
-                                                                      facecolor='wheat', alpha=0.7))
+        # Eliminar espacio vertical entre los subplots
+        self.fig.subplots_adjust(hspace=0)
+        
+        # Líneas para cada canal en su propio eje
+        self.signal_line_0, = self.ax0.plot([], [], 'b-', lw=1.5, label='Canal A0')
+        self.signal_line_1, = self.ax1.plot([], [], 'r-', lw=1.5, label='Canal A1')
         
         # Configurar ejes y títulos
+        self.ax0.set_title('Monitor de Señal Cruda ADS1115')
+        self.ax0.set_ylabel('Canal A0')
+        self.ax0.grid(True)
+        self.ax0.legend(loc='upper right')
+        
         self.ax1.set_xlabel('Tiempo (s)')
-        self.ax1.set_ylabel('Amplitud')
-        self.ax1.set_title('Monitor de Señal Cruda ADS1115')
-        self.ax1.set_ylim(-30000, 30000)
-        self.ax1.set_xlim(-display_time, 0)
+        self.ax1.set_ylabel('Canal A1')
         self.ax1.grid(True)
+        self.ax1.legend(loc='upper right')
+        
+        # Establecer límites de los ejes
+        self.ax0.set_ylim(-30000, 30000)
+        self.ax1.set_ylim(-30000, 30000)
+        self.ax0.set_xlim(-display_time, 0)
+        
+        # Texto para mostrar estadísticas (en el eje superior)
+        self.stats_text = self.ax0.text(0.02, 0.95, '', transform=self.ax0.transAxes,
+                                      verticalalignment='top', bbox=dict(boxstyle='round', 
+                                                                      facecolor='wheat', alpha=0.7))
         
         plt.tight_layout()
         
@@ -121,11 +145,13 @@ class PulseMonitor:
             
             # Limpiar deques y reiniciar con ceros
             self.times.clear()
-            self.values.clear()
+            self.values_0.clear()
+            self.values_1.clear()
             initial_times = [-DISPLAY_TIME + i * self.sample_interval for i in range(self.display_size)]
             initial_values = [0] * self.display_size
             self.times.extend(initial_times)
-            self.values.extend(initial_values)
+            self.values_0.extend(initial_values)
+            self.values_1.extend(initial_values)
 
     def stop_acquisition(self):
         """Detener la adquisición de datos"""
@@ -295,15 +321,24 @@ class PulseMonitor:
                                 timestamp_ms = struct.unpack('<I', data_buffer[6:10])[0]
                                 timestamp_s = timestamp_ms / 1000.0  # Convertir a segundos
                                 
-                                # Valor (2 bytes)
-                                value = struct.unpack('<h', data_buffer[10:12])[0]
+                                # Valor del canal A0 (2 bytes)
+                                value_0 = struct.unpack('<h', data_buffer[10:12])[0]
+                                
+                                # Valor del canal A1 (2 bytes)
+                                value_1 = struct.unpack('<h', data_buffer[12:14])[0]
                                 
                                 # Device ID (1 byte)
-                                device_id = data_buffer[12]
+                                device_id = data_buffer[14]
                                 
                                 # Añadir a las colas
                                 self.times.append(timestamp_s)
-                                self.values.append(value)
+                                self.values_0.append(value_0)
+                                self.values_1.append(value_1)
+                                
+                                self.idx.append(packet_id)
+                                self.tiempos.append(timestamp_ms)
+                                self.valores_0.append(value_0)
+                                self.valores_1.append(value_1)
                                 
                                 # Actualizar contadores
                                 self.samples_received += 1
@@ -344,19 +379,21 @@ class PulseMonitor:
     def update_plot(self, frame):
         """Actualizar la gráfica (llamada por FuncAnimation)"""
         if not self.times or len(self.times) < 2:
-            return self.signal_line,
+            return self.signal_line_0, self.signal_line_1, self.stats_text
         
         # Convertir deques a arrays para graficación
         x_data = np.array(self.times)
-        y_data = np.array(self.values)
+        y_data_0 = np.array(self.values_0)
+        y_data_1 = np.array(self.values_1)
         
-        # Actualizar datos de la gráfica
-        self.signal_line.set_data(x_data, y_data)
+        # Actualizar datos de ambas gráficas
+        self.signal_line_0.set_data(x_data, y_data_0)
+        self.signal_line_1.set_data(x_data, y_data_1)
         
-        # Establecer ventana deslizante
+        # Establecer ventana deslizante (solo necesitamos configurarlo para una vez ya que comparten el eje X)
         if len(x_data) > 0:
             current_time = x_data[-1]
-            self.ax1.set_xlim(current_time - DISPLAY_TIME, current_time)
+            self.ax0.set_xlim(current_time - DISPLAY_TIME, current_time)
         
         # Actualizar texto de estadísticas
         stats_str = (f"Paquetes: {self.packets_received} | "
@@ -365,7 +402,39 @@ class PulseMonitor:
                      f"Duplicados: {self.duplicate_packets}")
         self.stats_text.set_text(stats_str)
                 
-        return self.signal_line, self.stats_text
+        return self.signal_line_0, self.signal_line_1, self.stats_text
+    
+    def save_data_to_csv(self):
+        """Guarda los datos recolectados en un archivo CSV"""
+        try:
+            if len(self.idx) == 0:
+                print("No hay datos para guardar")
+                return
+                
+            # Crear un DataFrame con los datos
+            data = {
+                'ID': self.idx,
+                'Timestamp_ms': self.tiempos,
+                'Valor A0': self.valores_0,
+                'Valor A1': self.valores_1
+            }
+            df = pd.DataFrame(data)
+            
+            # Crear carpeta de datos si no existe
+            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+            os.makedirs(data_dir, exist_ok=True)
+            
+            # Generar nombre de archivo con fecha y hora
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(data_dir, f"pulse_data_{timestamp}.csv")
+            
+            # Guardar datos
+            df.to_csv(filename, index=False)
+            print(f"\nDatos guardados en: {filename}")
+            print(f"Total de muestras guardadas: {len(self.idx)}")
+            
+        except Exception as e:
+            print(f"Error al guardar datos: {e}")
     
     def run(self):
         """Iniciar el monitor"""
@@ -391,14 +460,18 @@ class PulseMonitor:
                 if not self.running:  # Solo verificar si no está capturando
                     self.check_slave_connections()
             elif event.key == 'q':  # Q para salir
+                # Guardar datos antes de cerrar
+                if len(self.idx) > 0:
+                    print("\nGuardando datos antes de salir...")
+                    self.save_data_to_csv()
                 plt.close()
         
         self.fig.canvas.mpl_connect('key_press_event', on_key)
         
-        # Actualizar instrucciones para reflejar el requisito de conexión
+        # Actualizar instrucciones para reflejar el requisito de conexión y el guardado de datos
         plt.figtext(0.5, 0.01, 
-                   "Controles: Espacio = Iniciar/Detener (requiere dispositivos conectados), " +
-                   "C = Verificar Conexiones (solo cuando está detenido), Q = Salir", 
+                   "Controles: Espacio = Iniciar/Detener, " +
+                   "C = Verificar Conexiones, Q = Guardar y Salir", 
                    ha="center", fontsize=10)
         
         # Mostrar la gráfica

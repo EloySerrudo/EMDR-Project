@@ -1,7 +1,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <Wire.h>
-#include <ADS1115_WE.h>
+#include <Adafruit_ADS1X15.h>
 #include "CircularBuffer.h"
 #include <esp_now.h>
 #include <WiFi.h>
@@ -26,7 +26,7 @@ constexpr int STATUS_LED = 23;
 constexpr int ERROR_LED = 19;
 
 // Objeto ADS1115
-ADS1115_WE ads = ADS1115_WE(I2C_ADDRESS);
+Adafruit_ADS1115 ads;
 
 // Handle para el timer
 esp_timer_handle_t timer_handle;
@@ -97,8 +97,7 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
         
         if (cmd->command == 'S' || cmd->command == 's') {
             capturing = true;
-            ads.setCompareChannels(ADS1115_COMP_0_3);
-            ads.startSingleMeasurement();
+            ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
             digitalWrite(STATUS_LED, HIGH);  // Indicar captura activa
             // Iniciar el timer para muestreo periódico cada 4ms (250Hz), 4ms = 4000us
             if (!esp_timer_is_active(timer_handle)) {
@@ -154,20 +153,21 @@ void adcTask(void *parameter) {
             channel ^= 1;  // Alternar entre canales A0 y A1
             portEXIT_CRITICAL(&dataMux);
 
-            // Leer el valor del ADS1115
+            // Con la librería Adafruit, usando lecturas diferenciales
             if (channel == 0) {
-                adcValue_A0 = ads.getRawResult();
+                adcValue_A0 = ads.getLastConversionResults();
                 if (startTime == 0) startTime = millis();
                 time = millis() - startTime;
-                ads.setCompareChannels(ADS1115_COMP_1_3);
-                ads.startSingleMeasurement();
+                // Aumentar la ganancia para la lectura del sensor de pulso
+                ads.setGain(GAIN_EIGHT);       // 8x gain   +/- 0.512V  1 bit = 0.015625mV
+                ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_1_3, /*continuous=*/false);
             } else {
-                adcValue_A1 = ads.getRawResult();
+                adcValue_A1 = ads.getLastConversionResults();
                 // Almacenar en el buffer circular
                 adcBuffer.write(time, adcValue_A0, adcValue_A1);
                 // Cambiar el canal para la próxima lectura
-                ads.setCompareChannels(ADS1115_COMP_0_3);
-                ads.startSingleMeasurement();
+                ads.setGain(GAIN_TWO);       // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+                ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
             }
         }
         // Pequeña espera para no saturar el CPU
@@ -198,7 +198,8 @@ void transmitTask(void *parameter) {
                                                 sizeof(myData));
                 
                 if (result != ESP_OK) {
-                    
+                    // Manejar error si es necesario
+                    vTaskDelay(1); // Pequeño retardo en caso de error
                 }
             }
         }
@@ -246,8 +247,8 @@ void setup() {
   // Inicializar I2C para comunicación con el ADS1115
   Wire.begin();
 
-  // Inicializar ADS1115
-  if (!ads.init()) {
+  // Inicializar ADS1115 con la librería Adafruit
+  if (!ads.begin(I2C_ADDRESS)) {
       // Si no responde el ADS1115, indicar con led
       while (1) {
           delay(500);
@@ -258,9 +259,8 @@ void setup() {
   }
   
   // Configurar el ADS1115
-  ads.setVoltageRange_mV(ADS1115_RANGE_2048);  // 2x gain   +/- 2.048V  1 bit = 0.0625mV
-  ads.setConvRate(ADS1115_475_SPS);  // Usar 475 SPS (muestras por segundo)
-  ads.setMeasureMode(ADS1115_SINGLE);
+  ads.setGain(GAIN_TWO);       // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+  ads.setDataRate(RATE_ADS1115_475SPS); // Usar 475 SPS (similar al original)
   
   // Configurar el timer pero no iniciarlo todavía
   const esp_timer_create_args_t timer_args = {
