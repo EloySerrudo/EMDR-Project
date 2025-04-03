@@ -10,6 +10,7 @@ from collections import deque
 import pandas as pd  # Añadir pandas para guardado de datos
 import os
 from datetime import datetime
+from signal_processing import RealTimeFilter, HeartRateCalculator  # Importar nuestras clases de procesamiento
 
 # Configuración por defecto
 DEFAULT_PORT = 'COM4'  # Cambiar según el puerto que use tu ESP32
@@ -44,17 +45,36 @@ class PulseMonitor:
 
         # Inicializar deques con valores cero
         initial_times = [-display_time + i * self.sample_interval for i in range(self.display_size)]
-        initial_values_0 = [0] * self.display_size
-        initial_values_1 = [0] * self.display_size
+        initial_values = [0] * self.display_size
 
         self.times = deque(initial_times, maxlen=self.display_size)
-        self.values_0 = deque(initial_values_0, maxlen=self.display_size)  # Canal A0
-        self.values_1 = deque(initial_values_1, maxlen=self.display_size)  # Canal A1
+        self.values_0 = deque(initial_values, maxlen=self.display_size)  # Canal A0 (EOG)
+        self.values_1 = deque(initial_values, maxlen=self.display_size)  # Canal A1 (PPG)
         
+        # Para almacenar señales filtradas
+        self.filtered_values_0 = deque(initial_values, maxlen=self.display_size)  # EOG filtrado
+        self.filtered_values_1 = deque(initial_values, maxlen=self.display_size)  # PPG filtrado
+        
+        # Para almacenar datos sin límite
         self.idx = []
         self.tiempos = []
         self.valores_0 = []
         self.valores_1 = []
+        self.valores_filtrados_0 = []
+        self.valores_filtrados_1 = []
+        self.heart_rates = []
+        
+        # Filtros en tiempo real
+        self.eog_filter = RealTimeFilter(
+            filter_type='lowpass', fs=SAMPLE_RATE, highcut=10.0, order=4
+        )
+        self.ppg_filter = RealTimeFilter(
+            filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.5, highcut=5.0, order=4
+        )
+        
+        # Calculador de frecuencia cardiaca
+        self.hr_calculator = HeartRateCalculator(fs=SAMPLE_RATE, window_size=5)
+        self.current_heart_rate = 0
         
         # Estadísticas
         self.samples_received = 0
@@ -66,35 +86,51 @@ class PulseMonitor:
         self.last_rate_update = time.time()
         self.last_packet_id = -1  # Inicializar con -1 para asegurar que procesemos el primer paquete
         
-        # Configuración de la gráfica - dos ejes separados que comparten el eje X
-        self.fig, (self.ax0, self.ax1) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+        # Configuración de la gráfica - tres ejes separados que comparten el eje X
+        self.fig, (self.ax0, self.ax1, self.ax2) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
         
         # Eliminar espacio vertical entre los subplots
         self.fig.subplots_adjust(hspace=0)
         
         # Líneas para cada canal en su propio eje
-        self.signal_line_0, = self.ax0.plot([], [], 'b-', lw=1.5, label='Canal A0')
-        self.signal_line_1, = self.ax1.plot([], [], 'r-', lw=1.5, label='Canal A1')
+        self.signal_line_0, = self.ax0.plot([], [], '0.8', lw=1.0, label='EOG (raw)')
+        self.filtered_line_0, = self.ax0.plot([], [], 'g-', lw=1.5, label='EOG (filtrado)')
+        
+        self.signal_line_1, = self.ax1.plot([], [], '0.8', lw=1.0, label='Pulso (raw)')
+        self.filtered_line_1, = self.ax1.plot([], [], 'm-', lw=1.5, label='Pulso (filtrado)')
+        
+        # Gráfico para la frecuencia cardiaca
+        self.hr_times = deque(initial_times, maxlen=self.display_size)
+        self.hr_values = deque(initial_values, maxlen=self.display_size)
+        self.hr_line, = self.ax2.plot([], [], 'k-', lw=2.0, label='Frecuencia Cardiaca')
         
         # Configurar ejes y títulos
-        self.ax0.set_title('Monitor de Señal Cruda ADS1115')
-        self.ax0.set_ylabel('Canal A0')
+        self.ax0.set_title('Monitor de Señales Fisiológicas')
+        self.ax0.set_ylabel('EOG (mV)')
         self.ax0.grid(True)
         self.ax0.legend(loc='upper right')
         
-        self.ax1.set_xlabel('Tiempo (s)')
-        self.ax1.set_ylabel('Canal A1')
+        self.ax1.set_ylabel('PPG (mV)')
         self.ax1.grid(True)
         self.ax1.legend(loc='upper right')
         
+        self.ax2.set_xlabel('Tiempo (s)')
+        self.ax2.set_ylabel('BPM')
+        self.ax2.grid(True)
+        self.ax2.set_ylim(40, 180)  # Rango típico de frecuencia cardiaca
+        self.ax2.legend(loc='upper right')
+        
         # Establecer límites de los ejes
         self.ax0.set_ylim(-30000, 30000)
-        self.ax1.set_ylim(-30000, 30000)
+        self.ax1.set_ylim(-15000, 20000)
         self.ax0.set_xlim(-display_time, 0)
         
-        # Texto para mostrar estadísticas (en el eje superior)
+        # Texto para mostrar estadísticas y frecuencia cardiaca
         self.stats_text = self.ax0.text(0.02, 0.95, '', transform=self.ax0.transAxes,
                                       verticalalignment='top', bbox=dict(boxstyle='round', 
+                                                                      facecolor='wheat', alpha=0.7))
+        self.hr_text = self.ax2.text(0.02, 0.95, 'BPM: --', transform=self.ax2.transAxes,
+                                    verticalalignment='top', bbox=dict(boxstyle='round',
                                                                       facecolor='wheat', alpha=0.7))
         
         plt.tight_layout()
@@ -130,12 +166,18 @@ class PulseMonitor:
             # Iniciar captura
             self.running = True
             
-            # Reiniciar estadísticas
+            # Reiniciar estadísticas y filtros
             self.samples_received = 0
             self.packets_received = 0
             self.invalid_packets = 0
             self.last_samples_count = 0
             self.last_rate_update = time.time()
+            
+            # Reiniciar filtros y calculador de frecuencia cardiaca
+            self.eog_filter.reset()
+            self.ppg_filter.reset()
+            self.hr_calculator.reset()
+            self.current_heart_rate = 0
             
             # Iniciar hilo de lectura
             self.reading_thread = threading.Thread(target=self._read_data)
@@ -330,15 +372,31 @@ class PulseMonitor:
                                 # Device ID (1 byte)
                                 device_id = data_buffer[14]
                                 
+                                # Filtrar señales en tiempo real
+                                filtered_value_0 = value_0 # self.eog_filter.filter(value_0) #<---EDITADO. USAREMOS DESPUÉS EL FILTRADO PARA EOG
+                                filtered_value_1 = self.ppg_filter.filter(value_1)
+                                
+                                # Calcular frecuencia cardiaca con la señal PPG filtrada
+                                hr = self.hr_calculator.update(filtered_value_1)
+                                if hr > 0:
+                                    self.current_heart_rate = hr
+                                    self.hr_times.append(timestamp_s)
+                                    self.hr_values.append(hr)
+                                    self.heart_rates.append(hr)
+                                
                                 # Añadir a las colas
                                 self.times.append(timestamp_s)
                                 self.values_0.append(value_0)
                                 self.values_1.append(value_1)
+                                self.filtered_values_0.append(filtered_value_0)
+                                self.filtered_values_1.append(filtered_value_1)
                                 
                                 self.idx.append(packet_id)
                                 self.tiempos.append(timestamp_ms)
                                 self.valores_0.append(value_0)
                                 self.valores_1.append(value_1)
+                                self.valores_filtrados_0.append(filtered_value_0)
+                                self.valores_filtrados_1.append(filtered_value_1)
                                 
                                 # Actualizar contadores
                                 self.samples_received += 1
@@ -379,18 +437,28 @@ class PulseMonitor:
     def update_plot(self, frame):
         """Actualizar la gráfica (llamada por FuncAnimation)"""
         if not self.times or len(self.times) < 2:
-            return self.signal_line_0, self.signal_line_1, self.stats_text
+            return self.signal_line_0, self.filtered_line_0, self.signal_line_1, self.filtered_line_1, self.hr_line, self.stats_text, self.hr_text
         
         # Convertir deques a arrays para graficación
         x_data = np.array(self.times)
         y_data_0 = np.array(self.values_0)
         y_data_1 = np.array(self.values_1)
+        y_filtered_0 = np.array(self.filtered_values_0)
+        y_filtered_1 = np.array(self.filtered_values_1)
         
-        # Actualizar datos de ambas gráficas
+        # Actualizar datos de las gráficas
         self.signal_line_0.set_data(x_data, y_data_0)
+        self.filtered_line_0.set_data(x_data, y_filtered_0)
         self.signal_line_1.set_data(x_data, y_data_1)
+        self.filtered_line_1.set_data(x_data, y_filtered_1)
         
-        # Establecer ventana deslizante (solo necesitamos configurarlo para una vez ya que comparten el eje X)
+        # Actualizar gráfico de frecuencia cardiaca
+        if len(self.hr_times) > 1:
+            x_hr = np.array(self.hr_times)
+            y_hr = np.array(self.hr_values)
+            self.hr_line.set_data(x_hr, y_hr)
+        
+        # Establecer ventana deslizante
         if len(x_data) > 0:
             current_time = x_data[-1]
             self.ax0.set_xlim(current_time - DISPLAY_TIME, current_time)
@@ -401,8 +469,11 @@ class PulseMonitor:
                      f"Inválidos: {self.invalid_packets} | "
                      f"Duplicados: {self.duplicate_packets}")
         self.stats_text.set_text(stats_str)
+        
+        # Actualizar texto de frecuencia cardiaca
+        self.hr_text.set_text(f"BPM: {self.current_heart_rate:.1f}")
                 
-        return self.signal_line_0, self.signal_line_1, self.stats_text
+        return self.signal_line_0, self.filtered_line_0, self.signal_line_1, self.filtered_line_1, self.hr_line, self.stats_text, self.hr_text
     
     def save_data_to_csv(self):
         """Guarda los datos recolectados en un archivo CSV"""
@@ -415,8 +486,11 @@ class PulseMonitor:
             data = {
                 'ID': self.idx,
                 'Timestamp_ms': self.tiempos,
-                'Valor A0': self.valores_0,
-                'Valor A1': self.valores_1
+                'EOG_raw': self.valores_0,
+                'EOG_filtrado': self.valores_filtrados_0,
+                'PPG_raw': self.valores_1,
+                'PPG_filtrado': self.valores_filtrados_1,
+                'Heart_Rate': self.heart_rates if self.heart_rates else [0] * len(self.idx)
             }
             df = pd.DataFrame(data)
             
