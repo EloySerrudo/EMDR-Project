@@ -1,12 +1,11 @@
 """
 Módulo para procesamiento de señales en tiempo real.
-Contiene funciones para filtrar señales EOG y fotopletismográficas,
+Contiene funciones para filtrar la señal fotopletismográfica (PPG),
 y para calcular la frecuencia cardiaca.
 """
 
 import numpy as np
 from scipy import signal
-import matplotlib.pyplot as plt
 from collections import deque
 
 class RealTimeFilter:
@@ -77,179 +76,104 @@ class RealTimeFilter:
             return filtered
 
 
-class HeartRateCalculator:
-    """Clase para calcular frecuencia cardiaca en tiempo real."""
+class PulseDetector:
+    """Clase para detectar pulsos cardíacos a partir de señales PPG filtradas"""
     
-    def __init__(self, fs=125, window_size=5):
+    def __init__(self, sample_rate, buffer_size=125, threshold_factor=0.6):
         """
-        Inicializar calculador de frecuencia cardiaca.
+        Inicializa el detector de pulsos.
         
         Args:
-            fs: Frecuencia de muestreo en Hz
-            window_size: Tamaño de la ventana para calcular HR (segundos)
+            sample_rate: Frecuencia de muestreo en Hz
+            buffer_size: Tamaño del buffer para análisis (recomendado ~1s de datos)
+            threshold_factor: Factor para calcular el umbral adaptativo
         """
-        self.fs = fs
-        self.window_size = window_size
-        self.buffer_size = int(window_size * fs)
+        self.sample_rate = sample_rate
+        self.buffer_size = buffer_size
+        self.threshold_factor = threshold_factor
         
-        # Buffer para almacenar valores filtrados
-        self.ppg_buffer = deque(maxlen=self.buffer_size)
+        # Buffer para análisis de pulso
+        self.signal_buffer = deque(maxlen=buffer_size)
         
-        # Para detección de picos
-        self.min_bpm = 40
-        self.max_bpm = 180
-        self.min_peak_distance = int(fs * 60 / self.max_bpm)  # Mínima distancia entre picos (en muestras)
-        self.last_peaks = deque(maxlen=10)  # Guarda los últimos picos detectados
-        self.heart_rates = deque(maxlen=5)  # Historial reciente de frecuencias cardíacas
-        self.current_hr = 0
+        # Estado del pulso
+        self.prev_pulse_state = 0  # 0 = sin pulso, 1 = pulso
+        self.pulse_detected = False
+        self.last_pulse_time = 0
+        self.pulse_periods = deque(maxlen=10)  # Últimas 10 mediciones de periodo
         
-        # Umbrales adaptativos
+        # Valores adaptables
         self.threshold = 0
-        self.adaptive_influence = 0.125  # Influencia de nuevos datos en el umbral
-        
-    def reset(self):
-        """Reiniciar el calculador."""
-        self.ppg_buffer.clear()
-        self.last_peaks.clear()
-        self.heart_rates.clear()
-        self.current_hr = 0
-        self.threshold = 0
-        
-    def update(self, new_value):
+        self.minimum_delay_samples = int(0.3 * sample_rate)  # 300 ms mínimo entre pulsos (200 BPM máx)
+        self.samples_since_last_pulse = self.minimum_delay_samples
+    
+    def add_sample(self, filtered_value, timestamp):
         """
-        Actualizar con un nuevo valor de señal PPG filtrada.
+        Añade una nueva muestra y analiza si hay un pulso.
         
         Args:
-            new_value: Nuevo valor de la señal PPG filtrada
+            filtered_value: Valor de la señal filtrada
+            timestamp: Tiempo asociado a la muestra
             
         Returns:
-            Frecuencia cardiaca estimada (0 si aún no hay suficientes datos)
+            bool: True si se detectó un pulso, False en caso contrario
+            int: Estado del pulso (0 = sin pulso, 1 = pulso)
         """
-        # Añadir nuevo valor al buffer
-        self.ppg_buffer.append(new_value)
+        self.signal_buffer.append(filtered_value)
+        self.samples_since_last_pulse += 1
         
-        # Esperar a que el buffer esté suficientemente lleno
-        if len(self.ppg_buffer) < self.buffer_size * 0.5:
+        # Necesitamos suficientes muestras para calcular el umbral
+        if len(self.signal_buffer) < self.buffer_size // 2:
+            return False, 0
+        
+        # Calcular umbral adaptativo basado en valores recientes
+        recent_signal = list(self.signal_buffer)[-self.buffer_size//2:]
+        signal_min = min(recent_signal)
+        signal_max = max(recent_signal)
+        signal_range = signal_max - signal_min
+        
+        # Ajustar umbral
+        self.threshold = signal_min + signal_range * self.threshold_factor
+        
+        # Detectar pulso (subida por encima del umbral)
+        pulse_state = 1 if filtered_value > self.threshold else 0
+        pulse_detected = False
+        
+        # Detectamos un nuevo pulso cuando:
+        # 1. La señal cruza el umbral de abajo hacia arriba (flanco ascendente)
+        # 2. Ha pasado suficiente tiempo desde el último pulso
+        if pulse_state == 1 and self.prev_pulse_state == 0 and self.samples_since_last_pulse >= self.minimum_delay_samples:
+            pulse_detected = True
+            
+            # Calcular periodo entre pulsos
+            if self.last_pulse_time > 0:
+                period = timestamp - self.last_pulse_time
+                self.pulse_periods.append(period)
+            
+            self.last_pulse_time = timestamp
+            self.samples_since_last_pulse = 0
+        
+        self.prev_pulse_state = pulse_state
+        self.pulse_detected = pulse_detected
+        
+        return pulse_detected, pulse_state
+    
+    def get_heart_rate(self):
+        """
+        Calcula la frecuencia cardíaca basada en los periodos de pulso medidos.
+        
+        Returns:
+            float: Frecuencia cardíaca en BPM, o 0 si no hay suficientes datos
+        """
+        if not self.pulse_periods or len(self.pulse_periods) < 2:
+            return 0
+        
+        # Calcular frecuencia cardíaca promedio
+        avg_period = sum(self.pulse_periods) / len(self.pulse_periods)
+        if avg_period <= 0:
             return 0
             
-        # Calcular umbral adaptativo si aún no está establecido
-        if self.threshold == 0:
-            self.threshold = 0.6 * (max(self.ppg_buffer) - min(self.ppg_buffer))
-            
-        # Actualizar umbral de forma adaptativa
-        signal_range = max(self.ppg_buffer) - min(self.ppg_buffer)
-        target_threshold = 0.6 * signal_range
-        self.threshold = (1 - self.adaptive_influence) * self.threshold + self.adaptive_influence * target_threshold
+        # Convertir periodo (segundos) a BPM
+        heart_rate = 60 / avg_period
         
-        # Detectar picos en la ventana actual
-        data = np.array(self.ppg_buffer)
-        peaks, _ = signal.find_peaks(data, height=self.threshold, distance=self.min_peak_distance)
-        
-        # Si hay suficientes picos, calcular frecuencia cardiaca
-        if len(peaks) >= 2:
-            # Calcular intervalos entre picos
-            intervals = np.diff(peaks) / self.fs  # en segundos
-            
-            # Calcular BPM basado en intervalos
-            bpm_values = 60 / intervals  # 60 segundos / intervalo = BPM
-            
-            # Filtrar BPM fuera de rango
-            valid_bpm = [bpm for bpm in bpm_values if self.min_bpm <= bpm <= self.max_bpm]
-            
-            if valid_bpm:
-                # Calcular BPM promedio
-                hr = np.median(valid_bpm)  # Usando mediana para ser más resistente a valores atípicos
-                
-                # Añadir al historial
-                self.heart_rates.append(hr)
-                
-                # Obtener promedio de las últimas mediciones
-                self.current_hr = np.mean(self.heart_rates)
-                
-        return self.current_hr
-        
-    def get_heart_rate(self):
-        """Obtener la frecuencia cardiaca actual."""
-        return self.current_hr
-
-
-def process_eog_signal(raw_signal, fs=125):
-    """
-    Procesar señal EOG: aplicar filtro pasa-bajas.
-    
-    Args:
-        raw_signal: Señal EOG sin procesar
-        fs: Frecuencia de muestreo
-        
-    Returns:
-        Señal EOG filtrada
-    """
-    # Crear filtro pasa-bajas para EOG (0-10 Hz)
-    eog_filter = RealTimeFilter(filter_type='lowpass', fs=fs, highcut=10.0, order=4)
-    
-    # Aplicar filtro
-    filtered_eog = eog_filter.filter(raw_signal)
-    
-    return filtered_eog
-
-def process_ppg_signal(raw_signal, fs=125):
-    """
-    Procesar señal fotopletismográfica: aplicar filtro pasa-banda.
-    
-    Args:
-        raw_signal: Señal PPG sin procesar
-        fs: Frecuencia de muestreo
-        
-    Returns:
-        Señal PPG filtrada
-    """
-    # Crear filtro pasa-banda para PPG (0.5-5 Hz)
-    ppg_filter = RealTimeFilter(filter_type='bandpass', fs=fs, lowcut=0.5, highcut=5.0, order=4)
-    
-    # Aplicar filtro
-    filtered_ppg = ppg_filter.filter(raw_signal)
-    
-    return filtered_ppg
-
-
-# Ejemplos de uso
-if __name__ == "__main__":
-    # Generar señal de prueba 
-    fs = 125
-    t = np.arange(0, 10, 1/fs)
-    
-    # Simular EOG con ruido
-    eog_raw = np.sin(2 * np.pi * 0.5 * t) + 0.2 * np.sin(2 * np.pi * 50 * t) + 0.1 * np.random.randn(len(t))
-    
-    # Simular PPG con ruido
-    ppg_raw = np.sin(2 * np.pi * 1.2 * t) + 0.2 * np.sin(2 * np.pi * 50 * t) + 0.1 * np.random.randn(len(t))
-    
-    # Filtrar
-    eog_filtered = process_eog_signal(eog_raw, fs)
-    ppg_filtered = process_ppg_signal(ppg_raw, fs)
-    
-    # Visualizar resultados
-    plt.figure(figsize=(10, 8))
-    
-    plt.subplot(2, 2, 1)
-    plt.plot(t, eog_raw)
-    plt.title('EOG señal original')
-    plt.grid(True)
-    
-    plt.subplot(2, 2, 2)
-    plt.plot(t, eog_filtered)
-    plt.title('EOG filtrado')
-    plt.grid(True)
-    
-    plt.subplot(2, 2, 3)
-    plt.plot(t, ppg_raw)
-    plt.title('PPG señal original')
-    plt.grid(True)
-    
-    plt.subplot(2, 2, 4)
-    plt.plot(t, ppg_filtered)
-    plt.title('PPG filtrado')
-    plt.grid(True)
-    
-    plt.tight_layout()
-    plt.show()
+        # Limitar valores razonables (40-200 BPM)
+        return max(40, min(200, heart_rate))
