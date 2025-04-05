@@ -166,7 +166,7 @@ void adcTask(void *parameter) {
                 // Almacenar en el buffer circular
                 adcBuffer.write(time, adcValue_A0, adcValue_A1);
                 // Cambiar el canal para la próxima lectura
-                ads.setGain(GAIN_TWO);       // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+                ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
                 ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
             }
         }
