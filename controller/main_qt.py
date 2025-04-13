@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtWidgets import QMainWindow, QWidget, QGridLayout, QApplication, QStackedLayout
+from PySide6.QtWidgets import QMainWindow, QWidget, QGridLayout, QApplication, QStackedLayout, QPushButton
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon
 from numpy import log
@@ -104,6 +104,10 @@ class Controller(QMainWindow):
         stacked_widget.setLayout(self.stacked_layout)
         # Añadir el widget al QGridLayout, posición (1,1), abarcando 3 filas y 3 columnas
         self.main_layout.addWidget(stacked_widget, 1, 1, 3, 3)  # From (1,1) to (3,3)
+        
+        # Agregar botón de escaneo USB en la parte inferior
+        self.btn_scan_usb = CustomButton(4, 0, 'Scan USB', self.scan_usb_click)
+        self.main_layout.addWidget(self.btn_scan_usb, 4, 0, 1, 4)  # Posición 4,0 ocupando 1 fila y 4 columnas
         
         # Widget central. Creamos un componente generico para poder publicar el layout
         self.central_widget = QWidget()
@@ -239,21 +243,20 @@ class Controller(QMainWindow):
         # Configurar fondo
         self.central_widget.setStyleSheet("background-color: white;")
         
-        # Conectar eventos
+        # Eliminar la inicialización automática del timer de USB
         self.probe_timer = QTimer(self)
         self.probe_timer.timeout.connect(self.check_usb)
+        # self.probe_timer.start(1000)  # Comentar o eliminar esta línea
         
         # Conectar ACTION_EVENT con su manejador
         event_system.action_event.connect(self.action)
         
-        # Inicializar
+        # Inicializar pero sin verificar USB
         self.config_mode()
         self.reset_action()
-        self.activate(self.btn_lightbar)
-        self.deactivate(self.btn_lightbar)
-        self.activate(self.btn_buzzer)
-        self.deactivate(self.btn_buzzer)
-        self.check_usb()
+        
+        # No se verifican los USB en el arranque
+        # self.check_usb() # Eliminar o comentar esta línea
     
     def activate(self, elem):
         """Activa un elemento de la UI"""
@@ -393,8 +396,8 @@ class Controller(QMainWindow):
     def config_mode(self):
         """Cambia al modo de configuración"""
         self.mode = 'config'
-        # Iniciar temporizador de sondeo (reemplaza pygame.time.set_timer)
-        # self.probe_timer.start(1000)  # cada 1000ms = 1s <-------- EDITADO
+        # No iniciar el temporizador de sondeo automático
+        # self.probe_timer.start(1000)  # Comentar esta línea
         
         # Habilitar/deshabilitar botones
         if not self.btn_pause.isChecked():
@@ -566,6 +569,10 @@ class Controller(QMainWindow):
         # Opcional: apagar todos los dispositivos al salir
         Devices.set_led(0)
         event.accept()  # Acepta el cierre
+
+    def scan_usb_click(self):
+        """Maneja el clic en el botón de escaneo USB"""
+        self.check_usb()
 
 
 if __name__ == "__main__":

@@ -128,3 +128,4 @@ class Devices():
         cls._sound_duration = duration
         cls._channel_left.set_volume(1 * volume, 0)
         cls._channel_right.set_volume(0, 1 * volume)
+        
