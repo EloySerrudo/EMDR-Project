@@ -52,19 +52,24 @@ class Devices():
                 if (p.vid, p.pid) == (d['vid'], d['pid']):
                     ser = None
                     try:
-                        ser = Serial(p.device, baudrate=d['baud'], timeout=0.1)
-                        sleep(2) #  <-------- EDITADO
+                        ser = Serial(p.device, baudrate=d['baud'], timeout=0.5)  # Timeout aumentado
+                        sleep(2)
                         # Enviar 4 bytes: comando 'i' + 3 bytes a cero
                         ser.write(bytes([ord('i'), 0, 0, 0]))
                         ser.flush()
                         id_str = ser.read_until().strip()
+                        print(f"Device ID: {id_str}")
                         if id_str.find(b'EMDR Lightbar') == 0:
                             cls._lightbar = (d, ser)
+                        # elif id_str.find(b'EMDR Master Controller') == 0:  # Identificador del coordinador
+                        elif b'EMDR Master Controller' in id_str:
+                            cls._lightbar = (d, ser)  # Tratar al coordinador como si fuera un lightbar
                         elif id_str.find(b'EMDR Buzzer') == 0:
                             cls._buzzer = (d, ser)
                         else:
                             ser.close()
-                    except:
+                    except Exception as e:
+                        print(f"Error probing device: {e}")
                         if ser:
                             ser.close()
                         pass

@@ -1,99 +1,126 @@
-/*
- * EMDR Lightbar controller for ESP32
- * Equivalent functionality to the MicroPython main.py script
- */
+#include <esp_now.h>
+#include <WiFi.h>
+#include <Adafruit_NeoPixel.h>
 
- #include <Adafruit_NeoPixel.h>
+// Identificador único de este dispositivo
+#define DEVICE_ID 2     // Sensor de señales
 
- #define PIN_LED       13    // Pin para controlar el NeoPixel strip
- #define PIN_LED_ERROR 23    // LED para indicar errores
- #define NUMLED        60    // Número de LEDs en la tira
- #define PACKET_SIZE   4     // Tamaño fijo del paquete (comando + 3 bytes)
- 
- // Inicialización de la tira NeoPixel
- Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMLED, PIN_LED, NEO_GRB + NEO_KHZ800);
- 
- // Variables para el control de color y LED
- uint8_t red = 0x0F;
- uint8_t green = 0;
- uint8_t blue = 0;
- 
- void setup() {
-   // Inicialización de la comunicación serie
-   Serial.begin(115200);
-   
-   // Inicialización de la tira NeoPixel
-   strip.begin();
-   strip.clear();
-   strip.show();
-   
-   // Configuración del pin de error
-   pinMode(PIN_LED_ERROR, OUTPUT);
-   digitalWrite(PIN_LED_ERROR, LOW);
-   
-   // Mostrar patrón de prueba inicial
-   test();
- }
- 
- void loop() {
-   // Usar un buffer para los 4 bytes (comando + datos)
-   uint8_t packetBuffer[PACKET_SIZE];
-   
-   // Verificar si hay al menos PACKET_SIZE bytes disponibles
-   if (Serial.available() >= PACKET_SIZE) {
-     // Leer el paquete completo de PACKET_SIZE bytes
-     if (Serial.readBytes(packetBuffer, PACKET_SIZE) == PACKET_SIZE) {
-       // Extraer el comando (primer byte) y procesar
-       char cmd = packetBuffer[0];
-       uint8_t ledNum;
-       switch (cmd) {
-         case 'c': // Comando de color (0x63)
-           // Los 3 bytes siguientes son para RGB
-           red = packetBuffer[1];
-           green = packetBuffer[2];
-           blue = packetBuffer[3];
-           break;
-           
-         case 'l': // Comando de LED (0x6C)
-           // El segundo byte es para la posición, ignorar bytes 3 y 4
-           ledNum = packetBuffer[1];
-           
-           clearLEDs();
-           if (ledNum > 0 && ledNum <= NUMLED) {
-             strip.setPixelColor(ledNum - 1, strip.Color(red, green, blue));
-           }
-           strip.show();
-           break;
-           
-         case 't': // Comando test (0x74)
-           // Ignorar los 3 bytes adicionales
-           clearLEDs();
-           strip.setPixelColor(0, strip.Color(red, green, blue));
-           strip.setPixelColor(NUMLED - 1, strip.Color(red, green, blue));
-           strip.show();
-           break;
-           
-         case 'i': // Comando id (0x69)
-           // Ignorar los 3 bytes adicionales
-           Serial.println("EMDR Lightbar");
-           break;
-       }
-     }
-   }
- }
- 
- // Función para limpiar todos los LEDs
- void clearLEDs() {
-   strip.clear();
- }
- 
- // Función para probar la tira de LEDs al inicio
- void test() {
-   clearLEDs();
-   strip.setPixelColor(0, strip.Color(0, 0x20, 0));
-   strip.setPixelColor(NUMLED - 1, strip.Color(0x20, 0, 0));
-   strip.show();
-   delay(500);
-   clearLEDs();
-   strip.show();
- }
+#define PIN_LED       13    // Pin para controlar el NeoPixel strip
+#define PIN_LED_ERROR 23    // LED para indicar errores
+#define NUMLED        60    // Número de LEDs en la tira
+
+// Estructura para recibir los datos a través de ESP-NOW
+typedef struct {
+  char cmd;
+  uint8_t data1;
+  uint8_t data2;
+  uint8_t data3;
+} CommandPacket;
+
+// Inicialización de la tira NeoPixel
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMLED, PIN_LED, NEO_GRB + NEO_KHZ800);
+
+// Variables para el control de color y LED
+uint8_t red = 0x0F;
+uint8_t green = 0;
+uint8_t blue = 0;
+
+// Para control de estado de conexión
+bool receivedCommand = false;
+unsigned long lastCommandTime = 0;
+const unsigned long CONNECTION_TIMEOUT = 10000; // 10 segundos sin comandos = desconexión
+
+void setup() {
+  // Inicialización de la tira NeoPixel
+  strip.begin();
+  strip.clear();
+  strip.show();
+  
+  // Configuración del pin de error
+  pinMode(PIN_LED_ERROR, OUTPUT);
+  digitalWrite(PIN_LED_ERROR, LOW);
+  
+  // Inicializar WiFi en modo estación
+  WiFi.mode(WIFI_STA);
+  
+  // Inicializar ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    digitalWrite(PIN_LED_ERROR, HIGH);
+    return;
+  }
+  
+  // Registrar la función de callback para cuando recibamos datos
+  esp_now_register_recv_cb(OnDataRecv);
+  
+  // Mostrar patrón de prueba inicial
+  test();
+}
+
+void loop() {
+  // Verificar si estamos desconectados (timeout)
+  if (receivedCommand && millis() - lastCommandTime > CONNECTION_TIMEOUT) {
+    receivedCommand = false;
+    // Indicar desconexión (por ejemplo, parpadear el LED de error)
+    digitalWrite(PIN_LED_ERROR, HIGH);
+    delay(100);
+    digitalWrite(PIN_LED_ERROR, LOW);
+  }
+}
+
+// Callback para cuando se reciben datos
+void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+  // Actualizar indicadores de conexión
+  receivedCommand = true;
+  lastCommandTime = millis();
+  digitalWrite(PIN_LED_ERROR, LOW);
+  
+  // Procesar el comando recibido
+  if (len == sizeof(CommandPacket)) {
+    CommandPacket cmd;
+    memcpy(&cmd, incomingData, sizeof(cmd));
+    
+    uint8_t ledNum;
+    switch (cmd.cmd) {
+      case 'c': // Comando de color
+        // Los 3 bytes siguientes son para RGB
+        red = cmd.data1;
+        green = cmd.data2;
+        blue = cmd.data3;
+        break;
+        
+      case 'l': // Comando de LED
+        // El segundo byte es para la posición
+        ledNum = cmd.data1;
+        
+        clearLEDs();
+        if (ledNum > 0 && ledNum <= NUMLED) {
+          strip.setPixelColor(ledNum - 1, strip.Color(red, green, blue));
+        }
+        strip.show();
+        break;
+        
+      case 't': // Comando test
+        clearLEDs();
+        strip.setPixelColor(0, strip.Color(red, green, blue));
+        strip.setPixelColor(NUMLED - 1, strip.Color(red, green, blue));
+        strip.show();
+        break;
+    }
+  }
+}
+
+// Función para limpiar todos los LEDs
+void clearLEDs() {
+  strip.clear();
+}
+
+// Función para probar la tira de LEDs al inicio
+void test() {
+  clearLEDs();
+  strip.setPixelColor(0, strip.Color(0, 0x20, 0));
+  strip.setPixelColor(NUMLED - 1, strip.Color(0x20, 0, 0));
+  strip.show();
+  delay(500);
+  clearLEDs();
+  strip.show();
+}
