@@ -23,7 +23,7 @@ class Note(pygame.mixer.Sound):
         return samples
 
 class Devices():
-    led_num = 57
+    led_num = 60
     _buzzer_duration = 100
     pygame.mixer.pre_init(44100, -16, 2, 1024)
     pygame.init()
@@ -54,10 +54,9 @@ class Devices():
                     try:
                         ser = Serial(p.device, baudrate=d['baud'], timeout=0.1)
                         sleep(2) #  <-------- EDITADO
-                        ser.write(b'i\r\n')
+                        # Enviar 4 bytes: comando 'i' + 3 bytes a cero
+                        ser.write(bytes([ord('i'), 0, 0, 0]))
                         ser.flush()
-                        if d['echo']:
-                            ser.read_until()
                         id_str = ser.read_until().strip()
                         if id_str.find(b'EMDR Lightbar') == 0:
                             cls._lightbar = (d, ser)
@@ -84,20 +83,24 @@ class Devices():
         if dev and ser:
             ser.write(cmd)
             ser.flush()
-            if dev['echo']:
-                ser.read_until().strip()
 
 
     @classmethod
     def set_led(cls, num):
         if num >= 0:
-            cls.write(cls._lightbar, b'l %d\r\n' % num)
+            # Enviar 4 bytes: comando 'l' + posición del LED + 2 bytes a cero
+            cls.write(cls._lightbar, bytes([ord('l'), int(num), 0, 0]))
         else:
-            cls.write(cls._lightbar, b't\r\n')
+            # Enviar 4 bytes: comando 't' + 3 bytes a cero
+            cls.write(cls._lightbar, bytes([ord('t'), 0, 0, 0]))
 
     @classmethod
     def set_color(cls, col):
-        cls.write(cls._lightbar, b'c %d\r\n' % col)
+        r = (col >> 16) & 0xFF
+        g = (col >> 8) & 0xFF
+        b = col & 0xFF
+        # Enviar 4 bytes: comando 'c' + r + g + b
+        cls.write(cls._lightbar, bytes([ord('c'), r, g, b]))
 
     @classmethod
     def set_buzzer_duration(cls, duration):
