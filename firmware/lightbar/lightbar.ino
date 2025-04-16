@@ -58,9 +58,9 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 // Callback para cuando se reciben datos
-void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int data_len) {
   // Procesar el comando recibido
-  if (len == sizeof(CommandPacket)) {
+  if (data_len == sizeof(CommandPacket)) {
     CommandPacket cmd;
     memcpy(&cmd, incomingData, sizeof(cmd));
 

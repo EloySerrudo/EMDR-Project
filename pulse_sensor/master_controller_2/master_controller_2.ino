@@ -22,13 +22,19 @@ uint8_t slaveAddresses[][6] = {
 // Control de estado de los esclavos
 bool slaveConnected[NUM_SLAVES] = { false };
 
+// Variables de estado
+volatile bool lastCommandSent = true;
+
+// Variable para almacenar información de envío
+esp_now_peer_info_t peerInfo;
+
 // Estructura para enviar los datos a través de ESP-NOW
-typedef struct lightbar_command {
+typedef struct slave_command {
   char cmd;
   uint8_t data1;
   uint8_t data2;
   uint8_t data3;
-} lightbar_command_t;
+} slave_command_t;
 
 // Estructura para recibir confirmación
 typedef struct ack_packet {
@@ -37,11 +43,19 @@ typedef struct ack_packet {
   uint8_t status;
 } ack_packet_t;
 
-// Variables de estado
-volatile bool lastCommandSent = true;
-
-// Variable para almacenar información de envío
-esp_now_peer_info_t peerInfo;
+// Función para enviar comandos a los esclavos
+void sendCommandToSlave(uint8_t slaveIndex, char cmd, uint8_t data1, uint8_t data2, uint8_t data3) {
+  // Verificar que el índice del esclavo sea válido
+  if (slaveIndex >= NUM_SLAVES) return;
+  // Llenar la estructura para enviar
+  slave_command_t commandToSend;
+  commandToSend.cmd = cmd;
+  commandToSend.data1 = data1;
+  commandToSend.data2 = data2;
+  commandToSend.data3 = data3;
+  
+  esp_now_send(slaveAddresses[slaveIndex], (uint8_t *)&commandToSend, sizeof(slave_command_t));
+}
 
 // Función para verificar la conexión de todos los esclavos
 void checkSlaveConnections() {
@@ -52,18 +66,7 @@ void checkSlaveConnections() {
 
   // Enviar comando de verificación a cada esclavo
   for (int i = 0; i < NUM_SLAVES; i++) {
-    if (i == 1) {
-      // Para el lightbar
-      lightbar_command_t packet;
-      packet.cmd = 'a';
-      packet.data1 = 0;
-      packet.data2 = 0;
-      packet.data3 = 0;
-      esp_now_send(slaveAddresses[1], (uint8_t *)&packet, sizeof(packet));
-    } else {
-      // Para el sensor de pulso
-      // sendCommandToSlave(i, 'A');
-    }
+    sendCommandToSlave(i, 'a', 0, 0, 0);
     delay(50);
   }
 
@@ -73,7 +76,6 @@ void checkSlaveConnections() {
   // Enviar resultado al PC
   Serial.write('!');
   Serial.write('C');
-  Serial.write(NUM_SLAVES);
 
   for (int i = 0; i < NUM_SLAVES; i++) {
     Serial.write(i + 1);
@@ -144,46 +146,20 @@ void setup() {
 }
 
 void loop() {
-  // Usar un buffer para los 4 bytes (comando + datos)
-  uint8_t packetBuffer[4];
-  lightbar_command_t commandToSend;
-
   // Verificar si hay al menos 4 bytes disponibles
   if (Serial.available() >= 4) {
+    // Usar un buffer para los 4 bytes (comando + datos)
+    uint8_t packetBuffer[4];
     // Leer el paquete completo de 4 bytes
     if (Serial.readBytes(packetBuffer, 4) == 4) {
-      // Llenar la estructura para enviar
-      commandToSend.cmd = packetBuffer[0];
-      commandToSend.data1 = packetBuffer[1];
-      commandToSend.data2 = packetBuffer[2];
-      commandToSend.data3 = packetBuffer[3];
-
       // Si el comando es 'i', responder directamente
-      if (commandToSend.cmd == 'i') {
+      if (packetBuffer[0] == 'i') {
         Serial.println("EMDR Master Controller");
-      } else if (commandToSend.cmd == 'A') {
-        // Reiniciar estado de conexión
-        for (int i = 0; i < NUM_SLAVES; i++) {
-          slaveConnected[i] = false;
-        }
-
-        esp_err_t result = esp_now_send(slaveAddresses[1], (uint8_t *)&commandToSend, sizeof(lightbar_command_t));
-        delay(50);
-
-        // Esperar respuestas
-        delay(500);
-
-        // Enviar resultado al PC
-        Serial.write('!');
-        Serial.write('C');
-
-        for (int i = 0; i < NUM_SLAVES; i++) {
-          Serial.write(i + 1);
-          Serial.write(slaveConnected[i] ? 1 : 0);
-        }
+      } else if (packetBuffer[0] == 'A') {
+        checkSlaveConnections();
       } else {
         // Enviar el paquete mediante ESP-NOW
-        esp_err_t result = esp_now_send(slaveAddresses[1], (uint8_t *)&commandToSend, sizeof(lightbar_command_t));
+        sendCommandToSlave(1, packetBuffer[0], packetBuffer[1], packetBuffer[2], packetBuffer[3]);
       }
     }
   }

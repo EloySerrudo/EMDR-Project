@@ -65,12 +65,14 @@ typedef struct struct_message {
   uint8_t device_id;    // 1 byte
 } struct_message;       // TOTAL: 15 bytes
 
-// Estructura para recibir comandos del maestro
-typedef struct command_packet {
-    uint8_t command;    // 'S': start, 'P': pause, 'C': check connection
-    uint8_t device_id;  // ID del dispositivo (útil para respuestas)
-} command_packet_t;
-
+// Estructura para recibir los datos a través de ESP-NOW
+typedef struct {
+    char cmd;       // 'S': start, 'P': pause, 'C': check connection
+    uint8_t data1;
+    uint8_t data2;
+    uint8_t data3;
+  } CommandPacket;
+  
 // Estructura para enviar confirmación al maestro
 typedef struct ack_packet {
     uint8_t command;    // 'A': acknowledge
@@ -90,47 +92,54 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 // callback when data is received from master
-void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
+void OnDataReceived(const uint8_t *mac_addr, const uint8_t *incomingData, int data_len) {
     // Verificar si los datos recibidos son del maestro
-    if (memcmp(mac_addr, masterAddress, 6) == 0 && data_len == sizeof(command_packet_t)) {
-        command_packet_t *cmd = (command_packet_t*)data;
+    if (data_len == sizeof(CommandPacket)) {
+        CommandPacket cmd;
+        memcpy(&cmd, incomingData, sizeof(cmd));
+        // Convertir comando a minúsculas para procesar tanto mayúsculas como minúsculas
+        char command = tolower(cmd.cmd);
         
-        if (cmd->command == 'S' || cmd->command == 's') {
-            capturing = true;
-            ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
-            digitalWrite(STATUS_LED, HIGH);  // Indicar captura activa
-            // Iniciar el timer para muestreo periódico cada 4ms (250Hz), 4ms = 4000us
-            if (!esp_timer_is_active(timer_handle)) {
-                ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handle, 4000));
-            }
-        } else if (cmd->command == 'P' || cmd->command == 'p') {
-            capturing = false;
-            portENTER_CRITICAL(&dataMux);
-            startTime = 0;  // Reset startTime when ending capture
-            channel = 1;
-            portEXIT_CRITICAL(&dataMux);
-            digitalWrite(STATUS_LED, LOW);  // Indicar captura inactiva
-            // Detener el timer
-            if (esp_timer_is_active(timer_handle)) {
-                ESP_ERROR_CHECK(esp_timer_stop(timer_handle));
-            }
-        } else if (cmd->command == 'A' || cmd->command == 'a') {
-            // Preparar respuesta
-            ack_packet_t response;
-            response.command = 'A';  // Acknowledge
-            response.device_id = DEVICE_ID;  // Usar el ID definido 
-            response.status = 1;     // 1 = OK
-            
-            // Enviar respuesta al maestro
-            esp_err_t result = esp_now_send(masterAddress, 
-                                          (uint8_t *) &response, 
-                                          sizeof(response));
-            
-            // Parpadear LED para indicar que respondimos
-            digitalWrite(STATUS_LED, HIGH);
-            delay(50);
-            digitalWrite(STATUS_LED, LOW);
+        switch (command) {
+            case 'a':  // Comando de verificación de conexión
+                // Enviar respuesta al maestro
+                ack_packet_t response;
+                response.command = 'A';  // Confirmación de conexión
+                response.device_id = DEVICE_ID;  // Usar el ID definido 
+                response.status = 1;  // 1 = OK
+                
+                // Enviar respuesta al maestro
+                esp_err_t result = esp_now_send(masterAddress, 
+                                              (uint8_t *) &response, 
+                                              sizeof(response));
+                
+                // Parpadear LED para indicar que respondimos
+                digitalWrite(STATUS_LED, HIGH);
+                delay(50);
+                digitalWrite(STATUS_LED, LOW);
+                break;
         }
+
+        // if (cmd->command == 'S' || cmd->command == 's') {
+        //     capturing = true;
+        //     ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
+        //     digitalWrite(STATUS_LED, HIGH);  // Indicar captura activa
+        //     // Iniciar el timer para muestreo periódico cada 4ms (250Hz), 4ms = 4000us
+        //     if (!esp_timer_is_active(timer_handle)) {
+        //         ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handle, 4000));
+        //     }
+        // } else if (cmd->command == 'P' || cmd->command == 'p') {
+        //     capturing = false;
+        //     portENTER_CRITICAL(&dataMux);
+        //     startTime = 0;  // Reset startTime when ending capture
+        //     channel = 1;
+        //     portEXIT_CRITICAL(&dataMux);
+        //     digitalWrite(STATUS_LED, LOW);  // Indicar captura inactiva
+        //     // Detener el timer
+        //     if (esp_timer_is_active(timer_handle)) {
+        //         ESP_ERROR_CHECK(esp_timer_stop(timer_handle));
+        //     }
+        // }
     }
 }
  
