@@ -76,7 +76,6 @@ class Devices():
                         if b'EMDR Master Controller' in id_str:
                             cls._found_devices.append("Master Controller")
                             cls._master_controller = (d, ser)  # Usamos esta conexión para comunicarnos con todo
-                            print("Master controller detected")
                             
                             # Solicitar verificación de dispositivos conectados
                             ser.write(bytes([ord('A'), 0, 0, 0]))  # Comando 'A' para verificar conexiones
@@ -85,21 +84,15 @@ class Devices():
                             
                             # Leer respuesta del protocolo de verificación de conexión
                             if ser.in_waiting > 0:
-                                # Protocolo definido: !C[num_devices][device_id1][status1][device_id2][status2]...
-                                if ser.read(1) == b'!' and ser.read(1) == b'C':  
-                                    num_devices = ord(ser.read(1))
-                                    print(f"Reported {num_devices} slaves connected")
-                                    
-                                    for _ in range(num_devices):
+                                # Protocolo definido: !C[device_id1][status1][device_id2][status2]...
+                                if ser.read(1) == b'!' and ser.read(1) == b'C':
+                                    for _ in range(len(KNOWN_SLAVES)):
                                         if ser.in_waiting >= 2:
                                             device_id = ord(ser.read(1))
                                             status = ord(ser.read(1))
                                             device, _ = KNOWN_SLAVES.get(device_id, None)
-                                            connection = 'connected' if status == 1 else 'disconnected'
-                                            print(f"Device ID: {device_id}, Device: {device}, Status: {connection}")
                                             if status == 1:
                                                 cls._found_devices.append(device)
-                                    print(cls._found_devices)
                         else:
                             print(f"Unknown device: {id_str}")
                             ser.close()
