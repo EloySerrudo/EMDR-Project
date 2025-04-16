@@ -5,6 +5,13 @@ import pygame
 from array import array
 from device_config import DEVICE_CONFIG
 
+# Diccionario de esclavos: {ID: (nombre, requerido_para_captura)}
+KNOWN_SLAVES = {
+    1: ("Sensor", True),   # ID 1: Sensor de pulso (requerido para captura de señales)
+    2: ("Lightbar", False),         # Ejemplo: ID 2 para un sensor que no es obligatorio
+    3: ("Buzzer", False)            # Ejemplo: ID 3 para otro sensor opcional
+}
+
 class Note(pygame.mixer.Sound):
     def __init__(self, frequency, volume=.33):
         self.frequency = frequency
@@ -33,24 +40,23 @@ class Devices():
     _channel_right.set_volume(0, 1)
     _beep = Note(440)
     _sound_duration = 50
+    _master_controller = (None, None)
     _lightbar = (None, None)
     _buzzer = (None, None)
+    _sensor = (None, None)
+    # Lista para almacenar dispositivos encontrados
+    _found_devices = []
 
     @classmethod
     def probe(cls):
         """Detecta y conecta dispositivos, incluyendo controlador maestro y sus esclavos"""
         # Cerrar cualquier conexión existente
-        _, ser = cls._lightbar
+        _, ser = cls._master_controller
         if ser:
             ser.close()
-        cls._lightbar = (None, None)
-        _, ser = cls._buzzer
-        if ser:
-            ser.close()
-        cls._buzzer = (None, None)
+        cls._master_controller = (None, None)
         
-        # Lista para almacenar dispositivos encontrados
-        found_devices = []
+        cls._found_devices = []
         
         # Buscar puerto serial del controlador maestro
         for p in comports():
@@ -65,12 +71,11 @@ class Devices():
                         ser.write(bytes([ord('i'), 0, 0, 0]))
                         ser.flush()
                         id_str = ser.read_until().strip()
-                        print(f"Device response: {id_str}")
                         
                         # Verificar si es el controlador maestro
                         if b'EMDR Master Controller' in id_str:
-                            found_devices.append("Master Controller")
-                            cls._lightbar = (d, ser)  # Usamos esta conexión para comunicarnos con todo
+                            cls._found_devices.append("Master Controller")
+                            cls._master_controller = (d, ser)  # Usamos esta conexión para comunicarnos con todo
                             print("Master controller detected")
                             
                             # Solicitar verificación de dispositivos conectados
@@ -79,14 +84,9 @@ class Devices():
                             sleep(2)  # Esperar respuesta
                             
                             # Leer respuesta del protocolo de verificación de conexión
-                            print(f"Serial in waiting: {ser.in_waiting}")
                             if ser.in_waiting > 0:
-                                print("Entró")
-                                a = ser.read(1)
-                                b = ser.read(1)
-                                print(f"Received: {a}, {b}")
                                 # Protocolo definido: !C[num_devices][device_id1][status1][device_id2][status2]...
-                                if a == b'!' and b == b'C':  
+                                if ser.read(1) == b'!' and ser.read(1) == b'C':  
                                     num_devices = ord(ser.read(1))
                                     print(f"Reported {num_devices} slaves connected")
                                     
@@ -94,16 +94,12 @@ class Devices():
                                         if ser.in_waiting >= 2:
                                             device_id = ord(ser.read(1))
                                             status = ord(ser.read(1))
-                                            print(f"Device ID: {device_id}, Status: {status}")
+                                            device, _ = KNOWN_SLAVES.get(device_id, None)
+                                            connection = 'connected' if status == 1 else 'disconnected'
+                                            print(f"Device ID: {device_id}, Device: {device}, Status: {connection}")
                                             if status == 1:
-                                                if device_id == 1:
-                                                    found_devices.append("Pulse Sensor")
-                                                    print("Pulse sensor connected")
-                                                elif device_id == 2:
-                                                    found_devices.append("Lightbar")
-                                                    print("Lightbar connected")
-                                                else:
-                                                    found_devices.append(f"Device ID {device_id}")
+                                                cls._found_devices.append(device)
+                                    print(cls._found_devices)
                         else:
                             print(f"Unknown device: {id_str}")
                             ser.close()
@@ -113,15 +109,19 @@ class Devices():
                         if ser:
                             ser.close()
         
-        return found_devices
+        return cls._found_devices
 
     @classmethod
     def lightbar_plugged_in(cls):
-        return cls._lightbar != (None, None)
+        return "Lightbar" in cls._found_devices
 
     @classmethod
     def buzzer_plugged_in(cls):
-        return cls._buzzer != (None, None)
+        return "Device" in cls._found_devices
+
+    @classmethod
+    def sensor_plugged_in(cls):
+        return "Sensor" in cls._found_devices
 
     @classmethod
     def write(cls, devser, cmd):
@@ -135,10 +135,10 @@ class Devices():
     def set_led(cls, num):
         if num >= 0:
             # Enviar 4 bytes: comando 'l' + posición del LED + 2 bytes a cero
-            cls.write(cls._lightbar, bytes([ord('l'), int(num), 0, 0]))
+            cls.write(cls._master_controller, bytes([ord('l'), int(num), 0, 0]))
         else:
             # Enviar 4 bytes: comando 't' + 3 bytes a cero
-            cls.write(cls._lightbar, bytes([ord('t'), 0, 0, 0]))
+            cls.write(cls._master_controller, bytes([ord('t'), 0, 0, 0]))
 
     @classmethod
     def set_color(cls, col):
@@ -146,7 +146,7 @@ class Devices():
         g = (col >> 8) & 0xFF
         b = col & 0xFF
         # Enviar 4 bytes: comando 'c' + r + g + b
-        cls.write(cls._lightbar, bytes([ord('c'), r, g, b]))
+        cls.write(cls._master_controller, bytes([ord('c'), r, g, b]))
 
     @classmethod
     def set_buzzer_duration(cls, duration):
