@@ -8,7 +8,7 @@
 #include "esp_timer.h"  // Incluir para el timer
 
 // Identificador único de este dispositivo
-#define DEVICE_ID 1
+#define DEVICE_ID 1     // Sensor de señales
 
 #define I2C_ADDRESS 0x48
 
@@ -52,7 +52,7 @@ TaskHandle_t adcTaskHandle = NULL;
 TaskHandle_t transmitTaskHandle = NULL;
 
 // MAC del dispositivo maestro
-uint8_t masterAddress[] = {0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30};  // Reemplazar con la MAC real del maestro
+uint8_t masterAddress[] = {0x78, 0x21, 0x84, 0x79, 0x66, 0xD0};  // Reemplazar con la MAC real del maestro
 
 // Estructura para enviar los datos de la tarea ADC
 // Debe coincidir con una estructura receptora en el maestro
@@ -114,7 +114,7 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *data, int data_len) 
             if (esp_timer_is_active(timer_handle)) {
                 ESP_ERROR_CHECK(esp_timer_stop(timer_handle));
             }
-        } else if (cmd->command == 'C') {
+        } else if (cmd->command == 'A' || cmd->command == 'a') {
             // Preparar respuesta
             ack_packet_t response;
             response.command = 'A';  // Acknowledge

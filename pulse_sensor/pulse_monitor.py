@@ -202,7 +202,7 @@ class PulseMonitor:
             return
             
         print("Verificando dispositivos conectados...")
-        self.serial.write(b'C')  # Enviar comando para verificar conexiones
+        self.serial.write(b'A')  # Enviar comando para verificar conexiones
         
         # Resetear estado de conexión
         self.slave_status = {slave_id: False for slave_id in KNOWN_SLAVES}

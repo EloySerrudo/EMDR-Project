@@ -571,8 +571,61 @@ class Controller(QMainWindow):
         event.accept()  # Acepta el cierre
 
     def scan_usb_click(self):
-        """Maneja el clic en el botón de escaneo USB"""
-        self.check_usb()
+        """Maneja el clic en el botón de escaneo USB y muestra dispositivos conectados"""
+        # Cambiar texto del botón durante el escaneo
+        old_text = self.btn_scan_usb.text()
+        self.btn_scan_usb.setText("Scanning...")
+        self.btn_scan_usb.setEnabled(False)
+        QApplication.processEvents()  # Forzar actualización de la interfaz
+        
+        # Realizar el escaneo (la nueva función devuelve los dispositivos encontrados)
+        found_devices = Devices.probe()
+        
+        # Habilitar/deshabilitar botones según dispositivos encontrados
+        if "Master Controller" in found_devices:
+            # Si encontramos un controlador maestro, verificamos qué dispositivos están conectados
+            if "Pulse Sensor" in found_devices:
+                # El sensor está conectado, podemos iniciar captura
+                self.activate(self.btn_start)
+                self.activate(self.btn_start24)
+            
+            if "Lightbar" in found_devices:
+                # La barra de luz está conectada, activar su botón
+                self.activate(self.btn_lightbar)
+            else:
+                self.deactivate(self.btn_lightbar)
+            
+            # El buzzer es un dispositivo directo, comprobamos si está conectado
+            if Devices.buzzer_plugged_in():
+                self.activate(self.btn_buzzer)
+            else:
+                self.deactivate(self.btn_buzzer)
+        else:
+            # No se encontró controlador maestro, desactivar todo
+            self.deactivate(self.btn_lightbar)
+            self.deactivate(self.btn_buzzer)
+            self.deactivate(self.btn_start)
+            self.deactivate(self.btn_start24)
+        
+        # Mostrar resultados en el botón temporalmente
+        self.btn_scan_usb.setEnabled(True)
+        
+        if found_devices:
+            self.btn_scan_usb.setText(f"Found: {', '.join(found_devices[-2:])}")  # Mostrar últimos 2 dispositivos
+            
+            # Mostrar estado de conexión en la consola
+            print("Connected devices:")
+            for device in found_devices:
+                print(f"- {device}")
+            
+            # Si hay lightbar, inicializar con LED central
+            if "Lightbar" in found_devices:
+                Devices.set_led(Devices.led_num // 2 + 1)
+        else:
+            self.btn_scan_usb.setText("No devices found")
+        
+        # Restaurar texto original después de 2 segundos
+        QTimer.singleShot(2000, lambda: self.btn_scan_usb.setText(old_text))
 
 
 if __name__ == "__main__":

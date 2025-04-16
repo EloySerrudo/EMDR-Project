@@ -27,7 +27,7 @@ typedef struct esp_now_packet {
 
 // Estructura para enviar comandos a los esclavos
 typedef struct command_packet {
-    uint8_t command;  // 'S': start, 'P': pause, 'C': check connection
+    uint8_t command;  // 'S': start, 'P': pause, 'A': check connection
     uint8_t device_id; // ID del dispositivo (útil para respuestas)
 } command_packet_t;
 
@@ -40,7 +40,7 @@ typedef struct ack_packet {
 
 // Direcciones MAC de los dispositivos esclavos
 uint8_t slaveAddresses[][6] = {
-    {0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4}, // MAC del sensor de pulso
+    {0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30}, // MAC del ESP32 sensor de señales. DEVICE_ID: 1
     // Añadir más dispositivos aquí cuando sea necesario
 };
 
@@ -161,7 +161,7 @@ void checkSlaveConnections() {
     
     // Enviar comando de verificación a todos los esclavos
     for (int i = 0; i < NUM_SLAVES; i++) {
-        sendCommandToSlave(i, 'C');
+        sendCommandToSlave(i, 'A');
         delay(50); // Dar tiempo para respuesta
     }
     
@@ -199,7 +199,7 @@ void serialTask(void *parameter) {
                 // Detener todos los esclavos
                 forwarding = false;
                 sendCommandToSlaves('P');
-            } else if (cmd == 'C' || cmd == 'c') {
+            } else if (cmd == 'A' || cmd == 'a') {
                 // Nuevo comando para verificar conexiones
                 checkSlaveConnections();
             }

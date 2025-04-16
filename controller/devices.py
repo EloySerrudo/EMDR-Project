@@ -38,6 +38,8 @@ class Devices():
 
     @classmethod
     def probe(cls):
+        """Detecta y conecta dispositivos, incluyendo controlador maestro y sus esclavos"""
+        # Cerrar cualquier conexión existente
         _, ser = cls._lightbar
         if ser:
             ser.close()
@@ -47,32 +49,71 @@ class Devices():
             ser.close()
         cls._buzzer = (None, None)
         
+        # Lista para almacenar dispositivos encontrados
+        found_devices = []
+        
+        # Buscar puerto serial del controlador maestro
         for p in comports():
             for d in DEVICE_CONFIG.values():
                 if (p.vid, p.pid) == (d['vid'], d['pid']):
                     ser = None
                     try:
-                        ser = Serial(p.device, baudrate=d['baud'], timeout=0.5)  # Timeout aumentado
-                        sleep(2)
-                        # Enviar 4 bytes: comando 'i' + 3 bytes a cero
+                        ser = Serial(p.device, baudrate=d['baud'], timeout=1.0)
+                        sleep(2)  # Dar tiempo para inicialización
+                        
+                        # Enviar comando de identificación
                         ser.write(bytes([ord('i'), 0, 0, 0]))
                         ser.flush()
                         id_str = ser.read_until().strip()
-                        print(f"Device ID: {id_str}")
-                        if id_str.find(b'EMDR Lightbar') == 0:
-                            cls._lightbar = (d, ser)
-                        # elif id_str.find(b'EMDR Master Controller') == 0:  # Identificador del coordinador
-                        elif b'EMDR Master Controller' in id_str:
-                            cls._lightbar = (d, ser)  # Tratar al coordinador como si fuera un lightbar
-                        elif id_str.find(b'EMDR Buzzer') == 0:
-                            cls._buzzer = (d, ser)
+                        print(f"Device response: {id_str}")
+                        
+                        # Verificar si es el controlador maestro
+                        if b'EMDR Master Controller' in id_str:
+                            found_devices.append("Master Controller")
+                            cls._lightbar = (d, ser)  # Usamos esta conexión para comunicarnos con todo
+                            print("Master controller detected")
+                            
+                            # Solicitar verificación de dispositivos conectados
+                            ser.write(bytes([ord('A'), 0, 0, 0]))  # Comando 'A' para verificar conexiones
+                            ser.flush()
+                            sleep(2)  # Esperar respuesta
+                            
+                            # Leer respuesta del protocolo de verificación de conexión
+                            print(f"Serial in waiting: {ser.in_waiting}")
+                            if ser.in_waiting > 0:
+                                print("Entró")
+                                a = ser.read(1)
+                                b = ser.read(1)
+                                print(f"Received: {a}, {b}")
+                                # Protocolo definido: !C[num_devices][device_id1][status1][device_id2][status2]...
+                                if a == b'!' and b == b'C':  
+                                    num_devices = ord(ser.read(1))
+                                    print(f"Reported {num_devices} slaves connected")
+                                    
+                                    for _ in range(num_devices):
+                                        if ser.in_waiting >= 2:
+                                            device_id = ord(ser.read(1))
+                                            status = ord(ser.read(1))
+                                            print(f"Device ID: {device_id}, Status: {status}")
+                                            if status == 1:
+                                                if device_id == 1:
+                                                    found_devices.append("Pulse Sensor")
+                                                    print("Pulse sensor connected")
+                                                elif device_id == 2:
+                                                    found_devices.append("Lightbar")
+                                                    print("Lightbar connected")
+                                                else:
+                                                    found_devices.append(f"Device ID {device_id}")
                         else:
+                            print(f"Unknown device: {id_str}")
                             ser.close()
+                            
                     except Exception as e:
-                        print(f"Error probing device: {e}")
+                        print(f"Error probing device on {p.device}: {e}")
                         if ser:
                             ser.close()
-                        pass
+        
+        return found_devices
 
     @classmethod
     def lightbar_plugged_in(cls):
@@ -128,4 +169,3 @@ class Devices():
         cls._sound_duration = duration
         cls._channel_left.set_volume(1 * volume, 0)
         cls._channel_right.set_volume(0, 1 * volume)
-        
