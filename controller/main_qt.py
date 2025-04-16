@@ -499,16 +499,16 @@ class Controller(QMainWindow):
         if self.mode == 'action':
             return
         Devices.probe()
-        if Devices.buzzer_plugged_in():
-            self.activate(self.btn_buzzer)
-        else:
-            self.deactivate(self.btn_buzzer)
         if Devices.lightbar_plugged_in():
             if not self.btn_lightbar.active:
                 Devices.set_led(Devices.led_num / 2 + 1)
             self.activate(self.btn_lightbar)
         else:
             self.deactivate(self.btn_lightbar)
+        if Devices.buzzer_plugged_in():
+            self.activate(self.btn_buzzer)
+        else:
+            self.deactivate(self.btn_buzzer)
 
     def reset_action(self):
         """Reinicia la acción EMDR"""
