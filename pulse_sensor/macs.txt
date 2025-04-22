@@ -4,4 +4,4 @@
 4 {0x18, 0x8B, 0x0E, 0x91, 0x3C, 0xBC} ESP32-C3 COM10
 200000 máxima saturación. 10000 después
 
-Crea un nuevo script que combine la funcionalidad de los scripts: 'main_qt.py' y 'eog_monitor_qt.py'.
+5 {0xE0, 0x5A, 0x1B, 0x60, 0x58, 0xCC} auxiliar

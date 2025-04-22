@@ -1,5 +1,4 @@
 import sys
-import serial
 import numpy as np
 import struct
 import threading
@@ -15,37 +14,34 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayou
 from PySide6.QtCore import QTimer, Qt, Signal, QObject
 import pyqtgraph as pg
 
+# Importaciones para gestión de dispositivos
+import sys, os
+# Add project root to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Now import from controller
+from controller.devices import Devices, KNOWN_SLAVES
+# from devices import Devices, KNOWN_SLAVES
+
 # Importación del filtro en tiempo real
 from signal_processing import RealTimeFilter
 
-# Configuración por defecto
-DEFAULT_PORT = 'COM6'  # Cambiar según el puerto que use tu ESP32
-DEFAULT_BAUDRATE = 115200
-BUFFER_SIZE = 512  # Debe coincidir con el BUFFER_SIZE del Arduino
+# Configuración constantes
 SAMPLE_RATE = 125  # Hz (tasa efectiva: 250 SPS ÷ 2 canales)
-DISPLAY_TIME = 5  # Segundos de datos a mostrar en la gráfica
+DISPLAY_TIME = 5   # Segundos de datos a mostrar en la gráfica
+BUFFER_SIZE = 512  # Tamaño máximo de buffer
 
 # Constantes para el protocolo binario
 PACKET_HEADER = 0xAA55  # Debe coincidir con el header en el código Arduino
-PACKET_SIZE = 15        # Tamaño en bytes de cada paquete (actualizado para incluir ambos canales y el ID del dispositivo)
-
-# Diccionario de esclavos: {ID: (nombre, requerido_para_captura)}
-KNOWN_SLAVES = {
-    1: ("Sensor EOG", True),  # ID 1: Sensor de EOG (requerido para captura)
-    # Aquí se pueden añadir más esclavos en el futuro
-}
+PACKET_SIZE = 15        # Tamaño en bytes de cada paquete
 
 class SignalsObject(QObject):
     device_status_updated = Signal(dict, bool)
     
 class EOGMonitorQt(QMainWindow):
-    def __init__(self, port=DEFAULT_PORT, baudrate=DEFAULT_BAUDRATE, display_time=DISPLAY_TIME):
+    def __init__(self, display_time=DISPLAY_TIME):
         super().__init__()
         
-        # Serial configuration
-        self.port = port
-        self.baudrate = baudrate
-        self.serial = None
+        # Ya no necesitamos configuración de puerto y baudrate
         self.running = False
         self.reading_thread = None
         
@@ -113,7 +109,7 @@ class EOGMonitorQt(QMainWindow):
         self.raw_plot_widget.setLabel('left', 'Señal EOG cruda')
         self.raw_plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.raw_plot_widget.showGrid(x=True, y=True)
-        self.raw_plot_widget.setYRange(-25000, 20000)  # Ajustado para valores EOG (-30000, 30000)
+        self.raw_plot_widget.setYRange(-25000, 20000)
         self.raw_plot_widget.setXRange(-display_time, 0)
         
         # Filtered signal plot
@@ -121,7 +117,7 @@ class EOGMonitorQt(QMainWindow):
         self.filtered_plot_widget.setLabel('left', 'Señal EOG filtrada')
         self.filtered_plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.filtered_plot_widget.showGrid(x=True, y=True)
-        self.filtered_plot_widget.setYRange(-25000, 20000)  # Ajustado para valores filtrados (-30000, 30000)
+        self.filtered_plot_widget.setYRange(-25000, 20000)
         self.filtered_plot_widget.setXRange(-display_time, 0)
         
         # Create curves for data
@@ -142,6 +138,14 @@ class EOGMonitorQt(QMainWindow):
         instructions.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(instructions)
         
+        # Add scan button
+        scan_button = QLabel("<a href='#'>Escanear dispositivos</a>")
+        scan_button.setAlignment(Qt.AlignCenter)
+        scan_button.setTextFormat(Qt.RichText)
+        scan_button.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        scan_button.linkActivated.connect(self.check_slave_connections)
+        main_layout.addWidget(scan_button)
+        
         self.setCentralWidget(central_widget)
         
         # Setup timer for updating plot
@@ -149,20 +153,11 @@ class EOGMonitorQt(QMainWindow):
         self.timer.timeout.connect(self.update_plot)
         self.timer.start(50)  # 50ms refresh rate (20 FPS)
         
-    def connect(self):
-        """Connect to serial port"""
-        try:
-            self.serial = serial.Serial(self.port, self.baudrate, timeout=1)
-            print(f"Conectado a {self.port} a {self.baudrate} baudios")
-            self.serial.reset_input_buffer()  # Clear any pending data
-            return True
-        except serial.SerialException as e:
-            print(f"Error al conectar al puerto {self.port}: {e}")
-            return False
-    
     def start_acquisition(self):
         """Start data acquisition"""
-        if not self.serial or self.running:
+        # Verificar que el controlador maestro esté conectado
+        if not Devices._master_controller[1] or self.running:
+            print("No hay conexión con el controlador maestro o ya está adquiriendo datos")
             return
             
         if not self.required_devices_connected:
@@ -196,8 +191,8 @@ class EOGMonitorQt(QMainWindow):
         self.valores = []
         self.valores_filtrados = []
         
-        # Send command to ESP32 to start capture
-        self.serial.write(b'S')
+        # Send command to ESP32 to start capture usando Devices
+        Devices.write(Devices._master_controller, bytes([ord('S'), 0, 0, 0]))
         
         # Start capture
         self.running = True
@@ -210,9 +205,9 @@ class EOGMonitorQt(QMainWindow):
 
     def stop_acquisition(self):
         """Stop data acquisition"""
-        if self.serial and self.running:
+        if Devices._master_controller[1] and self.running:
             # Send command to ESP32 to stop capture
-            self.serial.write(b'P')
+            Devices.write(Devices._master_controller, bytes([ord('P'), 0, 0, 0]))
             
             # Stop capture
             self.running = False
@@ -234,75 +229,44 @@ class EOGMonitorQt(QMainWindow):
 
     def check_slave_connections(self):
         """Send command to check for connected slaves"""
-        if not self.serial:
-            print("No hay conexión serial establecida")
+        # Escanear dispositivos usando Devices
+        found_devices = Devices.probe()
+        
+        if not found_devices:
+            print("No se encontraron dispositivos")
+            self.device_status_label.setText("Estado de dispositivos: No se encontraron dispositivos")
+            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+            return
+            
+        if "Master Controller" not in found_devices:
+            print("No se encontró el controlador maestro")
+            self.device_status_label.setText("Estado de dispositivos: No se encontró el controlador maestro")
+            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
             return
             
         print("Verificando dispositivos conectados...")
-        self.serial.write(b'C')  # Send command to check connections
         
         # Reset connection status
         self.slave_status = {slave_id: False for slave_id in KNOWN_SLAVES}
         self.required_devices_connected = False
         
-        # Read response in a separate thread to avoid blocking the UI
-        if self.connection_thread is None or not self.connection_thread.is_alive():
-            self.connection_thread = threading.Thread(target=self._read_connection_data)
-            self.connection_thread.daemon = True
-            self.connection_thread.start()
-    
-    def _read_connection_data(self):
-        """Read connection data in a separate thread"""
-        # Clear buffer before reading
-        message_buffer = bytearray()
-        timeout = time.time() + 2.0  # 2 seconds timeout
+        # Update status from found devices
+        status_dict = {}
+        for slave_id, (name, required) in KNOWN_SLAVES.items():
+            is_connected = name in found_devices
+            self.slave_status[slave_id] = is_connected
+            status_dict[slave_id] = is_connected
+            
+        # Check for required devices
+        required_connected = all(
+            self.slave_status.get(slave_id, False) 
+            for slave_id, (_, required) in KNOWN_SLAVES.items() 
+            if required
+        )
         
-        # Clear serial buffer
-        self.serial.reset_input_buffer()
-        
-        while time.time() < timeout:
-            try:
-                if self.serial.in_waiting > 0:
-                    data = self.serial.read(self.serial.in_waiting)
-                    message_buffer.extend(data)
-                    
-                    # Check if we have enough bytes to process
-                    if len(message_buffer) >= 3:  # At least '!', 'C' and slave_count
-                        marker = chr(message_buffer[0])
-                        command = chr(message_buffer[1])
-                        
-                        if marker == '!' and command == 'C':
-                            slave_count = message_buffer[2]
-                            # Check if we have all bytes needed
-                            if len(message_buffer) >= 3 + (slave_count * 2):
-                                self.slave_count = slave_count
-                                
-                                # Process connection information
-                                status_dict = {}
-                                for i in range(slave_count):
-                                    device_id = message_buffer[3 + (i * 2)]
-                                    status = message_buffer[4 + (i * 2)] == 1
-                                    
-                                    if device_id in self.slave_status:
-                                        self.slave_status[device_id] = status
-                                        status_dict[device_id] = status
-                                
-                                # Check for required devices
-                                required_connected = all(
-                                    self.slave_status.get(slave_id, False) 
-                                    for slave_id, (_, required) in KNOWN_SLAVES.items() 
-                                    if required
-                                )
-                                
-                                # Update UI from main thread
-                                self.signals.device_status_updated.emit(status_dict, required_connected)
-                                self._print_connection_status()
-                                break
-                    
-                time.sleep(0.05)
-            except Exception as e:
-                print(f"Error al leer datos de conexión: {e}")
-                break
+        self.required_devices_connected = required_connected
+        self.signals.device_status_updated.emit(status_dict, required_connected)
+        self._print_connection_status()
     
     def update_device_status(self, status_dict, required_connected):
         """Update the device status UI - called from main thread"""
@@ -345,15 +309,21 @@ class EOGMonitorQt(QMainWindow):
     def _read_data(self):
         """Function that runs in a separate thread to read binary data"""
         data_buffer = bytearray()
+        serial_conn = Devices._master_controller[1]  # Obtener la conexión serial del controlador maestro
+        
+        if not serial_conn:
+            print("No hay conexión serial disponible")
+            self.running = False
+            return
         
         while self.running:
             try:
                 # Read available data
-                available = self.serial.in_waiting
+                available = serial_conn.in_waiting
                 
                 if available > 0:
                     # Read available data
-                    new_data = self.serial.read(min(available, BUFFER_SIZE * PACKET_SIZE))
+                    new_data = serial_conn.read(min(available, BUFFER_SIZE * PACKET_SIZE))
                     data_buffer.extend(new_data)
                     
                     # Process while we have enough data for a complete packet
@@ -397,8 +367,6 @@ class EOGMonitorQt(QMainWindow):
                                 # Timestamp (4 bytes)
                                 timestamp_ms = struct.unpack('<I', data_buffer[6:10])[0]
                                 timestamp_s = timestamp_ms / 1000.0  # Convert to seconds
-                                
-                                # Skip value_0, we only care about EOG value
                                 
                                 # EOG value (2 bytes)
                                 value = struct.unpack('<h', data_buffer[10:12])[0]
@@ -540,26 +508,15 @@ class EOGMonitorQt(QMainWindow):
             print("\nGuardando datos antes de salir...")
             self.save_data_to_csv()
             
-        if self.serial:
-            print(f"Puerto {self.port} cerrado")
-            self.serial.close()
         super().closeEvent(event)
 
 def main():
     parser = argparse.ArgumentParser(description='Monitor de EOG (PyQtGraph)')
-    parser.add_argument('-p', '--port', default=DEFAULT_PORT,
-                        help=f'Puerto serial (default: {DEFAULT_PORT})')
-    parser.add_argument('-b', '--baudrate', type=int, default=DEFAULT_BAUDRATE,
-                        help=f'Velocidad en baudios (default: {DEFAULT_BAUDRATE})')
     args = parser.parse_args()
     
     app = QApplication([])
-    monitor = EOGMonitorQt(port=args.port, baudrate=args.baudrate)
+    monitor = EOGMonitorQt()
     monitor.show()
-    
-    # Try to connect to serial port
-    if not monitor.connect():
-        print("No se pudo conectar al puerto serial. La aplicación continuará sin conexión.")
     
     # Start Qt event loop
     sys.exit(app.exec())

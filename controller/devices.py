@@ -10,6 +10,7 @@ KNOWN_SLAVES = {
     1: ("Sensor", True),   # ID 1: Sensor de pulso (requerido para captura de señales)
     2: ("Lightbar", False),         # Ejemplo: ID 2 para un sensor que no es obligatorio
     3: ("Buzzer", False)            # Ejemplo: ID 3 para otro sensor opcional
+    # Aquí se pueden añadir más esclavos en el futuro
 }
 
 class Note(pygame.mixer.Sound):
@@ -96,7 +97,7 @@ class Devices():
                         else:
                             print(f"Unknown device: {id_str}")
                             ser.close()
-                            
+                           
                     except Exception as e:
                         print(f"Error probing device on {p.device}: {e}")
                         if ser:
@@ -122,7 +123,6 @@ class Devices():
         if dev and ser:
             ser.write(cmd)
             ser.flush()
-
 
     @classmethod
     def set_led(cls, num):

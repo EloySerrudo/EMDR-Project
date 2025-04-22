@@ -8,12 +8,17 @@
 #include <esp_system.h>
 
 // Configuración de LED y botones
-#define STATUS_LED 22  // LED integrado del ESP32
+#define STATUS_LED 22         // LED integrado del ESP32
+#define PACKET_HEADER 0xAA55  // Header para paquetes de datos
+#define PACKET_SIZE 15        // Tamaño del paquete del sensor
+
+// Variables globales
+bool forwarding = true;  // Indicador para reenviar datos al PC
 
 // Direcciones MAC de los dispositivos esclavos
 uint8_t slaveAddresses[][6] = {
-  { 0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30 },  // MAC del ESP32 sensor de señales. DEVICE_ID: 1
-  { 0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4 }   // MAC del ESP32 de la lightbar. DEVICE_ID: 2
+  { 0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4 },  // MAC del ESP32 sensor de señales. DEVICE_ID: 1
+  { 0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30 }   // MAC del ESP32 de la lightbar. DEVICE_ID: 2
   // Añadir más dispositivos aquí cuando sea necesario
 };
 
@@ -21,6 +26,9 @@ uint8_t slaveAddresses[][6] = {
 
 // Control de estado de los esclavos
 bool slaveConnected[NUM_SLAVES] = { false };
+
+// Buffer para reensamblar paquetes para serial
+uint8_t serialPacket[PACKET_SIZE];
 
 // Variables de estado
 volatile bool lastCommandSent = true;
@@ -43,6 +51,16 @@ typedef struct ack_packet {
   uint8_t status;
 } ack_packet_t;
 
+// Estructura para recibir datos del sensor
+typedef struct esp_now_packet {
+  uint16_t header;
+  uint32_t id;
+  uint32_t timestamp;
+  int16_t value_0;
+  int16_t value_1;
+  uint8_t device_id;
+} esp_now_packet_t;
+
 // Función para enviar comandos a los esclavos
 void sendCommandToSlave(uint8_t slaveIndex, char cmd, uint8_t data1, uint8_t data2, uint8_t data3) {
   // Verificar que el índice del esclavo sea válido
@@ -53,7 +71,7 @@ void sendCommandToSlave(uint8_t slaveIndex, char cmd, uint8_t data1, uint8_t dat
   commandToSend.data1 = data1;
   commandToSend.data2 = data2;
   commandToSend.data3 = data3;
-  
+
   esp_now_send(slaveAddresses[slaveIndex], (uint8_t *)&commandToSend, sizeof(slave_command_t));
 }
 
@@ -91,8 +109,37 @@ void onSentEspNowData(const uint8_t *mac_addr, esp_now_send_status_t status) {
 
 // Callback cuando se reciben datos
 void onReceivedEspNowData(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
+  // 1. Verificar si es un paquete del sensor de pulso
+  if (data_len == sizeof(esp_now_packet_t)) {
+    esp_now_packet_t *packet = (esp_now_packet_t *)data;
+    if (packet->header == PACKET_HEADER && forwarding) {
+      // Reenviar datos al PC en formato binario
+      serialPacket[0] = PACKET_HEADER & 0xFF;
+      serialPacket[1] = (PACKET_HEADER >> 8) & 0xFF;
+
+      serialPacket[2] = packet->id & 0xFF;
+      serialPacket[3] = (packet->id >> 8) & 0xFF;
+      serialPacket[4] = (packet->id >> 16) & 0xFF;
+      serialPacket[5] = (packet->id >> 24) & 0xFF;
+
+      serialPacket[6] = packet->timestamp & 0xFF;
+      serialPacket[7] = (packet->timestamp >> 8) & 0xFF;
+      serialPacket[8] = (packet->timestamp >> 16) & 0xFF;
+      serialPacket[9] = (packet->timestamp >> 24) & 0xFF;
+
+      serialPacket[10] = packet->value_0 & 0xFF;
+      serialPacket[11] = (packet->value_0 >> 8) & 0xFF;
+
+      serialPacket[12] = packet->value_1 & 0xFF;
+      serialPacket[13] = (packet->value_1 >> 8) & 0xFF;
+
+      serialPacket[14] = packet->device_id;
+
+      Serial.write(serialPacket, PACKET_SIZE);
+    }
+  }
   // 2. Verificar si es una confirmación de conexión
-  if (data_len == sizeof(ack_packet_t)) {
+  else if (data_len == sizeof(ack_packet_t)) {
     ack_packet_t *ackPacket = (ack_packet_t *)data;
     if (ackPacket->command == 'A') {
       uint8_t deviceId = ackPacket->device_id;
@@ -126,15 +173,13 @@ void setup() {
     return;
   }
 
-  // Registrar el receptor
-  memcpy(peerInfo.peer_addr, slaveAddresses[1], 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-
-  // Añadir peer
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Failed to add peer");
-    return;
+  // Registrar todos los dispositivos esclavos como peers
+  for (uint8_t i = 0; i < NUM_SLAVES; i++) {
+    memcpy(peerInfo.peer_addr, slaveAddresses[i], 6);
+    peerInfo.channel = 0;
+    peerInfo.encrypt = false;
+    // Añadir peer
+    esp_now_add_peer(&peerInfo);
   }
 
   // Registrar la función de callback para saber el estado del envío
@@ -159,7 +204,7 @@ void loop() {
         checkSlaveConnections();
       } else {
         // Enviar el paquete mediante ESP-NOW
-        sendCommandToSlave(1, packetBuffer[0], packetBuffer[1], packetBuffer[2], packetBuffer[3]);
+        sendCommandToSlave(0, packetBuffer[0], packetBuffer[1], packetBuffer[2], packetBuffer[3]);
       }
     }
   }

@@ -67,11 +67,11 @@ typedef struct struct_message {
 
 // Estructura para recibir los datos a través de ESP-NOW
 typedef struct {
-    char cmd;       // 'S': start, 'P': pause, 'C': check connection
+    char cmd;       // 'S': start, 'P': pause, 'A': check connection
     uint8_t data1;
     uint8_t data2;
     uint8_t data3;
-  } CommandPacket;
+} CommandPacket;
   
 // Estructura para enviar confirmación al maestro
 typedef struct ack_packet {
@@ -99,8 +99,29 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *incomingData, int da
         memcpy(&cmd, incomingData, sizeof(cmd));
         // Convertir comando a minúsculas para procesar tanto mayúsculas como minúsculas
         char command = tolower(cmd.cmd);
-        
+        Serial.println(cmd.cmd);
         switch (command) {
+            case 's':  // Comando de inicio de captura
+                ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
+                digitalWrite(STATUS_LED, HIGH);  // Indicar captura activa
+                capturing = true;
+                // Iniciar el timer para muestreo periódico cada 4ms (250Hz), 4ms = 4000us
+                if (!esp_timer_is_active(timer_handle)) {
+                    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handle, 4000));
+                }
+                break;
+            case 'p':  // Comando de pausa de captura
+                capturing = false;
+                portENTER_CRITICAL(&dataMux);
+                startTime = 0;  // Reset startTime when ending capture
+                channel = 1;
+                portEXIT_CRITICAL(&dataMux);
+                digitalWrite(STATUS_LED, LOW);  // Indicar captura inactiva
+                // Detener el timer
+                if (esp_timer_is_active(timer_handle)) {
+                    ESP_ERROR_CHECK(esp_timer_stop(timer_handle));
+                }
+                break;
             case 'a':  // Comando de verificación de conexión
                 // Enviar respuesta al maestro
                 ack_packet_t response;
@@ -112,34 +133,14 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *incomingData, int da
                 esp_err_t result = esp_now_send(masterAddress, 
                                               (uint8_t *) &response, 
                                               sizeof(response));
-                
-                // Parpadear LED para indicar que respondimos
-                digitalWrite(STATUS_LED, HIGH);
-                delay(50);
-                digitalWrite(STATUS_LED, LOW);
+                if (result == ESP_OK) {
+                  // Parpadear LED para indicar que respondimos
+                  digitalWrite(STATUS_LED, HIGH);
+                  delay(50);
+                  digitalWrite(STATUS_LED, LOW);
+                }
                 break;
         }
-
-        // if (cmd->command == 'S' || cmd->command == 's') {
-        //     capturing = true;
-        //     ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
-        //     digitalWrite(STATUS_LED, HIGH);  // Indicar captura activa
-        //     // Iniciar el timer para muestreo periódico cada 4ms (250Hz), 4ms = 4000us
-        //     if (!esp_timer_is_active(timer_handle)) {
-        //         ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handle, 4000));
-        //     }
-        // } else if (cmd->command == 'P' || cmd->command == 'p') {
-        //     capturing = false;
-        //     portENTER_CRITICAL(&dataMux);
-        //     startTime = 0;  // Reset startTime when ending capture
-        //     channel = 1;
-        //     portEXIT_CRITICAL(&dataMux);
-        //     digitalWrite(STATUS_LED, LOW);  // Indicar captura inactiva
-        //     // Detener el timer
-        //     if (esp_timer_is_active(timer_handle)) {
-        //         ESP_ERROR_CHECK(esp_timer_stop(timer_handle));
-        //     }
-        // }
     }
 }
  
@@ -205,20 +206,22 @@ void transmitTask(void *parameter) {
                 esp_err_t result = esp_now_send(masterAddress, 
                                                 (uint8_t *) &myData, 
                                                 sizeof(myData));
-                
+                digitalWrite(STATUS_LED, HIGH);
                 if (result != ESP_OK) {
                     // Manejar error si es necesario
                     vTaskDelay(1); // Pequeño retardo en caso de error
                 }
             }
         }
-
         // Pequeña espera para no saturar el CPU
         vTaskDelay(2);
     }
 }
 
 void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
   // Configurar los LEDs
   pinMode(STATUS_LED, OUTPUT);
   pinMode(ERROR_LED, OUTPUT);
@@ -243,15 +246,12 @@ void setup() {
   peerInfo.encrypt = false;
   
   // Add peer        
-  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
     return;
   }
 
   // Indicar que ESP-NOW está listo
   espNowConnected = true;
-  digitalWrite(STATUS_LED, HIGH);
-  delay(500);
-  digitalWrite(STATUS_LED, LOW);
   
   // Inicializar I2C para comunicación con el ADS1115
   Wire.begin();
@@ -270,6 +270,10 @@ void setup() {
   // Configurar el ADS1115
   ads.setGain(GAIN_TWO);       // 2x gain   +/- 2.048V  1 bit = 0.0625mV
   ads.setDataRate(RATE_ADS1115_475SPS); // Usar 475 SPS (similar al original)
+  // Inicialización correcta
+  digitalWrite(STATUS_LED, HIGH);
+  delay(500);
+  digitalWrite(STATUS_LED, LOW);
   
   // Configurar el timer pero no iniciarlo todavía
   const esp_timer_create_args_t timer_args = {

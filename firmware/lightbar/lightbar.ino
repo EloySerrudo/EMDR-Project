@@ -105,11 +105,12 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int data_len) {
         esp_err_t result = esp_now_send(masterAddress, 
                                       (uint8_t *) &response, 
                                       sizeof(response));
-            
-        // Parpadear LED para indicar que respondimos
-        digitalWrite(STATUS_LED, HIGH);
-        delay(50);
-        digitalWrite(STATUS_LED, LOW);
+        if (result == ESP_OK) {
+          // Parpadear LED para indicar que respondimos
+          digitalWrite(STATUS_LED, HIGH);
+          delay(50);
+          digitalWrite(STATUS_LED, LOW);
+        }
         break;
     }
   }
@@ -120,6 +121,7 @@ void setup() {
   strip.begin();
   strip.clear();
   strip.show();
+  delay(1000);
 
   // Configuración del pin de status
   pinMode(STATUS_LED, OUTPUT);
@@ -145,9 +147,12 @@ void setup() {
   
   // Añadir peer
   if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    digitalWrite(STATUS_LED, HIGH);  // Indicar error
     return;
   }
+  // Inicialización correcta
+  digitalWrite(STATUS_LED, HIGH);
+  delay(500);
+  digitalWrite(STATUS_LED, LOW);
 
   // Mostrar patrón de prueba inicial
   test();
