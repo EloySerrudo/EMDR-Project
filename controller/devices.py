@@ -42,9 +42,6 @@ class Devices():
     _beep = Note(440)
     _sound_duration = 50
     _master_controller = (None, None)
-    _lightbar = (None, None)
-    _buzzer = (None, None)
-    _sensor = (None, None)
     # Lista para almacenar dispositivos encontrados
     _found_devices = []
 
@@ -69,17 +66,17 @@ class Devices():
                         sleep(2)  # Dar tiempo para inicialización
                         
                         # Enviar comando de identificación
-                        ser.write(bytes([ord('i'), 0, 0, 0]))
+                        ser.write(bytes([ord('I'), 0, 0, 0, 0]))
                         ser.flush()
                         id_str = ser.read_until().strip()
-                        
+                        print(id_str)  # Imprimir la cadena de identificación para depuración
                         # Verificar si es el controlador maestro
                         if b'EMDR Master Controller' in id_str:
                             cls._found_devices.append("Master Controller")
                             cls._master_controller = (d, ser)  # Usamos esta conexión para comunicarnos con todo
                             
                             # Solicitar verificación de dispositivos conectados
-                            ser.write(bytes([ord('A'), 0, 0, 0]))  # Comando 'A' para verificar conexiones
+                            ser.write(bytes([ord('A'), 0, 0, 0, 0]))  # Comando 'A' para verificar conexiones
                             ser.flush()
                             sleep(2)  # Esperar respuesta
                             
@@ -106,16 +103,20 @@ class Devices():
         return cls._found_devices
 
     @classmethod
+    def master_plugged_in(cls):
+        return "Master Controller" in cls._found_devices
+
+    @classmethod
+    def sensor_plugged_in(cls):
+        return "Sensor" in cls._found_devices
+
+    @classmethod
     def lightbar_plugged_in(cls):
         return "Lightbar" in cls._found_devices
 
     @classmethod
     def buzzer_plugged_in(cls):
-        return "Device" in cls._found_devices
-
-    @classmethod
-    def sensor_plugged_in(cls):
-        return "Sensor" in cls._found_devices
+        return "Buzzer" in cls._found_devices
 
     @classmethod
     def write(cls, devser, cmd):
@@ -125,21 +126,35 @@ class Devices():
             ser.flush()
 
     @classmethod
+    def get_master_connection(cls):
+        return cls._master_controller[1]
+
+    @classmethod
+    def start_sensor(cls):
+        # Enviar 5 bytes: comando 's' + ID + 3 bytes a cero
+        cls.write(cls._master_controller, bytes([ord('s'), 1, 0, 0, 0]))
+
+    @classmethod
+    def stop_sensor(cls):
+        # Enviar 5 bytes: comando 'p' + ID + 3 bytes a cero
+        cls.write(cls._master_controller, bytes([ord('p'), 1, 0, 0, 0]))
+
+    @classmethod
     def set_led(cls, num):
         if num >= 0:
-            # Enviar 4 bytes: comando 'l' + posición del LED + 2 bytes a cero
-            cls.write(cls._master_controller, bytes([ord('l'), int(num), 0, 0]))
+            # Enviar 5 bytes: comando 'l' + ID + posición del LED + 2 bytes a cero
+            cls.write(cls._master_controller, bytes([ord('l'), 2, int(num), 0, 0]))
         else:
-            # Enviar 4 bytes: comando 't' + 3 bytes a cero
-            cls.write(cls._master_controller, bytes([ord('t'), 0, 0, 0]))
+            # Enviar 5 bytes: comando 't' + ID + 3 bytes a cero
+            cls.write(cls._master_controller, bytes([ord('t'), 2, 0, 0, 0]))
 
     @classmethod
     def set_color(cls, col):
         r = (col >> 16) & 0xFF
         g = (col >> 8) & 0xFF
         b = col & 0xFF
-        # Enviar 4 bytes: comando 'c' + r + g + b
-        cls.write(cls._master_controller, bytes([ord('c'), r, g, b]))
+        # Enviar 5 bytes: comando 'c' + ID + r + g + b
+        cls.write(cls._master_controller, bytes([ord('c'), 2, r, g, b]))
 
     @classmethod
     def set_buzzer_duration(cls, duration):
@@ -147,7 +162,7 @@ class Devices():
 
     @classmethod
     def do_buzzer(cls, left):
-        cls.write(cls._buzzer, (b'l' if left else b'r') + b' %d\r\n' % cls._buzzer_duration)
+        cls.write(cls._master_controller, bytes([ord('l' if left else 'r'), 3, cls._buzzer_duration, 0, 0]))
 
     @classmethod
     def do_sound(cls, left):

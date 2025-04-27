@@ -3,7 +3,6 @@ import numpy as np
 import struct
 import threading
 import time
-import argparse
 import os
 from collections import deque
 import pandas as pd
@@ -156,7 +155,7 @@ class EOGMonitorQt(QMainWindow):
     def start_acquisition(self):
         """Start data acquisition"""
         # Verificar que el controlador maestro esté conectado
-        if not Devices._master_controller[1] or self.running:
+        if not Devices.master_plugged_in() or self.running:
             print("No hay conexión con el controlador maestro o ya está adquiriendo datos")
             return
             
@@ -192,7 +191,7 @@ class EOGMonitorQt(QMainWindow):
         self.valores_filtrados = []
         
         # Send command to ESP32 to start capture usando Devices
-        Devices.write(Devices._master_controller, bytes([ord('S'), 0, 0, 0]))
+        Devices.start_sensor()
         
         # Start capture
         self.running = True
@@ -205,9 +204,9 @@ class EOGMonitorQt(QMainWindow):
 
     def stop_acquisition(self):
         """Stop data acquisition"""
-        if Devices._master_controller[1] and self.running:
+        if Devices.master_plugged_in() and self.running:
             # Send command to ESP32 to stop capture
-            Devices.write(Devices._master_controller, bytes([ord('P'), 0, 0, 0]))
+            Devices.stop_sensor()
             
             # Stop capture
             self.running = False
@@ -309,8 +308,8 @@ class EOGMonitorQt(QMainWindow):
     def _read_data(self):
         """Function that runs in a separate thread to read binary data"""
         data_buffer = bytearray()
-        serial_conn = Devices._master_controller[1]  # Obtener la conexión serial del controlador maestro
-        
+        # serial_conn = Devices._master_controller[1]  # Obtener la conexión serial del controlador maestro
+        serial_conn = Devices.get_master_connection()  # Obtener la conexión serial del controlador maestro
         if not serial_conn:
             print("No hay conexión serial disponible")
             self.running = False
@@ -510,16 +509,11 @@ class EOGMonitorQt(QMainWindow):
             
         super().closeEvent(event)
 
-def main():
-    parser = argparse.ArgumentParser(description='Monitor de EOG (PyQtGraph)')
-    args = parser.parse_args()
-    
+if __name__ == "__main__":
+    """Función principal para ejecutar el monitor como aplicación independiente"""
     app = QApplication([])
     monitor = EOGMonitorQt()
     monitor.show()
     
     # Start Qt event loop
     sys.exit(app.exec())
-
-if __name__ == "__main__":
-    main()
