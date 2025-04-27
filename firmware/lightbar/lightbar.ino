@@ -3,10 +3,10 @@
 #include <Adafruit_NeoPixel.h>
 
 // Identificador único de este dispositivo
-#define DEVICE_ID 2  // Lightbar
+#define DEVICE_ID 2  // EMDR Lightbar
 
-#define PIN_LED 13     // Pin para controlar el NeoPixel strip
-#define STATUS_LED 23  // LED para indicar errores
+#define PIN_LED 25     // Pin para controlar el NeoPixel strip
+#define STATUS_LED 33  // LED para indicar errores
 #define NUMLED 60      // Número de LEDs en la tira
 
 // Estructura para recibir los datos a través de ESP-NOW

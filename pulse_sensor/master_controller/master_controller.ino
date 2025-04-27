@@ -18,8 +18,8 @@
  // Direcciones MAC de los dispositivos esclavos
  uint8_t slaveAddresses[][6] = {
    { 0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4 },  // MAC del ESP32 sensor de señales. DEVICE_ID: 1
-   { 0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30 }   // MAC del ESP32 de la lightbar. DEVICE_ID: 2
-   // Añadir más dispositivos aquí cuando sea necesario
+   { 0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30 },  // MAC del ESP32 de la lightbar. DEVICE_ID: 2
+   { 0xCC, 0xDB, 0xA7, 0x92, 0x15, 0xC8 }   // MAC del ESP32 del buzzer. DEVICE_ID: 3
  };
  
  #define NUM_SLAVES (sizeof(slaveAddresses) / sizeof(slaveAddresses[0]))
@@ -62,7 +62,7 @@
  } esp_now_packet_t;
  
  // Función para enviar comandos a los esclavos
- void sendCommandToSlave(uint8_t slaveIndex, char cmd, uint8_t data1, uint8_t data2, uint8_t data3) {
+ void sendCommandToSlave(char cmd, uint8_t slaveIndex, uint8_t data1, uint8_t data2, uint8_t data3) {
    // Verificar que el índice del esclavo sea válido
    if (slaveIndex >= NUM_SLAVES) return;
    // Llenar la estructura para enviar
@@ -84,7 +84,7 @@
  
    // Enviar comando de verificación a cada esclavo
    for (int i = 0; i < NUM_SLAVES; i++) {
-     sendCommandToSlave(i, 'a', 0, 0, 0);
+     sendCommandToSlave('a', i, 0, 0, 0);
      delay(50);
    }
  
@@ -191,20 +191,24 @@
  }
  
  void loop() {
-   // Verificar si hay al menos 4 bytes disponibles
-   if (Serial.available() >= 4) {
-     // Usar un buffer para los 4 bytes (comando + datos)
-     uint8_t packetBuffer[4];
-     // Leer el paquete completo de 4 bytes
-     if (Serial.readBytes(packetBuffer, 4) == 4) {
-       // Si el comando es 'i', responder directamente
-       if (packetBuffer[0] == 'i') {
+   // Verificar si hay al menos 5 bytes disponibles
+   if (Serial.available() >= 5) {
+     // Usar un buffer para los 5 bytes (comando + datos)
+     uint8_t packetBuffer[5];
+     // Leer el paquete completo de 5 bytes
+     if (Serial.readBytes(packetBuffer, 5) == 5) {
+       // Si el comando es 'I', responder directamente
+       if (packetBuffer[0] == 'I') {
          Serial.println("EMDR Master Controller");
        } else if (packetBuffer[0] == 'A') {
          checkSlaveConnections();
        } else {
          // Enviar el paquete mediante ESP-NOW
-         sendCommandToSlave(0, packetBuffer[0], packetBuffer[1], packetBuffer[2], packetBuffer[3]);
+         sendCommandToSlave(packetBuffer[0],     // Comando
+                            packetBuffer[1] - 1, // Índice del esclavo (ID-1)
+                            packetBuffer[2],     // Datos 1
+                            packetBuffer[3],     // Datos 2
+                            packetBuffer[4]);    // Datos 3
        }
      }
    }
