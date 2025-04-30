@@ -4,9 +4,9 @@
 // Identificador único de este dispositivo
 #define DEVICE_ID 3 // EMDR Buzzer
 
-#define R_PIN 25
-#define L_PIN 26
-#define STATUS_LED 4  // LED para indicar estado
+#define R_PIN 33
+#define L_PIN 32
+#define STATUS_LED 27  // LED para indicar estado
 
 // Estructura para recibir los datos a través de ESP-NOW
 typedef struct {
@@ -152,6 +152,7 @@ void setup() {
   test();
   
   Serial.println("EMDR Buzzer ready with ESP-NOW");
+  digitalWrite(L_PIN, HIGH);
 }
 
 void loop() {

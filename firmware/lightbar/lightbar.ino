@@ -5,8 +5,8 @@
 // Identificador único de este dispositivo
 #define DEVICE_ID 2  // EMDR Lightbar
 
-#define PIN_LED 25     // Pin para controlar el NeoPixel strip
-#define STATUS_LED 33  // LED para indicar errores
+#define PIN_LED 22     // Pin para controlar el NeoPixel strip
+#define STATUS_LED 16  // LED para indicar errores
 #define NUMLED 60      // Número de LEDs en la tira
 
 // Estructura para recibir los datos a través de ESP-NOW
@@ -117,6 +117,8 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int data_len) {
 }
 
 void setup() {
+  // Inicializar Serial (para debugging)
+  Serial.begin(115200);
   // Inicialización de la tira NeoPixel
   strip.begin();
   strip.clear();
@@ -133,6 +135,7 @@ void setup() {
   // Inicializar ESP-NOW
   if (esp_now_init() != ESP_OK) {
     digitalWrite(STATUS_LED, HIGH);
+    Serial.println("Error initializing ESP-NOW");
     return;
   }
 
@@ -147,6 +150,7 @@ void setup() {
   
   // Añadir peer
   if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Failed to add peer");
     return;
   }
   // Inicialización correcta
@@ -156,6 +160,8 @@ void setup() {
 
   // Mostrar patrón de prueba inicial
   test();
+  
+  Serial.println("EMDR Lightbar ready with ESP-NOW");
 }
 
 void loop() {
