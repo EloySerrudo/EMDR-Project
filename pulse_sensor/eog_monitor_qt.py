@@ -9,17 +9,12 @@ import pandas as pd
 from datetime import datetime
 
 # PyQtGraph y PySide6 imports
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel
+from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QPushButton
 from PySide6.QtCore import QTimer, Qt, Signal, QObject
 import pyqtgraph as pg
 
 # Importaciones para gestión de dispositivos
-import sys, os
-# Add project root to Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-# Now import from controller
-from controller.devices import Devices, KNOWN_SLAVES
-# from devices import Devices, KNOWN_SLAVES
+from devices import Devices, KNOWN_SLAVES
 
 # Importación del filtro en tiempo real
 from signal_processing import RealTimeFilter
@@ -108,7 +103,7 @@ class EOGMonitorQt(QMainWindow):
         self.raw_plot_widget.setLabel('left', 'Señal EOG cruda')
         self.raw_plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.raw_plot_widget.showGrid(x=True, y=True)
-        self.raw_plot_widget.setYRange(-25000, 20000)
+        self.raw_plot_widget.setYRange(-40000, 40000)
         self.raw_plot_widget.setXRange(-display_time, 0)
         
         # Filtered signal plot
@@ -132,18 +127,31 @@ class EOGMonitorQt(QMainWindow):
         self.stats_label.setStyleSheet("background-color: rgba(255, 255, 200, 180); padding: 5px;")
         main_layout.addWidget(self.stats_label)
         
-        # Add instructions label
-        instructions = QLabel("Controles: Espacio = Iniciar/Detener, C = Verificar Conexiones, S = Guardar datos, Q = Salir")
-        instructions.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(instructions)
+        # Crear un layout horizontal para los botones
+        button_layout = QHBoxLayout()
         
-        # Add scan button
-        scan_button = QLabel("<a href='#'>Escanear dispositivos</a>")
-        scan_button.setAlignment(Qt.AlignCenter)
-        scan_button.setTextFormat(Qt.RichText)
-        scan_button.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        scan_button.linkActivated.connect(self.check_slave_connections)
-        main_layout.addWidget(scan_button)
+        # Botón de Iniciar/Detener
+        self.start_stop_button = QPushButton("Iniciar Adquisición")
+        self.start_stop_button.clicked.connect(self.toggle_acquisition)
+        button_layout.addWidget(self.start_stop_button)
+        
+        # Botón de Escanear Dispositivos
+        self.scan_button = QPushButton("Escanear Dispositivos")
+        self.scan_button.clicked.connect(self.check_slave_connections)
+        button_layout.addWidget(self.scan_button)
+        
+        # Botón de Guardar Datos
+        self.save_button = QPushButton("Guardar Datos")
+        self.save_button.clicked.connect(self.save_data_to_csv)
+        button_layout.addWidget(self.save_button)
+        
+        # Botón de Salir
+        self.exit_button = QPushButton("Salir")
+        self.exit_button.clicked.connect(self.close)
+        button_layout.addWidget(self.exit_button)
+        
+        # Añadir el layout de botones al layout principal
+        main_layout.addLayout(button_layout)
         
         self.setCentralWidget(central_widget)
         
@@ -151,6 +159,15 @@ class EOGMonitorQt(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_plot)
         self.timer.start(50)  # 50ms refresh rate (20 FPS)
+    
+    def toggle_acquisition(self):
+        """Toggle between start and stop acquisition"""
+        if self.running:
+            self.stop_acquisition()
+            self.start_stop_button.setText("Iniciar Adquisición")
+        else:
+            self.start_acquisition()
+            self.start_stop_button.setText("Detener Adquisición")
         
     def start_acquisition(self):
         """Start data acquisition"""
@@ -161,7 +178,7 @@ class EOGMonitorQt(QMainWindow):
             
         if not self.required_devices_connected:
             print("\nNo se puede iniciar la adquisición: dispositivos requeridos no conectados.")
-            print("Use la tecla 'C' para verificar conexiones.\n")
+            print("Use el botón 'Escanear Dispositivos' para verificar conexiones.\n")
             return
         
         # Reset stats and filter
@@ -368,7 +385,7 @@ class EOGMonitorQt(QMainWindow):
                                 timestamp_s = timestamp_ms / 1000.0  # Convert to seconds
                                 
                                 # EOG value (2 bytes)
-                                value = struct.unpack('<h', data_buffer[10:12])[0]
+                                value = struct.unpack('<h', data_buffer[12:14])[0]
                                 
                                 # Device ID (1 byte) is at position 14
                                 device_id = data_buffer[14]

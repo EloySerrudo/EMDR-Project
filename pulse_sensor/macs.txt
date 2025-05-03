@@ -6,3 +6,16 @@
 
 5 {0x18, 0x8B, 0x0E, 0x91, 0x3C, 0xBC} ESP32-C3 COM10
 5 {0xE0, 0x5A, 0x1B, 0x60, 0x58, 0xCC} auxiliar
+
+
+ 70/min = 1.18Hz->845.8ms
+ 80/min = 1.35Hz->739.8ms
+ 90/min = 1.52Hz->657.2ms
+100/min = 1.69Hz->591.6ms
+120/min = 2.03Hz->493.2ms
+140/min = 2.37Hz->422.8ms
+
+Máximos:
+ 10/min->1000ms
+ 70/min->400ms
+140/min->200ms

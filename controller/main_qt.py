@@ -327,7 +327,7 @@ class Controller(QMainWindow):
     def update_buzzer(self):
         """Actualiza la configuración del buzzer"""
         duration = self.sel_buzzer_duration.get_value()
-        Devices.set_buzzer_duration(duration)
+        Devices.set_buzzer_duration(duration // 10)
         self.save_config()
     
     def update_sound(self):

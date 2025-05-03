@@ -34,7 +34,7 @@ volatile bool lastSendStatus = true;
 
 void buzz(uint8_t pin, uint16_t duration_ms) {
   digitalWrite(pin, HIGH);
-  delay(duration_ms);
+  delay(duration_ms * 10);
   digitalWrite(pin, LOW);
 }
 
@@ -46,13 +46,7 @@ void test() {
 
 // Callback cuando se envían datos
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  lastSendStatus = (status == ESP_NOW_SEND_SUCCESS);
-  // Parpadear LED para indicar envío exitoso
-  if (status == ESP_NOW_SEND_SUCCESS) {
-    digitalWrite(STATUS_LED, HIGH);
-    delay(10);
-    digitalWrite(STATUS_LED, LOW);
-  }
+    lastSendStatus = (status == ESP_NOW_SEND_SUCCESS);
 }
 
 // Callback para cuando se reciben datos
@@ -152,7 +146,6 @@ void setup() {
   test();
   
   Serial.println("EMDR Buzzer ready with ESP-NOW");
-  digitalWrite(L_PIN, HIGH);
 }
 
 void loop() {

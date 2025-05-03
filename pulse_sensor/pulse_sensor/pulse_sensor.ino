@@ -20,10 +20,10 @@
 #define PACKET_SIZE 15        // Tamaño del paquete binario en bytes. Esta constante es sólo para información, nunca se usa.
 
 // LED para indicar estado de la transmisión ESP-NOW
-constexpr int STATUS_LED = 23;
+constexpr int STATUS_LED = 16;
 
 // LED para indicar error en el ADS1115
-constexpr int ERROR_LED = 19;
+constexpr int ERROR_LED = 4;
 
 // Objeto ADS1115
 Adafruit_ADS1115 ads;
@@ -169,12 +169,12 @@ void adcTask(void *parameter) {
                 if (startTime == 0) startTime = millis();
                 time = millis() - startTime;
                 // Aumentar la ganancia para la lectura del sensor de pulso
-                ads.setGain(GAIN_EIGHT);       // 8x gain   +/- 0.512V  1 bit = 0.015625mV
+                ads.setGain(GAIN_TWO);       // 2x gain   +/- 2.048V  1 bit = 0.0625mV
                 ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_1_3, /*continuous=*/false);
             } else {
                 adcValue_A1 = ads.getLastConversionResults();
                 // Almacenar en el buffer circular
-                adcBuffer.write(time, adcValue_A0, adcValue_A1);
+                adcBuffer.write(time, adcValue_A0, adcValue_A1 * (-1));
                 // Cambiar el canal para la próxima lectura
                 ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
                 ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
@@ -268,8 +268,8 @@ void setup() {
   }
   
   // Configurar el ADS1115
-  ads.setGain(GAIN_TWO);       // 2x gain   +/- 2.048V  1 bit = 0.0625mV
   ads.setDataRate(RATE_ADS1115_475SPS); // Usar 475 SPS (similar al original)
+  ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
   // Inicialización correcta
   digitalWrite(STATUS_LED, HIGH);
   delay(500);
