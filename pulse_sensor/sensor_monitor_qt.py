@@ -48,18 +48,33 @@ class SensorMonitorQt(QMainWindow):
         initial_values = [0] * self.display_size
         
         self.times = deque(initial_times, maxlen=self.display_size)
+        
+        # Buffers para EOG
         self.eog_values = deque(initial_values, maxlen=self.display_size)
         self.filtered_eog_values = deque(initial_values, maxlen=self.display_size)
+        
+        # Buffers para PPG
+        self.ppg_values = deque(initial_values, maxlen=self.display_size)
+        self.filtered_ppg_values = deque(initial_values, maxlen=self.display_size)
         
         # For unlimited data storage (for saving to CSV)
         self.idx = []
         self.tiempos = []
+        
+        # Para EOG
         self.eog_datos = []
         self.eog_datos_filtrados = []
         
-        # Filter for real-time signal processing
+        # Para PPG
+        self.ppg_datos = []
+        self.ppg_datos_filtrados = []
+        
+        # Filtros para ambas señales
         self.eog_filter = RealTimeFilter(
             filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.1, highcut=30.0, order=4
+        )
+        self.ppg_filter = RealTimeFilter(
+            filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.5, highcut=8.0, order=4
         )
         
         # Stats tracking
@@ -83,10 +98,12 @@ class SensorMonitorQt(QMainWindow):
         # Setup UI
         self.setup_ui(display_time)
         
+        # Iniciar ventana maximizada
+        self.showMaximized()
+        
     def setup_ui(self, display_time):
         """Setup the user interface with PyQtGraph plots"""
-        self.setWindowTitle("Monitor de EOG y Pulso en Tiempo Real")
-        self.setGeometry(100, 100, 1000, 700)
+        self.setWindowTitle("Monitor de PPG y EOG en Tiempo Real")
         
         # Central widget and layout
         central_widget = QWidget()
@@ -98,29 +115,37 @@ class SensorMonitorQt(QMainWindow):
         main_layout.addWidget(self.device_status_label)
         
         # Create two plot widgets
-        # Raw signal plot
-        self.raw_plot_widget = pg.PlotWidget()
-        self.raw_plot_widget.setLabel('left', 'Señal EOG cruda')
-        self.raw_plot_widget.setLabel('bottom', 'Tiempo (s)')
-        self.raw_plot_widget.showGrid(x=True, y=True)
-        self.raw_plot_widget.setYRange(-40000, 40000)
-        self.raw_plot_widget.setXRange(-display_time, 0)
+        # PPG signal plot (superior)
+        self.ppg_plot_widget = pg.PlotWidget()
+        self.ppg_plot_widget.setLabel('left', 'Señal PPG filtrada')
+        self.ppg_plot_widget.setLabel('bottom', 'Tiempo (s)')
+        self.ppg_plot_widget.setYRange(-25000, 25000)
+        self.ppg_plot_widget.setXRange(-display_time, 0, padding=0)
         
-        # Filtered signal plot
-        self.filtered_plot_widget = pg.PlotWidget()
-        self.filtered_plot_widget.setLabel('left', 'Señal EOG filtrada')
-        self.filtered_plot_widget.setLabel('bottom', 'Tiempo (s)')
-        self.filtered_plot_widget.showGrid(x=True, y=True)
-        self.filtered_plot_widget.setYRange(-25000, 20000)
-        self.filtered_plot_widget.setXRange(-display_time, 0)
+        # Primero configurar el espaciado de ticks y luego la cuadrícula
+        x_axis_ppg = self.ppg_plot_widget.getAxis('bottom')
+        x_axis_ppg.setTickSpacing(major=1, minor=0.5)  # Marcas principales cada 1 segundo, menores cada 0.5
+        self.ppg_plot_widget.showGrid(x=True, y=True)
+        
+        # EOG signal plot (inferior)
+        self.eog_plot_widget = pg.PlotWidget()
+        self.eog_plot_widget.setLabel('left', 'Señal EOG filtrada')
+        self.eog_plot_widget.setLabel('bottom', 'Tiempo (s)')
+        self.eog_plot_widget.setYRange(-25000, 25000)
+        self.eog_plot_widget.setXRange(-display_time, 0, padding=0)
+        
+        # Primero configurar el espaciado de ticks y luego la cuadrícula
+        x_axis_eog = self.eog_plot_widget.getAxis('bottom')
+        x_axis_eog.setTickSpacing(major=1, minor=0.5)  # Marcas principales cada 1 segundo, menores cada 0.5
+        self.eog_plot_widget.showGrid(x=True, y=True)
         
         # Create curves for data
-        self.raw_curve = self.raw_plot_widget.plot(pen=pg.mkPen('r', width=1.5))
-        self.filtered_curve = self.filtered_plot_widget.plot(pen=pg.mkPen('g', width=1.5))
+        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('r', width=1.5))
+        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('g', width=1.5))
         
         # Add plots to layout
-        main_layout.addWidget(self.raw_plot_widget)
-        main_layout.addWidget(self.filtered_plot_widget)
+        main_layout.addWidget(self.ppg_plot_widget)
+        main_layout.addWidget(self.eog_plot_widget)
         
         # Stats display
         self.stats_label = QLabel("Esperando datos...")
@@ -190,22 +215,30 @@ class SensorMonitorQt(QMainWindow):
         self.last_rate_update = time.time()
         self.last_packet_id = -1
         self.eog_filter.reset()
+        self.ppg_filter.reset()
 
         # Clear and reset data buffers
         self.times.clear()
         self.eog_values.clear()
         self.filtered_eog_values.clear()
+        self.ppg_values.clear()
+        self.filtered_ppg_values.clear()
+        
         initial_times = [-DISPLAY_TIME + i * self.sample_interval for i in range(self.display_size)]
         initial_values = [0] * self.display_size
         self.times.extend(initial_times)
         self.eog_values.extend(initial_values)
         self.filtered_eog_values.extend(initial_values)
+        self.ppg_values.extend(initial_values)
+        self.filtered_ppg_values.extend(initial_values)
         
         # Clear lists for CSV data storage
         self.idx = []
         self.tiempos = []
         self.eog_datos = []
         self.eog_datos_filtrados = []
+        self.ppg_datos = []
+        self.ppg_datos_filtrados = []
         
         # Send command to ESP32 to start capture usando Devices
         Devices.start_sensor()
@@ -325,8 +358,8 @@ class SensorMonitorQt(QMainWindow):
     def _read_data(self):
         """Function that runs in a separate thread to read binary data"""
         data_buffer = bytearray()
-        # serial_conn = Devices._master_controller[1]  # Obtener la conexión serial del controlador maestro
         serial_conn = Devices.get_master_connection()  # Obtener la conexión serial del controlador maestro
+        
         if not serial_conn:
             print("No hay conexión serial disponible")
             self.running = False
@@ -384,23 +417,39 @@ class SensorMonitorQt(QMainWindow):
                                 timestamp_ms = struct.unpack('<I', data_buffer[6:10])[0]
                                 timestamp_s = timestamp_ms / 1000.0  # Convert to seconds
                                 
-                                # EOG value (2 bytes)
-                                eog_value = struct.unpack('<h', data_buffer[10:12])[0]
+                                # PPG value (2 bytes) en data_buffer[10:12]
+                                ppg_value = struct.unpack('<h', data_buffer[10:12])[0]
+                                
+                                # EOG value (2 bytes) en data_buffer[12:14]
+                                eog_value = struct.unpack('<h', data_buffer[12:14])[0]
                                 
                                 # Device ID (1 byte) is at position 14
                                 device_id = data_buffer[14]
                                 
-                                # Apply real-time filter
+                                # Apply real-time filters
+                                filtered_ppg_value = self.ppg_filter.filter(ppg_value)
                                 filtered_eog_value = self.eog_filter.filter(eog_value)
                                 
                                 # Add to deques for display
                                 self.times.append(timestamp_s)
+                                
+                                # PPG data
+                                self.ppg_values.append(ppg_value)
+                                self.filtered_ppg_values.append(filtered_ppg_value)
+                                
+                                # EOG data
                                 self.eog_values.append(eog_value)
                                 self.filtered_eog_values.append(filtered_eog_value)
                                 
                                 # Add to lists for CSV storage
                                 self.idx.append(packet_id)
                                 self.tiempos.append(timestamp_ms)
+                                
+                                # PPG data for storage
+                                self.ppg_datos.append(ppg_value)
+                                self.ppg_datos_filtrados.append(filtered_ppg_value)
+                                
+                                # EOG data for storage
                                 self.eog_datos.append(eog_value)
                                 self.eog_datos_filtrados.append(filtered_eog_value)
                                 
@@ -442,12 +491,14 @@ class SensorMonitorQt(QMainWindow):
         if len(self.times) > 0:
             # Convert deques to numpy arrays for plotting
             x_data = np.array(self.times)
-            eog_data = np.array(self.eog_values)
+            
+            # Datos filtrados para mostrar
+            filtered_ppg_data = np.array(self.filtered_ppg_values)
             filtered_eog_data = np.array(self.filtered_eog_values)
             
-            # Update plot data
-            self.raw_curve.setData(x_data, eog_data)
-            self.filtered_curve.setData(x_data, filtered_eog_data)
+            # Update plot data - solo mostramos las señales filtradas
+            self.ppg_curve.setData(x_data, filtered_ppg_data)
+            self.eog_curve.setData(x_data, filtered_eog_data)
             
             # Get current time (last data point)
             current_time = x_data[-1] if len(x_data) > 0 else 0
@@ -456,8 +507,10 @@ class SensorMonitorQt(QMainWindow):
             if len(x_data) > 0 and self.running:
                 window_start = current_time - DISPLAY_TIME
                 window_end = current_time
-                self.raw_plot_widget.setXRange(window_start, window_end)
-                self.filtered_plot_widget.setXRange(window_start, window_end)
+                
+                # Desactivar auto-ranging y establecer rango exacto sin padding
+                self.ppg_plot_widget.setXRange(window_start, window_end, padding=0)
+                self.eog_plot_widget.setXRange(window_start, window_end, padding=0)
             
             # Update stats label
             stats_str = (f"Paquetes: {self.packets_received} | "
@@ -473,12 +526,14 @@ class SensorMonitorQt(QMainWindow):
                 print("No hay datos para guardar")
                 return
                 
-            # Create DataFrame with data
+            # Create DataFrame with data including both PPG and EOG
             data = {
                 'ID': self.idx,
                 'Timestamp_ms': self.tiempos,
-                'EOG_raw': self.eog_datos,  # Renamed from valores
-                'EOG_filtrado': self.eog_datos_filtrados  # Renamed from valores_filtrados
+                'PPG_raw': self.ppg_datos,
+                'PPG_filtrado': self.ppg_datos_filtrados,
+                'EOG_raw': self.eog_datos,
+                'EOG_filtrado': self.eog_datos_filtrados
             }
             df = pd.DataFrame(data)
             
@@ -488,7 +543,7 @@ class SensorMonitorQt(QMainWindow):
             
             # Generate filename with date and time
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(data_dir, f"eog_data_{timestamp}.csv")
+            filename = os.path.join(data_dir, f"sensor_data_{timestamp}.csv")
             
             # Save data
             df.to_csv(filename, index=False)
@@ -497,23 +552,6 @@ class SensorMonitorQt(QMainWindow):
             
         except Exception as e:
             print(f"Error al guardar datos: {e}")
-    
-    def keyPressEvent(self, event):
-        """Handle key press events"""
-        if event.key() == Qt.Key_Space:  # Space to start/stop
-            if self.running:
-                self.stop_acquisition()
-            else:
-                self.start_acquisition()
-        elif event.key() == Qt.Key_C:  # C to check connections
-            if not self.running:  # Only check if not capturing
-                self.check_slave_connections()
-        elif event.key() == Qt.Key_S:  # S to save data
-            self.save_data_to_csv()
-        elif event.key() == Qt.Key_Q:  # Q to exit
-            self.close()
-        else:
-            super().keyPressEvent(event)
     
     def closeEvent(self, event):
         """Clean up when window is closed"""
@@ -530,7 +568,6 @@ if __name__ == "__main__":
     """Función principal para ejecutar el monitor como aplicación independiente"""
     app = QApplication([])
     monitor = SensorMonitorQt()
-    monitor.show()
     
     # Start Qt event loop
     sys.exit(app.exec())
