@@ -3,11 +3,11 @@ import pickle
 
 class Config():
     colors = [
-        ('white', 255, 255, 255),
-        ('red', 255, 0, 0),
-        ('green', 0, 255, 0),
-        ('blue', 0, 0, 255),
-        ('yellow', 255, 255, 0),
+        ('Blanco', 255, 255, 255),
+        ('Rojo', 255, 0, 0),
+        ('Verde', 0, 255, 0),
+        ('Azul', 0, 0, 255),
+        ('Amarillo', 255, 255, 0),
     ]
     intensities = [
         20, 40, 60, 80, 100
@@ -22,12 +22,12 @@ class Config():
         20, 40, 60, 80, 100
     ]
     tones = [
-        ('med./short', 440, 50),
-        ('med./long', 440, 100),
-        ('high/short', 880, 100),
-        ('high/long', 880, 200),
-        ('low/short', 220, 25),
-        ('low/long', 220, 50),
+        ('Medio/Corto', 440, 50),
+        ('Medio/Largo', 440, 100),
+        ('Alto/Corto', 880, 100),
+        ('Alto/Largo', 880, 200),
+        ('Bajo/Corto', 220, 25),
+        ('Bajo/Largo', 220, 50),
     ]
     data = {
         'general.speed': 10,

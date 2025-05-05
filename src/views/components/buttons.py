@@ -1,141 +1,132 @@
-from PySide6.QtWidgets import QWidget, QPushButton
-from PySide6.QtGui import QPixmap, QIcon
-import os
+from PySide6.QtWidgets import QPushButton, QSlider, QWidget, QHBoxLayout, QLabel
+from PySide6.QtCore import Qt, Signal
 
 class CustomButton(QPushButton):
-    def __init__(self, x, y, title, callback=None, togglable=False, parent=None):
-        """Crea un botón personalizado con imagen"""
-        super().__init__(parent)
-        self.title = title
-        self.active = True
-        
-        # Cargar imágenes
-        self.pixmap_normal = self._load_image(f'./src/imgs/{title.lower()}_normal.png', './src/imgs/default_normal.png')
-        self.pixmap_pressed = self._load_image(f'./src/imgs/{title.lower()}_pressed.png', './src/imgs/default_pressed.png')
-        self.pixmap_inactive = self._load_image(f'./src/imgs/{title.lower()}_inactive.png', './src/imgs/default_inactive.png')
-        
-        # Configurar apariencia
-        self.setStyleSheet("QPushButton { border: none; background-color: transparent; }")
-        self.setFixedSize(100, 60)  # Ajusta según el tamaño de tus imágenes
+    """Botón normal que mantiene compatibilidad con el botón personalizado original"""
+    
+    def __init__(self, x, y, title, callback=None, togglable=False, size=(100, 60), parent=None):
+        super().__init__(title, parent)
         self.pos_x = x
         self.pos_y = y
+        self.active = True
+        self.title = title
         
         # Configurar comportamiento
         self.setCheckable(togglable)
         if callback:
             self.clicked.connect(callback)
         
-        # Inicializar el estado visual
-        self.update_icon()
-    
-    def _load_image(self, primary_path, fallback_path):
-        """Intenta cargar una imagen, usando la alternativa si falla"""
-        try:
-            if os.path.exists(primary_path):
-                return QPixmap(primary_path)
-            else:
-                return QPixmap(fallback_path)
-        except:
-            try:
-                return QPixmap(fallback_path)
-            except:
-                # Crear un pixmap en blanco si ambos fallan
-                return QPixmap(100, 60)
-    
-    def update_icon(self):
-        """Actualiza el icono basado en el estado actual"""
-        if not self.active:
-            self.setIcon(QIcon(self.pixmap_inactive))
-        elif self.isChecked():
-            self.setIcon(QIcon(self.pixmap_pressed))
-        else:
-            self.setIcon(QIcon(self.pixmap_normal))
-        
-        self.setIconSize(self.size())
+        # Estilo básico
+        self.setFixedSize(*size)
+        self.setStyleSheet("""
+            QPushButton { 
+                background-color: #f0f0f0; 
+                border: 2px solid #c0c0c0;
+                border-radius: 5px;
+                font-size: 14px;
+            }
+            QPushButton:hover { 
+                background-color: #e0e0e0; 
+            }
+            QPushButton:pressed, QPushButton:checked { 
+                background-color: #c0e0ff;
+                border: 2px solid #80c0ff; 
+            }
+            QPushButton:disabled { 
+                background-color: #e0e0e0; 
+                color: #a0a0a0; 
+                border: 2px solid #d0d0d0;
+            }
+        """)
     
     def setActive(self, active):
-        """Establece si el botón está activo o no"""
+        """Mantiene compatibilidad con la interfaz anterior"""
         self.active = active
         self.setEnabled(active)
-        self.update_icon()
-    
-    # Override de los eventos para manejar estados visuales
-    def checkStateSet(self):
-        super().checkStateSet()
-        self.update_icon()
-    
-    def nextCheckState(self):
-        super().nextCheckState()
-        self.update_icon()
 
 
 class Switch(QWidget):
+    """Implementación de interruptor deslizante On/Off"""
+    
     def __init__(self, btn_on, btn_off, updater=None, parent=None):
         super().__init__(parent)
         
-        # Almacenar referencias a los botones y el actualizador
+        # Crear un layout horizontal
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Crear etiquetas para "Off" y "On"
+        self.label_off = QLabel("Off")
+        self.label_on = QLabel("On")
+        
+        # Crear deslizador
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setMinimum(0)
+        self.slider.setMaximum(1)
+        self.slider.setFixedSize(60, 30)
+        self.slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                height: 30px;
+                background: #f0f0f0;
+                border: 1px solid #c0c0c0;
+                border-radius: 15px;
+            }
+            QSlider::handle:horizontal {
+                width: 28px;
+                background: #80c0ff;
+                border: 1px solid #5080ff;
+                border-radius: 14px;
+                margin: 1px;
+            }
+            QSlider::handle:horizontal:checked {
+                background: #5080ff;
+            }
+        """)
+        
+        # Añadir widgets al layout
+        layout.addWidget(self.label_off)
+        layout.addWidget(self.slider)
+        layout.addWidget(self.label_on)
+        
+        # Guardar referencias a los botones originales (para compatibilidad)
         self.btn_on = btn_on
         self.btn_off = btn_off
+        
+        # Guardar el actualizador y conectar
         self.updater = updater
+        self.slider.valueChanged.connect(self._on_slider_changed)
         
-        # Configurar conexiones
-        self.btn_on.clicked.connect(self.on_click)
-        self.btn_off.clicked.connect(self.off_click)
-        
-        # Configuración inicial (apagado por defecto)
+        # Estado inicial
         self.set_value(False)
-        
-    def set_value(self, value):
-        """Establece el estado del interruptor"""
+    
+    def _on_slider_changed(self):
+        """Maneja cambios en el deslizador"""
+        value = self.slider.value() == 1
+        # Actualizar botones originales para mantener compatibilidad
         self.btn_on.setChecked(value)
         self.btn_off.setChecked(not value)
         
-        # Aplicar estilo para resaltar el botón activo
-        if value:
-            self.btn_on.setProperty("active", True)
-            self.btn_off.setProperty("active", False)
-        else:
-            self.btn_on.setProperty("active", False)
-            self.btn_off.setProperty("active", True)
+        # Actualizar colores según estado
+        self._update_colors()
         
-        # Forzar actualización de estilos
-        self.btn_on.style().unpolish(self.btn_on)
-        self.btn_on.style().polish(self.btn_on)
-        self.btn_off.style().unpolish(self.btn_off)
-        self.btn_off.style().polish(self.btn_off)
+        # Llamar al actualizador si existe
+        if self.updater:
+            self.updater()
+    
+    def _update_colors(self):
+        """Actualiza los colores según el estado"""
+        if self.get_value():
+            self.label_on.setStyleSheet("font-weight: bold; color: #0066cc;")
+            self.label_off.setStyleSheet("color: #808080;")
+        else:
+            self.label_on.setStyleSheet("color: #808080;")
+            self.label_off.setStyleSheet("font-weight: bold; color: #0066cc;")
     
     def get_value(self):
-        """Retorna True si el botón ON está activado"""
-        return self.btn_on.isChecked()
+        """Devuelve True si está activado"""
+        return self.slider.value() == 1
     
-    def on_click(self):
-        """Maneja el clic en el botón ON"""
-        if not self.btn_on.isChecked():  # Si el botón se estaba desactivando
-            self.btn_on.setChecked(True)  # Mantenerlo activado
-            return
-            
-        # Desactivar el botón OFF
-        self.btn_off.setChecked(False)
-        
-        # Actualizar estilos
-        self.set_value(True)
-        
-        # Llamar al callback si existe
-        if self.updater is not None:
-            self.updater()
-    
-    def off_click(self):
-        """Maneja el clic en el botón OFF"""
-        if not self.btn_off.isChecked():  # Si el botón se estaba desactivando
-            self.btn_off.setChecked(True)  # Mantenerlo activado
-            return
-            
-        # Desactivar el botón ON
-        self.btn_on.setChecked(False)
-        
-        # Actualizar estilos
-        self.set_value(False)
-        
-        # Llamar al callback si existe
-        if self.updater is not None:
-            self.updater()
+    def set_value(self, value):
+        """Establece el valor del interruptor"""
+        self.slider.setValue(1 if value else 0)
+        self._update_colors()

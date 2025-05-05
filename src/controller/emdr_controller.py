@@ -117,11 +117,11 @@ class EMDRControllerWidget(QWidget):
         self.btn_start24 = CustomButton(1, 0, 'Play24', self.start24_click)
         self.btn_stop = CustomButton(2, 0, 'Stop', self.stop_click)
         self.btn_pause = CustomButton(3, 0, 'Pause', self.pause_click, togglable=True)
-        self.btn_lightbar = CustomButton(0, 1, 'Light', self.lightbar_click, togglable=True)
+        self.btn_lightbar = CustomButton(0, 1, 'Visual', self.lightbar_click, togglable=True)
         self.btn_lightbar.setActive(False)
-        self.btn_buzzer = CustomButton(0, 2, 'Buzzer', self.buzzer_click, togglable=True)
+        self.btn_buzzer = CustomButton(0, 2, 'Táctil', self.buzzer_click, togglable=True)
         self.btn_buzzer.setActive(False)
-        self.btn_headphone = CustomButton(0, 3, 'Sound', self.headphone_click, togglable=True)
+        self.btn_headphone = CustomButton(0, 3, 'Auditiva', self.headphone_click, togglable=True)
         
         # Posicionar botones principales: Columna,Fila
         self.main_layout.addWidget(self.btn_start, self.btn_start.pos_y, self.btn_start.pos_x)
@@ -132,15 +132,22 @@ class EMDRControllerWidget(QWidget):
         self.main_layout.addWidget(self.btn_buzzer, self.btn_buzzer.pos_y, self.btn_buzzer.pos_x)
         self.main_layout.addWidget(self.btn_headphone, self.btn_headphone.pos_y, self.btn_headphone.pos_x)
         
-        # Área de velocidad
-        self.sel_counter = Selector(1, 0, 'Counter', None, '{0:d}', None, None, parent=self)
+        # Área de velocidad - Modificado para ocultar slider del contador
+        self.sel_counter = Selector(1, 0, 'Contador', None, '{0:d}', None, None, show_slider=False, parent=self)
         self.sel_counter.set_value(0)
-        self.btn_speed_plus = CustomButton(2, 1, '+')
-        self.btn_speed_minus = CustomButton(0, 1, '-')
-        self.sel_speed = Selector(1, 1, 'Speed.', Config.speeds, '{0:d}/min', 
+
+        # Botones más pequeños y cuadrados (75x75 píxeles)
+        self.btn_speed_plus = CustomButton(2, 1, '+', size=(75, 75))
+        self.btn_speed_minus = CustomButton(0, 1, '-', size=(75, 75))
+
+        self.sel_speed = Selector(1, 1, 'Velocidad', Config.speeds, '{0:d}/min', 
                                   self.btn_speed_plus, self.btn_speed_minus, 
                                   self.update_speed, parent=self)
-        
+
+        # Conectar botones de velocidad
+        self.btn_speed_plus.clicked.connect(self.sel_speed.next_value)
+        self.btn_speed_minus.clicked.connect(self.sel_speed.prev_value)
+
         box_speed = Container(elements=[
             self.sel_counter,
             self.btn_speed_plus,
@@ -148,24 +155,32 @@ class EMDRControllerWidget(QWidget):
             self.btn_speed_minus
         ], parent=self)
         
-        # Área de barra de luz
+        # Área de barra de luz - Botones más pequeños y cuadrados
         self.btn_light_on = CustomButton(0, 0, 'On', togglable=True)
         self.btn_light_off = CustomButton(1, 0, 'Off', togglable=True)
         self.switch_light = Switch(self.btn_light_on, self.btn_light_off, self.update_light)
-        self.btn_light_test = CustomButton(2, 0, 'Test', self.light_test_click, togglable=True)
-        
-        self.btn_light_color_plus = CustomButton(2, 1, '+')
-        self.btn_light_color_minus = CustomButton(0, 1, '-')
-        self.sel_light_color = Selector(1, 1, 'Colour', Config.colors, '{0}',
+        self.btn_light_test = CustomButton(2, 0, 'Prueba', self.light_test_click, togglable=True)
+
+        self.btn_light_color_plus = CustomButton(2, 1, '>>', size=(75, 75))
+        self.btn_light_color_minus = CustomButton(0, 1, '<<', size=(75, 75))
+        self.sel_light_color = Selector(1, 1, 'Color', Config.colors, '{0}',
                                         self.btn_light_color_plus, self.btn_light_color_minus,
                                         self.update_light, cyclic=True, parent=self)
-        
-        self.btn_light_intens_plus = CustomButton(2, 2, '+')
-        self.btn_light_intens_minus = CustomButton(0, 2, '-')
-        self.sel_light_intens = Selector(1, 2, 'Brightness', Config.intensities, '{0:d}%',
+
+        # Conectar botones de color
+        self.btn_light_color_plus.clicked.connect(self.sel_light_color.next_value)
+        self.btn_light_color_minus.clicked.connect(self.sel_light_color.prev_value)
+
+        self.btn_light_intens_plus = CustomButton(2, 2, '+', size=(75, 75))
+        self.btn_light_intens_minus = CustomButton(0, 2, '-', size=(75, 75))
+        self.sel_light_intens = Selector(1, 2, 'Brillo', Config.intensities, '{0:d}%',
                                          self.btn_light_intens_plus, self.btn_light_intens_minus,
                                          self.update_light, parent=self)
-        
+
+        # Conectar botones de intensidad
+        self.btn_light_intens_plus.clicked.connect(self.sel_light_intens.next_value)
+        self.btn_light_intens_minus.clicked.connect(self.sel_light_intens.prev_value)
+
         box_lightbar = Container(elements=[
             self.btn_light_on,
             self.btn_light_off,
@@ -182,14 +197,18 @@ class EMDRControllerWidget(QWidget):
         self.btn_buzzer_on = CustomButton(0, 0, 'On', togglable=True)
         self.btn_buzzer_off = CustomButton(1, 0, 'Off', togglable=True)
         self.switch_buzzer = Switch(self.btn_buzzer_on, self.btn_buzzer_off, self.update_buzzer)
-        self.btn_buzzer_test = CustomButton(2, 0, 'Test', self.buzzer_test_click)
+        self.btn_buzzer_test = CustomButton(2, 0, 'Prueba', self.buzzer_test_click)
         
-        self.btn_buzzer_duration_plus = CustomButton(2, 1, '+')
-        self.btn_buzzer_duration_minus = CustomButton(0, 1, '-')
-        self.sel_buzzer_duration = Selector(1, 1, 'Duration', Config.durations, '{0:d} ms', 
+        self.btn_buzzer_duration_plus = CustomButton(2, 1, '+', size=(75, 75))
+        self.btn_buzzer_duration_minus = CustomButton(0, 1, '-', size=(75, 75))
+        self.sel_buzzer_duration = Selector(1, 1, 'Duración', Config.durations, '{0:d} ms', 
                                             self.btn_buzzer_duration_plus, self.btn_buzzer_duration_minus, 
                                             self.update_buzzer, parent=self)
-        
+
+        # Conectar botones de duración del buzzer
+        self.btn_buzzer_duration_plus.clicked.connect(self.sel_buzzer_duration.next_value)
+        self.btn_buzzer_duration_minus.clicked.connect(self.sel_buzzer_duration.prev_value)
+
         box_buzzer = Container(elements=[
             self.btn_buzzer_on,
             self.btn_buzzer_off,
@@ -203,20 +222,28 @@ class EMDRControllerWidget(QWidget):
         self.btn_headphone_on = CustomButton(0, 0, 'On', togglable=True)
         self.btn_headphone_off = CustomButton(1, 0, 'Off', togglable=True)
         self.switch_headphone = Switch(self.btn_headphone_on, self.btn_headphone_off, self.update_sound)
-        self.btn_headphone_test = CustomButton(2, 0, 'Test', self.headphone_test_click)
+        self.btn_headphone_test = CustomButton(2, 0, 'Prueba', self.headphone_test_click)
         
-        self.btn_headphone_volume_plus = CustomButton(2, 1, '+')
-        self.btn_headphone_volume_minus = CustomButton(0, 1, '-')
-        self.sel_headphone_volume = Selector(1, 1, 'Volume', Config.volumes, '{0:d}%',
+        self.btn_headphone_volume_plus = CustomButton(2, 1, '+', size=(75, 75))
+        self.btn_headphone_volume_minus = CustomButton(0, 1, '-', size=(75, 75))
+        self.sel_headphone_volume = Selector(1, 1, 'Volumen', Config.volumes, '{0:d}%',
                                              self.btn_headphone_volume_plus, self.btn_headphone_volume_minus, 
                                              self.update_sound, parent=self)
-        
-        self.btn_headphone_tone_plus = CustomButton(2, 2, '+')
-        self.btn_headphone_tone_minus = CustomButton(0, 2, '-')
-        self.sel_headphone_tone = Selector(1, 2, 'Sound', Config.tones, '{0}',
+
+        # Conectar botones de volumen
+        self.btn_headphone_volume_plus.clicked.connect(self.sel_headphone_volume.next_value)
+        self.btn_headphone_volume_minus.clicked.connect(self.sel_headphone_volume.prev_value)
+
+        self.btn_headphone_tone_plus = CustomButton(2, 2, '>>', size=(75, 75))
+        self.btn_headphone_tone_minus = CustomButton(0, 2, '<<', size=(75, 75))
+        self.sel_headphone_tone = Selector(1, 2, 'Tono/Duración', Config.tones, '{0}',
                                            self.btn_headphone_tone_plus, self.btn_headphone_tone_minus, 
                                            self.update_sound, cyclic=True, parent=self)
-        
+
+        # Conectar botones de tono
+        self.btn_headphone_tone_plus.clicked.connect(self.sel_headphone_tone.next_value)
+        self.btn_headphone_tone_minus.clicked.connect(self.sel_headphone_tone.prev_value)
+
         box_headphone = Container(elements=[
             self.btn_headphone_on,
             self.btn_headphone_off,
