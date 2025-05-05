@@ -1,21 +1,24 @@
 import sys
-from PySide6.QtWidgets import QMainWindow, QWidget, QGridLayout, QApplication, QStackedLayout, QPushButton
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QIcon
 from numpy import log
 import time
 import os
+
+# PyQtGraph y PySide6 imports
+from PySide6.QtWidgets import QMainWindow, QWidget, QGridLayout, QApplication, QStackedLayout, QPushButton, QLabel
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QIcon
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
     
 # Importaciones de componentes de vistas
-from src.views.components.containers import Container
+from src.views.components.containers import Container, SwitchContainer
 from src.views.components.selectors import Selector
 from src.views.components.buttons import CustomButton, Switch
+from src.views.components.pyqtSwitch import PyQtSwitch
 
 # Importaciones de modelos
-from src.models.devices import Devices
+from src.models.devices import Devices, KNOWN_SLAVES
 from src.models.config import Config
 
 # Importaciones de utilidades
@@ -23,96 +26,25 @@ from src.utils.hiperf_timer import HighPerfTimer
 from src.utils.events import event_system
 
 
-class MyQtApp:
-    """Reemplazo de thorpy.Application para PySide6"""
-    
-    def __init__(self, app=None, size=(800, 600), title=None, icon=None, center=True, flags=0):
-        # No necesitamos hacer global _SCREEN y _CURRENT_APPLICATION como en thorpy
-        # Usar QApplication existente o crear una nueva
-        self.app = app if app is not None else QApplication([])  # Inicializa la aplicación Qt
-        self.size = tuple(size)
-        self.title = title
-        
-        # Crear ventana principal
-        self.window = QMainWindow()
-        self.window.resize(*self.size)
-        
-        # Establecer título si se proporciona
-        if self.title:
-            self.window.setWindowTitle(title)
-        
-        # Centrar ventana si se solicitó
-        if center:
-            self._center_window()
-        
-        # Establecer icono
-        if icon is not None:  # "thorpy" era el valor predeterminado
-            self._set_icon(icon)
-        
-        # Modo de pantalla completa
-        if flags == 1:  # pygame.FULLSCREEN equivale a 1
-            self.window.showFullScreen()
-        
-        # Ruta predeterminada como en la versión original
-        self.default_path = "./"
-    
-    def _set_icon(self, icon):
-        """Establece el icono de la ventana"""
-        if isinstance(icon, str):
-            try:
-                self.window.setWindowIcon(QIcon(icon))
-            except:
-                pass  # Ignorar errores si no se puede cargar el icono
-    
-    def _center_window(self):
-        """Centra la ventana en la pantalla"""
-        frame_geo = self.window.frameGeometry()
-        screen_center = self.app.primaryScreen().availableGeometry().center()
-        frame_geo.moveCenter(screen_center)
-        self.window.move(frame_geo.topLeft())
-    
-    def show(self):
-        """Muestra la ventana principal"""
-        self.window.show()
-        
-    def exec(self):
-        """Ejecuta el bucle principal de la aplicación"""
-        return self.app.exec()
-    
-    def quit(self):
-        """Cierra la aplicación"""
-        self.app.quit()
-
-
 class EMDRControllerWidget(QWidget):
     """Controlador principal de la aplicación EMDR convertido a widget PySide6"""
     
-    def __init__(self, resource_manager=None, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.resource_manager = resource_manager
         self.in_load = False
         self.pausing = False
         self.stopping = False
         
-        # Layout Grid
+        # Layout Grid - Reorganizado para asegurar que la etiqueta de estado esté arriba
         self.main_layout = QGridLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
-        # Crear QStackedLayout
-        self.stacked_layout = QStackedLayout()
-        self.stacked_layout.setContentsMargins(0, 0, 0, 0)
-        # Diccionario de áreas para el QStackedLayout
-        self.areas = {'speed':0, 'lightbar':1, 'buzzer':2, 'headphone':3}
-        # Crear contenedor para el QStackedLayout
-        stacked_widget = QWidget()
-        stacked_widget.setLayout(self.stacked_layout)
-        # Añadir el widget al QGridLayout, posición (1,1), abarcando 3 filas y 3 columnas
-        self.main_layout.addWidget(stacked_widget, 1, 1, 3, 3)  # From (1,1) to (3,3)
         
-        # Agregar botón de escaneo USB en la parte inferior
-        self.btn_scan_usb = CustomButton(4, 0, 'Scan USB', self.scan_usb_click)
-        self.main_layout.addWidget(self.btn_scan_usb, 4, 0, 1, 4)  # Posición 4,0 ocupando 1 fila y 4 columnas
+        # Primero: Añadir etiqueta de estado de dispositivos en la parte superior (fila 0)
+        self.device_status_label = QLabel("Estado de dispositivos: Desconocido")
+        self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+        self.main_layout.addWidget(self.device_status_label, 0, 0, 1, 5)  # Posición 0,0 ocupando 1 fila y 5 columnas
         
-        # Crear botones principales
+        # Segundo: Crear botones principales (ahora en la fila 1, dejando espacio para la etiqueta)
         self.btn_start = CustomButton(0, 0, 'Play', self.start_click)
         self.btn_start24 = CustomButton(1, 0, 'Play24', self.start24_click)
         self.btn_stop = CustomButton(2, 0, 'Stop', self.stop_click)
@@ -123,14 +55,32 @@ class EMDRControllerWidget(QWidget):
         self.btn_buzzer.setActive(False)
         self.btn_headphone = CustomButton(0, 3, 'Auditiva', self.headphone_click, togglable=True)
         
-        # Posicionar botones principales: Columna,Fila
-        self.main_layout.addWidget(self.btn_start, self.btn_start.pos_y, self.btn_start.pos_x)
-        self.main_layout.addWidget(self.btn_start24, self.btn_start24.pos_y, self.btn_start24.pos_x)
-        self.main_layout.addWidget(self.btn_stop, self.btn_stop.pos_y, self.btn_stop.pos_x)
-        self.main_layout.addWidget(self.btn_pause, self.btn_pause.pos_y, self.btn_pause.pos_x)
-        self.main_layout.addWidget(self.btn_lightbar, self.btn_lightbar.pos_y, self.btn_lightbar.pos_x)
-        self.main_layout.addWidget(self.btn_buzzer, self.btn_buzzer.pos_y, self.btn_buzzer.pos_x)
-        self.main_layout.addWidget(self.btn_headphone, self.btn_headphone.pos_y, self.btn_headphone.pos_x)
+        # Tercero: Crear QStackedLayout
+        self.stacked_layout = QStackedLayout()
+        self.stacked_layout.setContentsMargins(0, 0, 0, 0)
+        self.areas = {'speed':0, 'lightbar':1, 'buzzer':2, 'headphone':3}
+        stacked_widget = QWidget()
+        stacked_widget.setLayout(self.stacked_layout)
+        
+        # Cuarto: Añadir botón de escaneo USB en la parte inferior
+        self.btn_scan_usb = CustomButton(4, 0, 'Escanear', self.scan_usb_click)
+        
+        # Quinto: Posicionar todos los widgets en la cuadrícula con los desplazamientos correctos
+        
+        # Los botones principales se desplazan una fila hacia abajo (fila+1)
+        self.main_layout.addWidget(self.btn_start, self.btn_start.pos_y + 1, self.btn_start.pos_x)
+        self.main_layout.addWidget(self.btn_start24, self.btn_start24.pos_y + 1, self.btn_start24.pos_x)
+        self.main_layout.addWidget(self.btn_stop, self.btn_stop.pos_y + 1, self.btn_stop.pos_x)
+        self.main_layout.addWidget(self.btn_pause, self.btn_pause.pos_y + 1, self.btn_pause.pos_x)
+        self.main_layout.addWidget(self.btn_lightbar, self.btn_lightbar.pos_y + 1, self.btn_lightbar.pos_x)
+        self.main_layout.addWidget(self.btn_buzzer, self.btn_buzzer.pos_y + 1, self.btn_buzzer.pos_x)
+        self.main_layout.addWidget(self.btn_headphone, self.btn_headphone.pos_y + 1, self.btn_headphone.pos_x)
+        
+        # El widget apilado también se desplaza una fila hacia abajo
+        self.main_layout.addWidget(stacked_widget, 2, 1, 3, 3)  # Ahora en la fila 2
+        
+        # El botón de escaneo se desplaza una fila hacia abajo
+        self.main_layout.addWidget(self.btn_scan_usb, self.btn_scan_usb.pos_y + 1, self.btn_scan_usb.pos_x, 1, 4)
         
         # Área de velocidad - Modificado para ocultar slider del contador
         self.sel_counter = Selector(1, 0, 'Contador', None, '{0:d}', None, None, show_slider=False, parent=self)
@@ -156,9 +106,17 @@ class EMDRControllerWidget(QWidget):
         ], parent=self)
         
         # Área de barra de luz - Botones más pequeños y cuadrados
-        self.btn_light_on = CustomButton(0, 0, 'On', togglable=True)
-        self.btn_light_off = CustomButton(1, 0, 'Off', togglable=True)
-        self.switch_light = Switch(self.btn_light_on, self.btn_light_off, self.update_light)
+        # self.switch_light = Switch(self.btn_light_on, self.btn_light_off, self.update_light)
+        # Crear un layout para contener la etiqueta y el switch
+        self.light_switch_container = SwitchContainer("On/Off:", 0, 0)
+        self.switch_light = PyQtSwitch()
+        self.switch_light.setAnimation(True) 
+        self.switch_light.setCircleDiameter(30)
+        self.switch_light.toggled.connect(self.update_light)
+        self.light_switch_container.add_switch(self.switch_light)
+        self.switch_light.get_value = lambda: self.switch_light.isChecked()
+        self.switch_light.set_value = lambda value: self.switch_light.setChecked(value)
+
         self.btn_light_test = CustomButton(2, 0, 'Prueba', self.light_test_click, togglable=True)
 
         self.btn_light_color_plus = CustomButton(2, 1, '>>', size=(75, 75))
@@ -182,8 +140,7 @@ class EMDRControllerWidget(QWidget):
         self.btn_light_intens_minus.clicked.connect(self.sel_light_intens.prev_value)
 
         box_lightbar = Container(elements=[
-            self.btn_light_on,
-            self.btn_light_off,
+            self.light_switch_container,  # Reemplaza los botones ON/OFF
             self.btn_light_test,
             self.btn_light_color_plus,
             self.sel_light_color,
@@ -194,9 +151,15 @@ class EMDRControllerWidget(QWidget):
         ], parent=self)
         
         # Área de buzzer - Continuar con el resto de la interfaz
-        self.btn_buzzer_on = CustomButton(0, 0, 'On', togglable=True)
-        self.btn_buzzer_off = CustomButton(1, 0, 'Off', togglable=True)
-        self.switch_buzzer = Switch(self.btn_buzzer_on, self.btn_buzzer_off, self.update_buzzer)
+        # self.switch_buzzer = Switch(self.btn_buzzer_on, self.btn_buzzer_off, self.update_buzzer)
+        self.buzzer_switch_container = SwitchContainer("On/Off:", 0, 0)
+        self.switch_buzzer = PyQtSwitch()
+        self.switch_buzzer.setAnimation(True)
+        self.switch_buzzer.toggled.connect(self.update_buzzer)
+        self.buzzer_switch_container.add_switch(self.switch_buzzer)
+        self.switch_buzzer.get_value = lambda: self.switch_buzzer.isChecked()
+        self.switch_buzzer.set_value = lambda value: self.switch_buzzer.setChecked(value)
+        
         self.btn_buzzer_test = CustomButton(2, 0, 'Prueba', self.buzzer_test_click)
         
         self.btn_buzzer_duration_plus = CustomButton(2, 1, '+', size=(75, 75))
@@ -210,8 +173,7 @@ class EMDRControllerWidget(QWidget):
         self.btn_buzzer_duration_minus.clicked.connect(self.sel_buzzer_duration.prev_value)
 
         box_buzzer = Container(elements=[
-            self.btn_buzzer_on,
-            self.btn_buzzer_off,
+            self.buzzer_switch_container,  # Reemplaza los botones ON/OFF
             self.btn_buzzer_test,
             self.btn_buzzer_duration_plus,
             self.sel_buzzer_duration,
@@ -219,9 +181,16 @@ class EMDRControllerWidget(QWidget):
         ], parent=self)
         
         # Área de auriculares
-        self.btn_headphone_on = CustomButton(0, 0, 'On', togglable=True)
-        self.btn_headphone_off = CustomButton(1, 0, 'Off', togglable=True)
-        self.switch_headphone = Switch(self.btn_headphone_on, self.btn_headphone_off, self.update_sound)
+        # self.switch_headphone = Switch(self.btn_headphone_on, self.btn_headphone_off, self.update_sound)
+        self.headphone_switch_container = SwitchContainer("On/Off:", 0, 0)
+        self.switch_headphone = PyQtSwitch()
+        self.switch_headphone.setAnimation(True)
+        self.switch_headphone.setCircleDiameter(30)
+        self.switch_headphone.toggled.connect(self.update_sound)
+        self.headphone_switch_container.add_switch(self.switch_headphone)
+        self.switch_headphone.get_value = lambda: self.switch_headphone.isChecked()
+        self.switch_headphone.set_value = lambda value: self.switch_headphone.setChecked(value)
+
         self.btn_headphone_test = CustomButton(2, 0, 'Prueba', self.headphone_test_click)
         
         self.btn_headphone_volume_plus = CustomButton(2, 1, '+', size=(75, 75))
@@ -245,8 +214,7 @@ class EMDRControllerWidget(QWidget):
         self.btn_headphone_tone_minus.clicked.connect(self.sel_headphone_tone.prev_value)
 
         box_headphone = Container(elements=[
-            self.btn_headphone_on,
-            self.btn_headphone_off,
+            self.headphone_switch_container,  # Reemplaza los botones ON/OFF
             self.btn_headphone_test,
             self.btn_headphone_volume_plus,
             self.sel_headphone_volume,
@@ -266,7 +234,7 @@ class EMDRControllerWidget(QWidget):
         
         # Eliminar la inicialización automática del timer de USB
         self.probe_timer = QTimer(self)
-        self.probe_timer.timeout.connect(self.check_usb)
+        self.probe_timer.timeout.connect(self.scan_usb)
         # self.probe_timer.start(1000)  # Comentar o eliminar esta línea
         
         # Conectar ACTION_EVENT con su manejador
@@ -275,20 +243,6 @@ class EMDRControllerWidget(QWidget):
         # Inicializar pero sin verificar USB
         self.config_mode()
         self.reset_action()
-        
-        # No se verifican los USB en el arranque
-        # self.check_usb() # Eliminar o comentar esta línea
-    
-    def acquire_devices(self):
-        """Solicita acceso exclusivo a los dispositivos"""
-        if self.resource_manager:
-            return self.resource_manager.acquire_for_emdr()
-        return True
-    
-    def release_devices(self):
-        """Libera los dispositivos para otros componentes"""
-        if self.resource_manager:
-            self.resource_manager.release_devices()
     
     def activate(self, elem):
         """Activa un elemento de la UI"""
@@ -396,12 +350,15 @@ class EMDRControllerWidget(QWidget):
             self.in_load = True
             Config.load()
             self.sel_speed.set_value(Config.data.get('general.speed'))
-            self.switch_light.set_value(Config.data.get('lightbar.on'))
+            # self.switch_light.set_value(Config.data.get('lightbar.on'))
+            self.switch_light.set_value(True)
             self.sel_light_color.set_value(Config.data.get('lightbar.color'))
             self.sel_light_intens.set_value(Config.data.get('lightbar.intensity'))
-            self.switch_buzzer.set_value(Config.data.get('buzzer.on'))
+            # self.switch_buzzer.set_value(Config.data.get('buzzer.on'))
+            self.switch_buzzer.set_value(True)
             self.sel_buzzer_duration.set_value(Config.data.get('buzzer.duration'))
-            self.switch_headphone.set_value(Config.data.get('headphone.on'))
+            # self.switch_headphone.set_value(Config.data.get('headphone.on'))
+            self.switch_headphone.set_value(True)
             self.sel_headphone_tone.set_value(Config.data.get('headphone.tone'))
             self.sel_headphone_volume.set_value(Config.data.get('headphone.volume'))
         except:
@@ -427,7 +384,7 @@ class EMDRControllerWidget(QWidget):
         """Cambia al modo de configuración"""
         self.mode = 'config'
         # No iniciar el temporizador de sondeo automático
-        # self.probe_timer.start(1000)  # Comentar esta línea
+        # self.probe_timer.start(1000)  # Mantener comentado
         
         # Habilitar/deshabilitar botones
         if not self.btn_pause.isChecked():
@@ -452,10 +409,6 @@ class EMDRControllerWidget(QWidget):
     def action_mode(self):
         """Cambia al modo de acción"""
         # Verificar si podemos adquirir los dispositivos
-        if not self.acquire_devices():
-            print("No se pueden adquirir los dispositivos - otra parte de la aplicación los está usando")
-            return
-            
         if self.mode == 'action':
             return
         self.mode = 'action'
@@ -505,10 +458,6 @@ class EMDRControllerWidget(QWidget):
         else:
             self.config_mode()
             self.reset_action()
-        
-        # Liberar recursos cuando se detiene
-        if self.mode == 'action':
-            self.release_devices()
 
     def pause_click(self):
         """Maneja clic en el botón Pause"""
@@ -524,23 +473,6 @@ class EMDRControllerWidget(QWidget):
                 self.action_extra_delay = 0
                 self.decay = False
 
-    def check_usb(self):
-        """Verifica los dispositivos USB conectados"""
-        # Eliminamos el parámetro event que no se usa
-        if self.mode == 'action':
-            return
-        Devices.probe()
-        if Devices.lightbar_plugged_in():
-            if not self.btn_lightbar.active:
-                Devices.set_led(Devices.led_num / 2 + 1)
-            self.activate(self.btn_lightbar)
-        else:
-            self.deactivate(self.btn_lightbar)
-        if Devices.buzzer_plugged_in():
-            self.activate(self.btn_buzzer)
-        else:
-            self.deactivate(self.btn_buzzer)
-
     def reset_action(self):
         """Reinicia la acción EMDR"""
         print('reset_action')
@@ -548,12 +480,13 @@ class EMDRControllerWidget(QWidget):
         self.direction = -1
         self.decay = False
         Devices.set_led(self.led_pos if self.switch_light.get_value() else 0)
-
+    
     def action(self):
         """Maneja un paso en la secuencia EMDR"""
         # Eliminamos el parámetro event ya que usamos signals
         if self.mode != 'action':
             return
+        
         if self.switch_light.get_value():
             Devices.set_led(self.led_pos)
         cntr = self.sel_counter.get_value()
@@ -580,8 +513,6 @@ class EMDRControllerWidget(QWidget):
             if self.decay:
                 self.config_mode()
                 self.reset_action()
-                # Liberar dispositivos cuando termina la acción
-                self.release_devices()
                 return
             else:
                 cntr += 1
@@ -595,50 +526,111 @@ class EMDRControllerWidget(QWidget):
             factor = 1.5 / n ** alpha
             self.action_extra_delay = self.action_delay + factor * pos ** alpha
 
-    def scan_usb_click(self):
-        """Maneja el clic en el botón de escaneo USB y muestra dispositivos conectados"""
-        # Cambiar texto del botón durante el escaneo
-        old_text = self.btn_scan_usb.text()
-        self.btn_scan_usb.setText("Scanning...")
-        self.btn_scan_usb.setEnabled(False)
-        QApplication.processEvents()  # Forzar actualización de la interfaz
-        
-        # Realizar el escaneo (la nueva función devuelve los dispositivos encontrados)
+    def check_slave_connections(self):
+        """Método base que contiene la lógica común para verificar conexiones de dispositivos"""
+        # Realizar el escaneo y obtener los dispositivos encontrados
         found_devices = Devices.probe()
         
-        # Habilitar/deshabilitar botones según dispositivos encontrados
+        # Actualizar el estado de los botones según los dispositivos encontrados
         if "Master Controller" in found_devices:
-            # Si encontramos un controlador maestro, verificamos qué dispositivos están conectados
-            if "Pulse Sensor" in found_devices:
-                # El sensor está conectado, podemos iniciar captura
-                self.activate(self.btn_start)
-                self.activate(self.btn_start24)
-            
+            # Verificar lightbar
             if "Lightbar" in found_devices:
-                # La barra de luz está conectada, activar su botón
                 self.activate(self.btn_lightbar)
             else:
                 self.deactivate(self.btn_lightbar)
             
-            # El buzzer es un dispositivo directo, comprobamos si está conectado
-            if Devices.buzzer_plugged_in():
+            # Verificar buzzer
+            if "Buzzer" in found_devices:
                 self.activate(self.btn_buzzer)
             else:
                 self.deactivate(self.btn_buzzer)
+                
+            # Siempre activar los botones de inicio si existe el controlador maestro
+            if self.mode == 'config':
+                self.activate(self.btn_start)
+                self.activate(self.btn_start24)
         else:
-            # No se encontró controlador maestro, desactivar todo
+            # No hay controlador maestro, desactivar todos los controles
             self.deactivate(self.btn_lightbar)
             self.deactivate(self.btn_buzzer)
             self.deactivate(self.btn_start)
             self.deactivate(self.btn_start24)
         
-        # Mostrar resultados en el botón temporalmente
-        self.btn_scan_usb.setEnabled(True)
+        # Actualizar la etiqueta de estado de dispositivos
+        self.update_device_status_label(found_devices)
         
-        if found_devices:
-            self.btn_scan_usb.setText(f"Found: {', '.join(found_devices[-2:])}")  # Mostrar últimos 2 dispositivos
+        return found_devices
+
+    def update_device_status_label(self, found_devices):
+        """Actualiza la etiqueta de estado de dispositivos"""
+        if not found_devices:
+            self.device_status_label.setText("Estado de dispositivos: No se encontraron dispositivos")
+            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+            return
             
-            # Mostrar estado de conexión en la consola
+        if "Master Controller" not in found_devices:
+            self.device_status_label.setText("Estado de dispositivos: No se encontró el controlador maestro")
+            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+            return
+        
+        # Crear texto de estado para cada tipo de dispositivo conocido
+        status_text = "Estado de dispositivos: "
+        
+        # Comprobar cada tipo de dispositivo en KNOWN_SLAVES
+        for slave_id, (name, required) in KNOWN_SLAVES.items():
+            # Tratar el sensor como no requerido para esta interfaz
+            if name == "Sensor":
+                required = False
+                
+            is_connected = name in found_devices
+            status = "CONECTADO" if is_connected else "DESCONECTADO"
+            req = " (Requerido)" if required else ""
+            status_text += f"{name}{req}: {status} | "
+        
+        # Añadir también el controlador maestro
+        status_text += "Master Controller: CONECTADO"
+        
+        # Actualizar el texto de la etiqueta
+        self.device_status_label.setText(status_text)
+        
+        # Verificar si todos los dispositivos requeridos (excepto el Sensor) están conectados
+        required_connected = all(
+            name in found_devices
+            for slave_id, (name, required) in KNOWN_SLAVES.items()
+            if required and name != "Sensor"
+        )
+        
+        # Cambiar el color de fondo según el estado de conexión
+        if required_connected:
+            self.device_status_label.setStyleSheet("background-color: rgba(200, 255, 200, 180); padding: 5px;")
+        else:
+            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+
+    def scan_usb(self):
+        """Verifica los dispositivos USB conectados automáticamente (reemplaza a check_usb)"""
+        # No ejecutar durante una acción EMDR
+        if self.mode == 'action':
+            return
+            
+        # Usar el método común y actualizar la interfaz
+        self.check_slave_connections()
+
+    def scan_usb_click(self):
+        """Maneja el clic en el botón de escaneo USB y muestra dispositivos conectados"""
+        # Cambiar texto del botón durante el escaneo
+        self.btn_scan_usb.setText("Scanning...")
+        self.btn_scan_usb.setEnabled(False)
+        QApplication.processEvents()  # Forzar actualización de la interfaz
+        
+        # Realizar el escaneo usando el método común
+        found_devices = self.check_slave_connections()
+        
+        # Re-habilitar el botón (pero NO cambiar su texto)
+        self.btn_scan_usb.setEnabled(True)
+        self.btn_scan_usb.setText("Escanear")
+        
+        # Mostrar estado de conexión en la consola
+        if found_devices:
             print("Connected devices:")
             for device in found_devices:
                 print(f"- {device}")
@@ -646,22 +638,28 @@ class EMDRControllerWidget(QWidget):
             # Si hay lightbar, inicializar con LED central
             if "Lightbar" in found_devices:
                 Devices.set_led(Devices.led_num // 2 + 1)
-        else:
-            self.btn_scan_usb.setText("No devices found")
+    
+    def closeEvent(self):
+        """Maneja el evento de cierre de la ventana"""
+        print("Cerrando aplicación y limpiando recursos...")
         
-        # Restaurar texto original después de 2 segundos
-        QTimer.singleShot(2000, lambda: self.btn_scan_usb.setText(old_text))
+        # Detener cualquier acción EMDR en progreso
+        if self.mode == 'action':
+            self.stopping = True
+            self.config_mode()
+        
+        # Apagar todos los dispositivos de estimulación
+        Devices.set_led(0)  # Apagar todos los LEDs
+        
+        # Guardar la configuración actual
+        self.save_config()
 
 
 # Esta sección del código se mantiene para permitir ejecutar el archivo independientemente
 if __name__ == "__main__":
     """Función principal que inicializa y ejecuta la aplicación EMDR Controller"""
     # Crear la aplicación Qt
-    app = QApplication(sys.argv)
-    
-    # Analizar argumentos de línea de comandos
-    fullscreen = "--fullscreen" in sys.argv
-    touchscreen = "--touchscreen" in sys.argv
+    app = QApplication([])
     
     # Crear ventana principal para modo independiente
     main_window = QMainWindow()
@@ -672,12 +670,6 @@ if __name__ == "__main__":
     controller = EMDRControllerWidget(parent=main_window)
     main_window.setCentralWidget(controller)
     
-    # Configurar opciones específicas de la ventana
-    if fullscreen:
-        main_window.showFullScreen()
-    if touchscreen:
-        main_window.setCursor(Qt.BlankCursor)
-    
     # Inicializar controlador
     controller.load_config()
     controller.set_area('speed')
@@ -686,6 +678,6 @@ if __name__ == "__main__":
     main_window.show()
     
     # Antes de salir, guardar configuración
-    app.aboutToQuit.connect(controller.save_config)
+    app.aboutToQuit.connect(controller.closeEvent)
     
     sys.exit(app.exec())

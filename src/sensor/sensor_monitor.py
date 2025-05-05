@@ -13,11 +13,14 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayou
 from PySide6.QtCore import QTimer, Qt, Signal, QObject
 import pyqtgraph as pg
 
+# Ajustar el path para importaciones absolutas
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 # Importaciones para gestión de dispositivos
-from models.devices import Devices, KNOWN_SLAVES
+from src.models.devices import Devices, KNOWN_SLAVES
 
 # Importación del filtro en tiempo real
-from utils.signal_processing import RealTimeFilter
+from src.utils.signal_processing import RealTimeFilter
 
 # Configuración constantes
 SAMPLE_RATE = 125  # Hz (tasa efectiva: 250 SPS ÷ 2 canales)
@@ -156,24 +159,24 @@ class SensorMonitorQt(QMainWindow):
         button_layout = QHBoxLayout()
         
         # Botón de Iniciar/Detener
-        self.start_stop_button = QPushButton("Iniciar Adquisición")
-        self.start_stop_button.clicked.connect(self.toggle_acquisition)
-        button_layout.addWidget(self.start_stop_button)
+        self.btn_start_stop = QPushButton("Iniciar Adquisición")
+        self.btn_start_stop.clicked.connect(self.toggle_acquisition)
+        button_layout.addWidget(self.btn_start_stop)
         
         # Botón de Escanear Dispositivos
-        self.scan_button = QPushButton("Escanear Dispositivos")
-        self.scan_button.clicked.connect(self.check_slave_connections)
-        button_layout.addWidget(self.scan_button)
+        self.btn_scan_usb = QPushButton("Escanear")
+        self.btn_scan_usb.clicked.connect(self.check_slave_connections)
+        button_layout.addWidget(self.btn_scan_usb)
         
         # Botón de Guardar Datos
-        self.save_button = QPushButton("Guardar Datos")
-        self.save_button.clicked.connect(self.save_data_to_csv)
-        button_layout.addWidget(self.save_button)
+        self.btn_save = QPushButton("Guardar")
+        self.btn_save.clicked.connect(self.save_data_to_csv)
+        button_layout.addWidget(self.btn_save)
         
         # Botón de Salir
-        self.exit_button = QPushButton("Salir")
-        self.exit_button.clicked.connect(self.close)
-        button_layout.addWidget(self.exit_button)
+        self.btn_exit = QPushButton("Salir")
+        self.btn_exit.clicked.connect(self.close)
+        button_layout.addWidget(self.btn_exit)
         
         # Añadir el layout de botones al layout principal
         main_layout.addLayout(button_layout)
