@@ -120,7 +120,7 @@ class SensorMonitorQt(QMainWindow):
         self.ppg_plot_widget.setLabel('left', 'Señal PPG filtrada')
         self.ppg_plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.ppg_plot_widget.setYRange(-25000, 25000)
-        self.ppg_plot_widget.setXRange(-display_time, 0, padding=0)
+        self.ppg_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
         
         # Primero configurar el espaciado de ticks y luego la cuadrícula
         x_axis_ppg = self.ppg_plot_widget.getAxis('bottom')
@@ -132,7 +132,7 @@ class SensorMonitorQt(QMainWindow):
         self.eog_plot_widget.setLabel('left', 'Señal EOG filtrada')
         self.eog_plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.eog_plot_widget.setYRange(-25000, 25000)
-        self.eog_plot_widget.setXRange(-display_time, 0, padding=0)
+        self.eog_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
         
         # Primero configurar el espaciado de ticks y luego la cuadrícula
         x_axis_eog = self.eog_plot_widget.getAxis('bottom')
@@ -496,21 +496,21 @@ class SensorMonitorQt(QMainWindow):
             filtered_ppg_data = np.array(self.filtered_ppg_values)
             filtered_eog_data = np.array(self.filtered_eog_values)
             
-            # Update plot data - solo mostramos las señales filtradas
-            self.ppg_curve.setData(x_data, filtered_ppg_data)
-            self.eog_curve.setData(x_data, filtered_eog_data)
-            
-            # Get current time (last data point)
-            current_time = x_data[-1] if len(x_data) > 0 else 0
-            
-            # Set fixed window of width DISPLAY_TIME that slides with data
-            if len(x_data) > 0 and self.running:
-                window_start = current_time - DISPLAY_TIME
-                window_end = current_time
+            if self.running:
+                # Normalizar los tiempos para que siempre estén entre -5 y 0
+                current_time = x_data[-1]
+                normalized_x = x_data - current_time  # El tiempo actual será 0, los anteriores negativos
+            else:
+                # Si está detenido, mantener la última normalización
+                normalized_x = x_data
                 
-                # Desactivar auto-ranging y establecer rango exacto sin padding
-                self.ppg_plot_widget.setXRange(window_start, window_end, padding=0)
-                self.eog_plot_widget.setXRange(window_start, window_end, padding=0)
+            # Update plot data con los tiempos normalizados
+            self.ppg_curve.setData(normalized_x, filtered_ppg_data)
+            self.eog_curve.setData(normalized_x, filtered_eog_data)
+            
+            # Fijar siempre el rango X entre -5 y 0
+            self.ppg_plot_widget.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
+            self.eog_plot_widget.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
             
             # Update stats label
             stats_str = (f"Paquetes: {self.packets_received} | "
