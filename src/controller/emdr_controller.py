@@ -106,7 +106,6 @@ class EMDRControllerWidget(QWidget):
         ], parent=self)
         
         # Área de barra de luz - Botones más pequeños y cuadrados
-        # self.switch_light = Switch(self.btn_light_on, self.btn_light_off, self.update_light)
         # Crear un layout para contener la etiqueta y el switch
         self.light_switch_container = SwitchContainer("On/Off:", 0, 0)
         self.switch_light = PyQtSwitch()
@@ -151,7 +150,6 @@ class EMDRControllerWidget(QWidget):
         ], parent=self)
         
         # Área de buzzer - Continuar con el resto de la interfaz
-        # self.switch_buzzer = Switch(self.btn_buzzer_on, self.btn_buzzer_off, self.update_buzzer)
         self.buzzer_switch_container = SwitchContainer("On/Off:", 0, 0)
         self.switch_buzzer = PyQtSwitch()
         self.switch_buzzer.setAnimation(True)
@@ -181,7 +179,6 @@ class EMDRControllerWidget(QWidget):
         ], parent=self)
         
         # Área de auriculares
-        # self.switch_headphone = Switch(self.btn_headphone_on, self.btn_headphone_off, self.update_sound)
         self.headphone_switch_container = SwitchContainer("On/Off:", 0, 0)
         self.switch_headphone = PyQtSwitch()
         self.switch_headphone.setAnimation(True)
