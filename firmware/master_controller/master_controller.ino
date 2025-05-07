@@ -19,7 +19,6 @@
    { 0xA0, 0xA3, 0xB3, 0xAA, 0x33, 0xA4 },  // MAC del ESP32 sensor de señales. DEVICE_ID: 1
    { 0xA0, 0xB7, 0x65, 0x55, 0xF3, 0x30 },  // MAC del ESP32 de la lightbar. DEVICE_ID: 2
    { 0xCC, 0xDB, 0xA7, 0x92, 0x15, 0xC8 }   // MAC del ESP32 del buzzer. DEVICE_ID: 3
-   { 0xE4, 0x65, 0xB8, 0xA3, 0x7E, 0x4C }
  };
  
  #define NUM_SLAVES (sizeof(slaveAddresses) / sizeof(slaveAddresses[0]))
@@ -183,7 +182,7 @@
    esp_now_register_send_cb(onSentEspNowData);
  
    // Identificación del dispositivo
-   Serial.println("EMDR Master Controller");
+  //  Serial.println("EMDR Master Controller");
  }
  
  void loop() {

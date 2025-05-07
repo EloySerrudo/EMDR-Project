@@ -120,27 +120,38 @@ class SensorMonitor(QWidget):
         self.ppg_plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.ppg_plot_widget.setYRange(-25000, 25000)
         self.ppg_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
-        
+        self.ppg_plot_widget.setBackground('#f8f9fa')  # Fondo claro
+        self.ppg_plot_widget.showGrid(x=True, y=True, alpha=0.3)
+
         # Primero configurar el espaciado de ticks y luego la cuadrícula
         x_axis_ppg = self.ppg_plot_widget.getAxis('bottom')
-        x_axis_ppg.setTickSpacing(major=1, minor=0.5)  # Marcas principales cada 1 segundo, menores cada 0.5
-        self.ppg_plot_widget.showGrid(x=True, y=True)
-        
+        x_axis_ppg.setTickSpacing(major=1, minor=0.5)
+
         # EOG signal plot (inferior)
         self.eog_plot_widget = pg.PlotWidget()
         self.eog_plot_widget.setLabel('left', 'Señal EOG filtrada')
         self.eog_plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.eog_plot_widget.setYRange(-25000, 25000)
         self.eog_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
-        
+        self.eog_plot_widget.setBackground('#f8f9fa')  # Fondo claro
+        self.eog_plot_widget.showGrid(x=True, y=True, alpha=0.3)
+
         # Primero configurar el espaciado de ticks y luego la cuadrícula
         x_axis_eog = self.eog_plot_widget.getAxis('bottom')
-        x_axis_eog.setTickSpacing(major=1, minor=0.5)  # Marcas principales cada 1 segundo, menores cada 0.5
-        self.eog_plot_widget.showGrid(x=True, y=True)
-        
-        # Create curves for data
-        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('r', width=1.5))
-        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('g', width=1.5))
+        x_axis_eog.setTickSpacing(major=1, minor=0.5)
+
+        # Create curves for data - estilos más claros y definidos
+        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('#E91E63', width=2))
+        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('#2196F3', width=2))
+
+        # Añadir leyendas
+        ppg_legend = pg.LegendItem(offset=(70, 30))
+        ppg_legend.setParentItem(self.ppg_plot_widget.graphicsItem())
+        ppg_legend.addItem(self.ppg_curve, "Señal Cardíaca (PPG)")
+
+        eog_legend = pg.LegendItem(offset=(70, 30))
+        eog_legend.setParentItem(self.eog_plot_widget.graphicsItem())
+        eog_legend.addItem(self.eog_curve, "Movimiento Ocular (EOG)")
         
         # Add plots to layout
         main_layout.addWidget(self.ppg_plot_widget)
