@@ -4,7 +4,10 @@ import time
 import os
 
 # PyQtGraph y PySide6 imports
-from PySide6.QtWidgets import QMainWindow, QWidget, QGridLayout, QApplication, QStackedLayout, QPushButton, QLabel
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QApplication, QTabWidget, 
+    QPushButton, QLabel, QSpacerItem, QSizePolicy
+)
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon
 
@@ -35,150 +38,119 @@ class EMDRControllerWidget(QWidget):
         self.pausing = False
         self.stopping = False
         
-        # Layout Grid - Reorganizado para asegurar que la etiqueta de estado esté arriba
-        self.main_layout = QGridLayout(self)
+        # Layout principal vertical
+        self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(5)
         
-        # Primero: Añadir etiqueta de estado de dispositivos en la parte superior (fila 0)
+        # 1. Etiqueta de estado de dispositivos en la parte superior
         self.device_status_label = QLabel("Estado de dispositivos: Desconocido")
         self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
-        self.main_layout.addWidget(self.device_status_label, 0, 0, 1, 5)  # Posición 0,0 ocupando 1 fila y 5 columnas
+        self.main_layout.addWidget(self.device_status_label)
         
-        # Segundo: Crear botones principales (ahora en la fila 1, dejando espacio para la etiqueta)
+        # 2. Layout para botones principales (reemplazando QGridLayout)
+        button_container = QWidget()
+        button_layout = QVBoxLayout(button_container)
+        button_layout.setContentsMargins(5, 5, 5, 5)
+        button_layout.setSpacing(2)
+        
+        # Crear botones principales
         self.btn_start = CustomButton(0, 0, 'Play', self.start_click)
         self.btn_start24 = CustomButton(1, 0, 'Play24', self.start24_click)
         self.btn_stop = CustomButton(2, 0, 'Stop', self.stop_click)
         self.btn_pause = CustomButton(3, 0, 'Pause', self.pause_click, togglable=True)
-        self.btn_lightbar = CustomButton(0, 1, 'Visual', self.lightbar_click, togglable=True)
-        self.btn_lightbar.setActive(False)
-        self.btn_buzzer = CustomButton(0, 2, 'Táctil', self.buzzer_click, togglable=True)
-        self.btn_buzzer.setActive(False)
-        self.btn_headphone = CustomButton(0, 3, 'Auditiva', self.headphone_click, togglable=True)
         
-        # Tercero: Crear QStackedLayout
-        self.stacked_layout = QStackedLayout()
-        self.stacked_layout.setContentsMargins(0, 0, 0, 0)
-        self.areas = {'speed':0, 'lightbar':1, 'buzzer':2, 'headphone':3}
-        stacked_widget = QWidget()
-        stacked_widget.setLayout(self.stacked_layout)
+        # Crear layout horizontal para la primera fila de botones
+        top_button_row = QHBoxLayout()
+        top_button_row.addWidget(self.btn_start)
+        top_button_row.addWidget(self.btn_start24)
+        top_button_row.addWidget(self.btn_stop)
+        top_button_row.addWidget(self.btn_pause)
         
-        # Cuarto: Añadir botón de escaneo USB en la parte inferior
+        # Crear el botón Escanear en su propia fila
         self.btn_scan_usb = CustomButton(4, 0, 'Escanear', self.scan_usb_click)
+        scan_button_row = QHBoxLayout()
+        scan_button_row.addWidget(self.btn_scan_usb)
         
-        # Quinto: Posicionar todos los widgets en la cuadrícula con los desplazamientos correctos
+        # Añadir todas las filas al layout de botones
+        button_layout.addLayout(top_button_row)
+        button_layout.addLayout(scan_button_row)
         
-        # Los botones principales se desplazan una fila hacia abajo (fila+1)
-        self.main_layout.addWidget(self.btn_start, self.btn_start.pos_y + 1, self.btn_start.pos_x)
-        self.main_layout.addWidget(self.btn_start24, self.btn_start24.pos_y + 1, self.btn_start24.pos_x)
-        self.main_layout.addWidget(self.btn_stop, self.btn_stop.pos_y + 1, self.btn_stop.pos_x)
-        self.main_layout.addWidget(self.btn_pause, self.btn_pause.pos_y + 1, self.btn_pause.pos_x)
-        self.main_layout.addWidget(self.btn_lightbar, self.btn_lightbar.pos_y + 1, self.btn_lightbar.pos_x)
-        self.main_layout.addWidget(self.btn_buzzer, self.btn_buzzer.pos_y + 1, self.btn_buzzer.pos_x)
-        self.main_layout.addWidget(self.btn_headphone, self.btn_headphone.pos_y + 1, self.btn_headphone.pos_x)
+        # Añadir el contenedor de botones al layout principal
+        self.main_layout.addWidget(button_container)
         
-        # El widget apilado también se desplaza una fila hacia abajo
-        self.main_layout.addWidget(stacked_widget, 2, 1, 3, 3)  # Ahora en la fila 2
+        # 3. Crear widget de velocidad (siempre visible)
+        speed_container = QWidget()
+        speed_layout = QVBoxLayout(speed_container)
         
-        # El botón de escaneo se desplaza una fila hacia abajo
-        self.main_layout.addWidget(self.btn_scan_usb, self.btn_scan_usb.pos_y + 1, self.btn_scan_usb.pos_x, 1, 4)
-        
-        # Área de velocidad - Modificado para ocultar slider del contador
+        # Crear el selector de contador
         self.sel_counter = Selector(1, 0, 'Contador', None, '{0:d}', None, None, show_slider=False, parent=self)
         self.sel_counter.set_value(0)
-
-        # Botones más pequeños y cuadrados (75x75 píxeles)
-        self.btn_speed_plus = CustomButton(2, 1, '+', size=(75, 75))
+        
+        # Layout para el contador
+        counter_row = QHBoxLayout()
+        counter_row.addStretch()
+        counter_row.addWidget(self.sel_counter)
+        counter_row.addStretch()
+        speed_layout.addLayout(counter_row)
+        
+        # Crear layout para controles de velocidad
+        speed_control_row = QHBoxLayout()
+        
+        # Botones de velocidad
         self.btn_speed_minus = CustomButton(0, 1, '-', size=(75, 75))
-
-        self.sel_speed = Selector(1, 1, 'Velocidad', Config.speeds, '{0:d}/min', 
-                                  self.btn_speed_plus, self.btn_speed_minus, 
-                                  self.update_speed, parent=self)
-
+        self.sel_speed = Selector(1, 1, 'Velocidad', Config.speeds, '{0:d}/min', None, None, self.update_speed, parent=self)
+        self.btn_speed_plus = CustomButton(2, 1, '+', size=(75, 75))
+        
         # Conectar botones de velocidad
         self.btn_speed_plus.clicked.connect(self.sel_speed.next_value)
         self.btn_speed_minus.clicked.connect(self.sel_speed.prev_value)
-
-        box_speed = Container(elements=[
-            self.sel_counter,
-            self.btn_speed_plus,
-            self.sel_speed,
-            self.btn_speed_minus
-        ], parent=self)
         
-        # Área de barra de luz - Botones más pequeños y cuadrados
-        # Crear un layout para contener la etiqueta y el switch
-        self.light_switch_container = SwitchContainer("On/Off:", 0, 0)
-        self.switch_light = PyQtSwitch()
-        self.switch_light.setAnimation(True) 
-        self.switch_light.setCircleDiameter(30)
-        self.switch_light.toggled.connect(self.update_light)
-        self.light_switch_container.add_switch(self.switch_light)
-        self.switch_light.get_value = lambda: self.switch_light.isChecked()
-        self.switch_light.set_value = lambda value: self.switch_light.setChecked(value)
-
-        self.btn_light_test = CustomButton(2, 0, 'Prueba', self.light_test_click, togglable=True)
-
-        self.btn_light_color_plus = CustomButton(2, 1, '>>', size=(75, 75))
-        self.btn_light_color_minus = CustomButton(0, 1, '<<', size=(75, 75))
-        self.sel_light_color = Selector(1, 1, 'Color', Config.colors, '{0}',
-                                        self.btn_light_color_plus, self.btn_light_color_minus,
-                                        self.update_light, cyclic=True, parent=self)
-
-        # Conectar botones de color
-        self.btn_light_color_plus.clicked.connect(self.sel_light_color.next_value)
-        self.btn_light_color_minus.clicked.connect(self.sel_light_color.prev_value)
-
-        self.btn_light_intens_plus = CustomButton(2, 2, '+', size=(75, 75))
-        self.btn_light_intens_minus = CustomButton(0, 2, '-', size=(75, 75))
-        self.sel_light_intens = Selector(1, 2, 'Brillo', Config.intensities, '{0:d}%',
-                                         self.btn_light_intens_plus, self.btn_light_intens_minus,
-                                         self.update_light, parent=self)
-
-        # Conectar botones de intensidad
-        self.btn_light_intens_plus.clicked.connect(self.sel_light_intens.next_value)
-        self.btn_light_intens_minus.clicked.connect(self.sel_light_intens.prev_value)
-
-        box_lightbar = Container(elements=[
-            self.light_switch_container,  # Reemplaza los botones ON/OFF
-            self.btn_light_test,
-            self.btn_light_color_plus,
-            self.sel_light_color,
-            self.btn_light_color_minus,
-            self.btn_light_intens_plus,
-            self.sel_light_intens,
-            self.btn_light_intens_minus
-        ], parent=self)
+        # Añadir controles de velocidad al layout
+        speed_control_row.addStretch()
+        speed_control_row.addWidget(self.btn_speed_minus)
+        speed_control_row.addWidget(self.sel_speed)
+        speed_control_row.addWidget(self.btn_speed_plus)
+        speed_control_row.addStretch()
         
-        # Área de buzzer - Continuar con el resto de la interfaz
-        self.buzzer_switch_container = SwitchContainer("On/Off:", 0, 0)
-        self.switch_buzzer = PyQtSwitch()
-        self.switch_buzzer.setAnimation(True)
-        self.switch_buzzer.toggled.connect(self.update_buzzer)
-        self.buzzer_switch_container.add_switch(self.switch_buzzer)
-        self.switch_buzzer.get_value = lambda: self.switch_buzzer.isChecked()
-        self.switch_buzzer.set_value = lambda value: self.switch_buzzer.setChecked(value)
+        speed_layout.addLayout(speed_control_row)
+        self.main_layout.addWidget(speed_container)
         
-        self.btn_buzzer_test = CustomButton(2, 0, 'Prueba', self.buzzer_test_click)
+        # 4. Crear el widget de pestañas
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane { 
+                background-color: white; 
+            }
+            QTabBar::tab {
+                background-color: #e0e0e0;
+                padding: 8px;
+                /* Eliminar min-width para permitir que el ancho sea flexible */
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                font-weight: bold;
+            }
+            QTabBar::tab:!enabled {
+                color: #a0a0a0;
+                background-color: #f0f0f0;
+            }
+        """)
+        self.tab_widget.setTabPosition(QTabWidget.TabPosition.North)
+        self.tab_widget.setUsesScrollButtons(False)  # No mostrar botones de scroll
         
-        self.btn_buzzer_duration_plus = CustomButton(2, 1, '+', size=(75, 75))
-        self.btn_buzzer_duration_minus = CustomButton(0, 1, '-', size=(75, 75))
-        self.sel_buzzer_duration = Selector(1, 1, 'Duración', Config.durations, '{0:d} ms', 
-                                            self.btn_buzzer_duration_plus, self.btn_buzzer_duration_minus, 
-                                            self.update_buzzer, parent=self)
-
-        # Conectar botones de duración del buzzer
-        self.btn_buzzer_duration_plus.clicked.connect(self.sel_buzzer_duration.next_value)
-        self.btn_buzzer_duration_minus.clicked.connect(self.sel_buzzer_duration.prev_value)
-
-        box_buzzer = Container(elements=[
-            self.buzzer_switch_container,  # Reemplaza los botones ON/OFF
-            self.btn_buzzer_test,
-            self.btn_buzzer_duration_plus,
-            self.sel_buzzer_duration,
-            self.btn_buzzer_duration_minus
-        ], parent=self)
+        # Configurar para expandir las pestañas por todo el ancho disponible
+        self.tab_widget.tabBar().setExpanding(True)  # Esta es la línea clave
         
-        # Área de auriculares
+        self.main_layout.addWidget(self.tab_widget)
+        
+        # 5. Crear contenido de pestañas
+        
+        # 5.1 Pestaña de Estimulación Auditiva (Auriculares)
+        headphone_container = QWidget()
+        headphone_layout = QVBoxLayout(headphone_container)
+        
+        # Switch container para auriculares
         self.headphone_switch_container = SwitchContainer("On/Off:", 0, 0)
         self.switch_headphone = PyQtSwitch()
         self.switch_headphone.setAnimation(True)
@@ -188,51 +160,186 @@ class EMDRControllerWidget(QWidget):
         self.switch_headphone.get_value = lambda: self.switch_headphone.isChecked()
         self.switch_headphone.set_value = lambda value: self.switch_headphone.setChecked(value)
 
+        # Botón de prueba
         self.btn_headphone_test = CustomButton(2, 0, 'Prueba', self.headphone_test_click)
         
-        self.btn_headphone_volume_plus = CustomButton(2, 1, '+', size=(75, 75))
+        # Primera fila: Switch y botón prueba
+        headphone_row1 = QHBoxLayout()
+        headphone_row1.addWidget(self.headphone_switch_container)
+        headphone_row1.addStretch()
+        headphone_row1.addWidget(self.btn_headphone_test)
+        
+        # Controles de volumen
         self.btn_headphone_volume_minus = CustomButton(0, 1, '-', size=(75, 75))
-        self.sel_headphone_volume = Selector(1, 1, 'Volumen', Config.volumes, '{0:d}%',
-                                             self.btn_headphone_volume_plus, self.btn_headphone_volume_minus, 
-                                             self.update_sound, parent=self)
-
+        self.sel_headphone_volume = Selector(1, 1, 'Volumen', Config.volumes, '{0:d}%', None, None, self.update_sound, parent=self)
+        self.btn_headphone_volume_plus = CustomButton(2, 1, '+', size=(75, 75))
+        
         # Conectar botones de volumen
         self.btn_headphone_volume_plus.clicked.connect(self.sel_headphone_volume.next_value)
         self.btn_headphone_volume_minus.clicked.connect(self.sel_headphone_volume.prev_value)
-
-        self.btn_headphone_tone_plus = CustomButton(2, 2, '>>', size=(75, 75))
+        
+        # Segunda fila: Controles de volumen
+        headphone_row2 = QHBoxLayout()
+        headphone_row2.addStretch()
+        headphone_row2.addWidget(self.btn_headphone_volume_minus)
+        headphone_row2.addWidget(self.sel_headphone_volume)
+        headphone_row2.addWidget(self.btn_headphone_volume_plus)
+        headphone_row2.addStretch()
+        
+        # Controles de tono
         self.btn_headphone_tone_minus = CustomButton(0, 2, '<<', size=(75, 75))
-        self.sel_headphone_tone = Selector(1, 2, 'Tono/Duración', Config.tones, '{0}',
-                                           self.btn_headphone_tone_plus, self.btn_headphone_tone_minus, 
-                                           self.update_sound, cyclic=True, parent=self)
-
+        self.sel_headphone_tone = Selector(1, 2, 'Tono/Duración', Config.tones, '{0}', None, None, 
+                                         self.update_sound, cyclic=True, parent=self)
+        self.btn_headphone_tone_plus = CustomButton(2, 2, '>>', size=(75, 75))
+        
         # Conectar botones de tono
         self.btn_headphone_tone_plus.clicked.connect(self.sel_headphone_tone.next_value)
         self.btn_headphone_tone_minus.clicked.connect(self.sel_headphone_tone.prev_value)
-
-        box_headphone = Container(elements=[
-            self.headphone_switch_container,  # Reemplaza los botones ON/OFF
-            self.btn_headphone_test,
-            self.btn_headphone_volume_plus,
-            self.sel_headphone_volume,
-            self.btn_headphone_volume_minus,
-            self.btn_headphone_tone_plus,
-            self.sel_headphone_tone,
-            self.btn_headphone_tone_minus
-        ], parent=self)
         
-        self.stacked_layout.addWidget(box_speed) # Index 0
-        self.stacked_layout.addWidget(box_lightbar) # Index 1
-        self.stacked_layout.addWidget(box_buzzer) # Index 2
-        self.stacked_layout.addWidget(box_headphone) # Index 3
+        # Tercera fila: Controles de tono
+        headphone_row3 = QHBoxLayout()
+        headphone_row3.addStretch()
+        headphone_row3.addWidget(self.btn_headphone_tone_minus)
+        headphone_row3.addWidget(self.sel_headphone_tone)
+        headphone_row3.addWidget(self.btn_headphone_tone_plus)
+        headphone_row3.addStretch()
+        
+        # Añadir todos los layouts al contenedor de auriculares
+        headphone_layout.addLayout(headphone_row1)
+        headphone_layout.addLayout(headphone_row2)
+        headphone_layout.addLayout(headphone_row3)
+        headphone_layout.addStretch()
+        
+        # 5.2 Pestaña de Estimulación Visual (Barra de Luz)
+        lightbar_container = QWidget()
+        lightbar_layout = QVBoxLayout(lightbar_container)
+        
+        # Switch para la barra de luz
+        self.light_switch_container = SwitchContainer("On/Off:", 0, 0)
+        self.switch_light = PyQtSwitch()
+        self.switch_light.setAnimation(True) 
+        self.switch_light.setCircleDiameter(30)
+        self.switch_light.toggled.connect(self.update_light)
+        self.light_switch_container.add_switch(self.switch_light)
+        self.switch_light.get_value = lambda: self.switch_light.isChecked()
+        self.switch_light.set_value = lambda value: self.switch_light.setChecked(value)
+
+        # Botón de prueba de luz
+        self.btn_light_test = CustomButton(2, 0, 'Prueba', self.light_test_click, togglable=True)
+        
+        # Primera fila: Switch y botón prueba
+        lightbar_row1 = QHBoxLayout()
+        lightbar_row1.addWidget(self.light_switch_container)
+        lightbar_row1.addStretch()
+        lightbar_row1.addWidget(self.btn_light_test)
+
+        # Controles de color
+        self.btn_light_color_minus = CustomButton(0, 1, '<<', size=(75, 75))
+        self.sel_light_color = Selector(1, 1, 'Color', Config.colors, '{0}', None, None,
+                                      self.update_light, cyclic=True, parent=self)
+        self.btn_light_color_plus = CustomButton(2, 1, '>>', size=(75, 75))
+
+        # Conectar botones de color
+        self.btn_light_color_plus.clicked.connect(self.sel_light_color.next_value)
+        self.btn_light_color_minus.clicked.connect(self.sel_light_color.prev_value)
+        
+        # Segunda fila: Controles de color
+        lightbar_row2 = QHBoxLayout()
+        lightbar_row2.addStretch()
+        lightbar_row2.addWidget(self.btn_light_color_minus)
+        lightbar_row2.addWidget(self.sel_light_color)
+        lightbar_row2.addWidget(self.btn_light_color_plus)
+        lightbar_row2.addStretch()
+
+        # Controles de intensidad
+        self.btn_light_intens_minus = CustomButton(0, 2, '-', size=(75, 75))
+        self.sel_light_intens = Selector(1, 2, 'Brillo', Config.intensities, '{0:d}%',
+                                       None, None, self.update_light, parent=self)
+        self.btn_light_intens_plus = CustomButton(2, 2, '+', size=(75, 75))
+
+        # Conectar botones de intensidad
+        self.btn_light_intens_plus.clicked.connect(self.sel_light_intens.next_value)
+        self.btn_light_intens_minus.clicked.connect(self.sel_light_intens.prev_value)
+        
+        # Tercera fila: Controles de intensidad
+        lightbar_row3 = QHBoxLayout()
+        lightbar_row3.addStretch()
+        lightbar_row3.addWidget(self.btn_light_intens_minus)
+        lightbar_row3.addWidget(self.sel_light_intens)
+        lightbar_row3.addWidget(self.btn_light_intens_plus)
+        lightbar_row3.addStretch()
+        
+        # Añadir todas las filas al layout de la barra de luz
+        lightbar_layout.addLayout(lightbar_row1)
+        lightbar_layout.addLayout(lightbar_row2)
+        lightbar_layout.addLayout(lightbar_row3)
+        lightbar_layout.addStretch()
+        
+        # 5.3 Pestaña de Estimulación Táctil (Buzzer)
+        buzzer_container = QWidget()
+        buzzer_layout = QVBoxLayout(buzzer_container)
+        
+        # Switch para el buzzer
+        self.buzzer_switch_container = SwitchContainer("On/Off:", 0, 0)
+        self.switch_buzzer = PyQtSwitch()
+        self.switch_buzzer.setAnimation(True)
+        self.switch_buzzer.toggled.connect(self.update_buzzer)
+        self.buzzer_switch_container.add_switch(self.switch_buzzer)
+        self.switch_buzzer.get_value = lambda: self.switch_buzzer.isChecked()
+        self.switch_buzzer.set_value = lambda value: self.switch_buzzer.setChecked(value)
+        
+        # Botón de prueba de buzzer
+        self.btn_buzzer_test = CustomButton(2, 0, 'Prueba', self.buzzer_test_click)
+        
+        # Primera fila: Switch y botón prueba
+        buzzer_row1 = QHBoxLayout()
+        buzzer_row1.addWidget(self.buzzer_switch_container)
+        buzzer_row1.addStretch()
+        buzzer_row1.addWidget(self.btn_buzzer_test)
+        
+        # Controles de duración
+        self.btn_buzzer_duration_minus = CustomButton(0, 1, '-', size=(75, 75))
+        self.sel_buzzer_duration = Selector(1, 1, 'Duración', Config.durations, '{0:d} ms', 
+                                          None, None, self.update_buzzer, parent=self)
+        self.btn_buzzer_duration_plus = CustomButton(2, 1, '+', size=(75, 75))
+        
+        # Conectar botones de duración
+        self.btn_buzzer_duration_plus.clicked.connect(self.sel_buzzer_duration.next_value)
+        self.btn_buzzer_duration_minus.clicked.connect(self.sel_buzzer_duration.prev_value)
+        
+        # Segunda fila: Controles de duración
+        buzzer_row2 = QHBoxLayout()
+        buzzer_row2.addStretch()
+        buzzer_row2.addWidget(self.btn_buzzer_duration_minus)
+        buzzer_row2.addWidget(self.sel_buzzer_duration)
+        buzzer_row2.addWidget(self.btn_buzzer_duration_plus)
+        buzzer_row2.addStretch()
+        
+        # Añadir todas las filas al layout del buzzer
+        buzzer_layout.addLayout(buzzer_row1)
+        buzzer_layout.addLayout(buzzer_row2)
+        buzzer_layout.addStretch()  # Añadir espacio al final
+        
+        # Añadir las pestañas al TabWidget
+        self.tab_widget.addTab(headphone_container, "Estimulación Auditiva")
+        self.tab_widget.addTab(lightbar_container, "Estimulación Visual")
+        self.tab_widget.addTab(buzzer_container, "Estimulación Táctil")
+        
+        # Deshabilitar pestañas inicialmente hasta verificar conexiones
+        # Excepto la auditiva que siempre está disponible
+        self.tab_widget.setTabEnabled(0, True)  # Auditiva siempre disponible
+        self.tab_widget.setTabEnabled(1, False)  # Visual deshabilitado hasta verificar
+        self.tab_widget.setTabEnabled(2, False)  # Táctil deshabilitado hasta verificar
+        
+        # Para mantener la compatibilidad con el código existente
+        self.areas = {'headphone': 0, 'lightbar': 1, 'buzzer': 2}
         
         # Configurar fondo
-        self.setStyleSheet("background-color: white;")
+        self.setStyleSheet("background-color: rgba(230, 230, 230, 100);")
         
         # Eliminar la inicialización automática del timer de USB
         self.probe_timer = QTimer(self)
         self.probe_timer.timeout.connect(self.scan_usb)
-        # self.probe_timer.start(1000)  # Comentar o eliminar esta línea
         
         # Conectar ACTION_EVENT con su manejador
         event_system.action_event.connect(self.action)
@@ -240,6 +347,9 @@ class EMDRControllerWidget(QWidget):
         # Inicializar pero sin verificar USB
         self.config_mode()
         self.reset_action()
+        
+        # Verificar dispositivos al iniciar
+        # QTimer.singleShot(500, self.scan_usb)
     
     def activate(self, elem):
         """Activa un elemento de la UI"""
@@ -250,27 +360,6 @@ class EMDRControllerWidget(QWidget):
         """Desactiva un elemento de la UI"""
         if elem.active:
             elem.setActive(False)
-    
-    def lightbar_click(self):
-        """Maneja el clic en el botón de la barra de luz"""
-        if self.btn_lightbar.isChecked():
-            self.set_area('lightbar')
-        else:
-            self.set_area('speed')
-    
-    def buzzer_click(self):
-        """Maneja el clic en el botón de buzzer"""
-        if self.btn_buzzer.isChecked():
-            self.set_area('buzzer')
-        else:
-            self.set_area('speed')
-    
-    def headphone_click(self):
-        """Maneja el clic en el botón de auriculares"""
-        if self.btn_headphone.isChecked():
-            self.set_area('headphone')
-        else:
-            self.set_area('speed')
     
     def light_test_click(self):
         """Prueba la luz"""
@@ -326,15 +415,9 @@ class EMDRControllerWidget(QWidget):
     
     def set_area(self, area):
         """Cambia el área visible"""
-        self.stacked_layout.setCurrentIndex(self.areas[area])
-        
-        # Gestionar botones togglables
-        if self.btn_lightbar.isChecked() and area != 'lightbar':
-            self.btn_lightbar.setChecked(False)
-        if self.btn_buzzer.isChecked() and area != 'buzzer':
-            self.btn_buzzer.setChecked(False)
-        if self.btn_headphone.isChecked() and area != 'headphone':
-            self.btn_headphone.setChecked(False)
+        if area != 'speed' and area in self.areas:
+            # Cambiar a la pestaña correspondiente
+            self.tab_widget.setCurrentIndex(self.areas[area])
         
         # Manejar prueba de luz
         if area != 'lightbar' and self.btn_light_test.isChecked():
@@ -347,14 +430,11 @@ class EMDRControllerWidget(QWidget):
             self.in_load = True
             Config.load()
             self.sel_speed.set_value(Config.data.get('general.speed'))
-            # self.switch_light.set_value(Config.data.get('lightbar.on'))
             self.switch_light.set_value(True)
             self.sel_light_color.set_value(Config.data.get('lightbar.color'))
             self.sel_light_intens.set_value(Config.data.get('lightbar.intensity'))
-            # self.switch_buzzer.set_value(Config.data.get('buzzer.on'))
             self.switch_buzzer.set_value(True)
             self.sel_buzzer_duration.set_value(Config.data.get('buzzer.duration'))
-            # self.switch_headphone.set_value(Config.data.get('headphone.on'))
             self.switch_headphone.set_value(True)
             self.sel_headphone_tone.set_value(Config.data.get('headphone.tone'))
             self.sel_headphone_volume.set_value(Config.data.get('headphone.volume'))
@@ -380,8 +460,6 @@ class EMDRControllerWidget(QWidget):
     def config_mode(self):
         """Cambia al modo de configuración"""
         self.mode = 'config'
-        # No iniciar el temporizador de sondeo automático
-        # self.probe_timer.start(1000)  # Mantener comentado
         
         # Habilitar/deshabilitar botones
         if not self.btn_pause.isChecked():
@@ -434,14 +512,12 @@ class EMDRControllerWidget(QWidget):
     
     def start_click(self):
         """Maneja clic en el botón Start (Play)"""
-        self.set_area('speed')
         self.max_counter = 0
         self.reset_action()
         self.action_mode()
 
     def start24_click(self):
         """Maneja clic en el botón Start24 (Play24)"""
-        self.set_area('speed')
         self.max_counter = 24
         self.reset_action()
         self.action_mode()
@@ -480,7 +556,6 @@ class EMDRControllerWidget(QWidget):
     
     def action(self):
         """Maneja un paso en la secuencia EMDR"""
-        # Eliminamos el parámetro event ya que usamos signals
         if self.mode != 'action':
             return
         
@@ -528,33 +603,47 @@ class EMDRControllerWidget(QWidget):
         # Realizar el escaneo y obtener los dispositivos encontrados
         found_devices = Devices.probe()
         
-        # Actualizar el estado de los botones según los dispositivos encontrados
+        # Actualizar el estado de las pestañas según los dispositivos encontrados
         if "Master Controller" in found_devices:
             # Verificar lightbar
-            if "Lightbar" in found_devices:
-                self.activate(self.btn_lightbar)
-            else:
-                self.deactivate(self.btn_lightbar)
+            lightbar_connected = "Lightbar" in found_devices
+            
+            # Tab visual (índice 1) debe estar habilitada solo si hay lightbar
+            self.tab_widget.setTabEnabled(1, lightbar_connected)
             
             # Verificar buzzer
-            if "Buzzer" in found_devices:
-                self.activate(self.btn_buzzer)
-            else:
-                self.deactivate(self.btn_buzzer)
+            buzzer_connected = "Buzzer" in found_devices
+            
+            # Tab táctil (índice 2) debe estar habilitada solo si hay buzzer
+            self.tab_widget.setTabEnabled(2, buzzer_connected)
+            
+            # La estimulación auditiva siempre está disponible (independientemente de conexiones)
+            self.tab_widget.setTabEnabled(0, True)
                 
             # Siempre activar los botones de inicio si existe el controlador maestro
             if self.mode == 'config':
                 self.activate(self.btn_start)
                 self.activate(self.btn_start24)
         else:
-            # No hay controlador maestro, desactivar todos los controles
-            self.deactivate(self.btn_lightbar)
-            self.deactivate(self.btn_buzzer)
+            # No hay controlador maestro
             self.deactivate(self.btn_start)
             self.deactivate(self.btn_start24)
+            
+            # La estimulación auditiva siempre está disponible (incluso sin controlador)
+            self.tab_widget.setTabEnabled(0, True)
+            
+            # Desactivar solo las pestañas específicas que requieren hardware
+            self.tab_widget.setTabEnabled(1, False)  # Visual - requiere lightbar
+            self.tab_widget.setTabEnabled(2, False)  # Táctil - requiere buzzer
         
         # Actualizar la etiqueta de estado de dispositivos
         self.update_device_status_label(found_devices)
+        
+        # Asegurar que la pestaña actual está habilitada, o cambiar a Estimulación Auditiva si no
+        current_index = self.tab_widget.currentIndex()
+        if not self.tab_widget.isTabEnabled(current_index):
+            # Si la pestaña actual está deshabilitada, cambiar a Estimulación Auditiva (índice 0)
+            self.tab_widget.setCurrentIndex(0)
         
         return found_devices
 
@@ -669,7 +758,6 @@ if __name__ == "__main__":
     
     # Inicializar controlador
     controller.load_config()
-    controller.set_area('speed')
     
     # Mostrar ventana y ejecutar aplicación
     main_window.show()

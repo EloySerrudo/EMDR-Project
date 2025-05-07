@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime
 
 # PyQtGraph y PySide6 imports
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 from PySide6.QtCore import QTimer, Qt, Signal, QObject
 import pyqtgraph as pg
 
@@ -34,9 +34,9 @@ PACKET_SIZE = 15        # Tamaño en bytes de cada paquete
 class SignalsObject(QObject):
     device_status_updated = Signal(dict, bool)
     
-class SensorMonitorQt(QMainWindow):
-    def __init__(self, display_time=DISPLAY_TIME):
-        super().__init__()
+class SensorMonitor(QWidget):
+    def __init__(self, display_time=DISPLAY_TIME, parent=None):
+        super().__init__(parent)
         
         # Ya no necesitamos configuración de puerto y baudrate
         self.running = False
@@ -100,17 +100,13 @@ class SensorMonitorQt(QMainWindow):
         
         # Setup UI
         self.setup_ui(display_time)
-        
-        # Iniciar ventana maximizada
-        self.showMaximized()
-        
+    
     def setup_ui(self, display_time):
         """Setup the user interface with PyQtGraph plots"""
-        self.setWindowTitle("Monitor de PPG y EOG en Tiempo Real")
-        
-        # Central widget and layout
-        central_widget = QWidget()
-        main_layout = QVBoxLayout(central_widget)
+        # Layout principal (ahora se aplica directamente al QWidget)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(5)
         
         # Device status section
         self.device_status_label = QLabel("Estado de dispositivos: Desconocido")
@@ -173,15 +169,14 @@ class SensorMonitorQt(QMainWindow):
         self.btn_save.clicked.connect(self.save_data_to_csv)
         button_layout.addWidget(self.btn_save)
         
-        # Botón de Salir
-        self.btn_exit = QPushButton("Salir")
-        self.btn_exit.clicked.connect(self.close)
-        button_layout.addWidget(self.btn_exit)
+        # Botón de Salir (solo visible si se ejecuta como ventana independiente)
+        if not self.parent():
+            self.btn_exit = QPushButton("Salir")
+            self.btn_exit.clicked.connect(self.close)
+            button_layout.addWidget(self.btn_exit)
         
         # Añadir el layout de botones al layout principal
         main_layout.addLayout(button_layout)
-        
-        self.setCentralWidget(central_widget)
         
         # Setup timer for updating plot
         self.timer = QTimer()
@@ -192,10 +187,10 @@ class SensorMonitorQt(QMainWindow):
         """Toggle between start and stop acquisition"""
         if self.running:
             self.stop_acquisition()
-            self.start_stop_button.setText("Iniciar Adquisición")
+            self.btn_start_stop.setText("Iniciar Adquisición")
         else:
             self.start_acquisition()
-            self.start_stop_button.setText("Detener Adquisición")
+            self.btn_start_stop.setText("Detener Adquisición")
         
     def start_acquisition(self):
         """Start data acquisition"""
@@ -565,12 +560,41 @@ class SensorMonitorQt(QMainWindow):
             print("\nGuardando datos antes de salir...")
             self.save_data_to_csv()
             
-        super().closeEvent(event)
+        # Si es parte de otra ventana, permitir el comportamiento por defecto
+        if self.parent():
+            event.accept()
+        else:
+            super().closeEvent(event)
+            
+    # Método para permitir integración con otras ventanas
+    def cleanup(self):
+        """Método para limpiar recursos cuando el widget es parte de otra ventana"""
+        self.stop_acquisition()
+        if self.timer:
+            self.timer.stop()
+        if len(self.idx) > 0:
+            self.save_data_to_csv()
 
+
+# Solo cuando se ejecuta como aplicación independiente
 if __name__ == "__main__":
     """Función principal para ejecutar el monitor como aplicación independiente"""
     app = QApplication([])
-    monitor = SensorMonitorQt()
+    
+    # Crear una ventana principal que contendrá el widget
+    main_window = QMainWindow()
+    main_window.setWindowTitle("Monitor de PPG y EOG en Tiempo Real")
+    main_window.setGeometry(100, 100, 800, 600)
+    
+    # Crear la instancia del monitor como widget
+    monitor_widget = SensorMonitor(parent=main_window)
+    main_window.setCentralWidget(monitor_widget)
+    
+    # Maximizar ventana para mejor visualización
+    main_window.showMaximized()
+    
+    # Cuando se cierra la ventana principal, asegurar la limpieza
+    app.aboutToQuit.connect(monitor_widget.cleanup)
     
     # Start Qt event loop
     sys.exit(app.exec())

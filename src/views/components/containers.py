@@ -1,9 +1,9 @@
-from PySide6.QtWidgets import QWidget, QGridLayout, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 
 class Container(QWidget):
     def __init__(self, elements=None, parent=None):
         super().__init__(parent)
-        self.layout = QGridLayout(self)
+        self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self._elements = []
         
@@ -13,16 +13,10 @@ class Container(QWidget):
         self.setLayout(self.layout)
     
     def add_elements(self, elements):
-        row = 0
         for element in elements:
             self._elements.append(element)
-            if hasattr(element, 'pos_y') and hasattr(element, 'pos_x'):
-                # Si el elemento tiene posición definida, úsala
-                self.layout.addWidget(element, element.pos_y, element.pos_x)
-            else:
-                # Si no tiene posición definida, añadirlo en una nueva fila
-                self.layout.addWidget(element, row, 0, 1, -1)  # Ocupar toda la fila
-                row += 1
+            # Añadir cada elemento en una fila separada
+            self.layout.addWidget(element)
     
     def get_elements(self):
         return self._elements
