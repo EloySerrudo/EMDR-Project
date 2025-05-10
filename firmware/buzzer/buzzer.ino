@@ -27,7 +27,7 @@ typedef struct ack_packet {
 esp_now_peer_info_t peerInfo;
 
 // MAC del dispositivo maestro
-uint8_t masterAddress[] = {0x78, 0x21, 0x84, 0x79, 0x66, 0xD0};  // Reemplazar con la MAC real del maestro
+uint8_t masterAddress[] = {0xE4, 0x65, 0xB8, 0xA3, 0x7E, 0x4C};  // Reemplazar con la MAC real del maestro
 
 // Variables para el último estado de envío ESP-NOW
 volatile bool lastSendStatus = true;
