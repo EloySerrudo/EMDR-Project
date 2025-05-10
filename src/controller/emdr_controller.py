@@ -6,10 +6,10 @@ import os
 # PyQtGraph y PySide6 imports
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QApplication, QTabWidget, 
-    QPushButton, QLabel, QSpacerItem, QSizePolicy
+    QPushButton, QLabel, QSpacerItem, QSizePolicy, QFrame
 )
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPainter, QColor, QBrush, QPen
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -27,6 +27,138 @@ from src.models.config import Config
 # Importaciones de utilidades
 from src.utils.hiperf_timer import HighPerfTimer
 from src.utils.events import event_system
+
+
+class CollapsibleSection(QWidget):
+    """Sección colapsable para agrupar controles relacionados"""
+    def __init__(self, title, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("""
+            QFrame {
+                border: 1px solid #C0C0C0;
+                border-radius: 4px;
+                background-color: #F8F9FA;
+            }
+            QPushButton {
+                text-align: left;
+                padding: 5px;
+                background-color: #E3F2FD;
+                border-top-left-radius: 3px;
+                border-top-right-radius: 3px;
+                border: none;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #BBDEFB;
+            }
+            QPushButton:pressed {
+                background-color: #90CAF9;
+            }
+        """)
+        
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+        
+        # Botón de título (header)
+        self.toggle_button = QPushButton(f" ▼ {title}")
+        self.toggle_button.clicked.connect(self.toggle_content)
+        self.main_layout.addWidget(self.toggle_button)
+        
+        # Contenedor para el contenido
+        self.content_frame = QFrame()
+        self.content_layout = QVBoxLayout(self.content_frame)
+        self.content_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout.addWidget(self.content_frame)
+        
+        self.is_collapsed = False
+    
+    def toggle_content(self):
+        """Alterna entre mostrar/ocultar el contenido"""
+        self.is_collapsed = not self.is_collapsed
+        self.content_frame.setVisible(not self.is_collapsed)
+        
+        # Actualizar el ícono
+        icon = "▶" if self.is_collapsed else "▼"
+        title = self.toggle_button.text().split(" ", 1)[1]
+        self.toggle_button.setText(f" {icon} {title}")
+    
+    def add_widget(self, widget):
+        """Añade un widget al contenido"""
+        self.content_layout.addWidget(widget)
+    
+    def add_layout(self, layout):
+        """Añade un layout al contenido"""
+        self.content_layout.addLayout(layout)
+
+
+# Agregar esta clase antes de EMDRControllerWidget
+
+class EMDRPatternVisualizer(QWidget):
+    """Widget para visualizar el patrón actual de movimiento EMDR"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.led_count = Devices.led_num
+        self.current_led = self.led_count // 2 + 1
+        self.setMinimumHeight(50)
+        self.setMaximumHeight(50)
+        self.dots = []
+        
+        # Crear los dots (representación de LEDs)
+        for i in range(self.led_count):
+            self.dots.append(False)  # Todos apagados inicialmente
+        
+        # Establecer el estilo
+        self.setStyleSheet("""
+            background-color: #282828;
+            border-radius: 10px;
+            margin: 5px;
+        """)
+    
+    def update_led_position(self, position):
+        """Actualiza la posición del LED activo"""
+        # Resetear todos los LEDs
+        self.dots = [False] * self.led_count
+        
+        # Marcar el LED activo
+        if 0 < position <= self.led_count:
+            self.dots[position-1] = True
+        
+        # Redibujar
+        self.update()
+    
+    def paintEvent(self, event):
+        """Maneja el evento de dibujo"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Dibujar el fondo
+        painter.fillRect(self.rect(), QColor("#282828"))
+        
+        # Dibujar los LEDs
+        width = self.width()
+        height = self.height()
+        
+        dot_radius = min(height * 0.3, width / (self.led_count * 2))
+        center_y = height / 2
+        
+        # Calcular espaciado entre LEDs
+        dot_spacing = (width - (2 * dot_radius * self.led_count)) / (self.led_count + 1)
+        
+        for i in range(self.led_count):
+            center_x = dot_spacing * (i + 1) + dot_radius * (2 * i + 1)
+            
+            # Dibujar el círculo
+            if self.dots[i]:
+                # LED activo: color brillante
+                painter.setBrush(QBrush(QColor("#00FF00")))
+            else:
+                # LED inactivo: color apagado
+                painter.setBrush(QBrush(QColor("#303030")))
+            
+            painter.setPen(QPen(QColor("#505050"), 1))
+            painter.drawEllipse(center_x - dot_radius, center_y - dot_radius, 
+                              dot_radius * 2, dot_radius * 2)
 
 
 class EMDRControllerWidget(QWidget):
@@ -114,6 +246,11 @@ class EMDRControllerWidget(QWidget):
         speed_control_row.addStretch()
         
         speed_layout.addLayout(speed_control_row)
+
+        # Añadir visualizador de patrón EMDR
+        self.pattern_visualizer = EMDRPatternVisualizer()
+        speed_layout.addWidget(self.pattern_visualizer)
+
         self.main_layout.addWidget(speed_container)
         
         # 4. Crear el widget de pestañas
@@ -149,8 +286,17 @@ class EMDRControllerWidget(QWidget):
         # 5.1 Pestaña de Estimulación Auditiva (Auriculares)
         headphone_container = QWidget()
         headphone_layout = QVBoxLayout(headphone_container)
-        
+        headphone_layout.setContentsMargins(5, 5, 5, 5)
+
+        # Sección colapsable para controles principales
+        audio_main_section = CollapsibleSection("CONTROLES DE AUDIO")
+
+        # Layout para los controles de audio
+        audio_controls = QWidget()
+        audio_controls_layout = QVBoxLayout(audio_controls)
+
         # Switch container para auriculares
+        control_row = QHBoxLayout()
         self.headphone_switch_container = SwitchContainer("On/Off:", 0, 0)
         self.switch_headphone = PyQtSwitch()
         self.switch_headphone.setAnimation(True)
@@ -162,52 +308,68 @@ class EMDRControllerWidget(QWidget):
 
         # Botón de prueba
         self.btn_headphone_test = CustomButton(2, 0, 'Prueba', self.headphone_test_click)
-        
-        # Primera fila: Switch y botón prueba
-        headphone_row1 = QHBoxLayout()
-        headphone_row1.addWidget(self.headphone_switch_container)
-        headphone_row1.addStretch()
-        headphone_row1.addWidget(self.btn_headphone_test)
-        
+
+        control_row.addWidget(self.headphone_switch_container)
+        control_row.addStretch()
+        control_row.addWidget(self.btn_headphone_test)
+        audio_controls_layout.addLayout(control_row)
+
+        # Añadir controles a la sección
+        audio_main_section.add_widget(audio_controls)
+
+        # Sección colapsable para volumen
+        audio_volume_section = CollapsibleSection("VOLUMEN")
+
         # Controles de volumen
+        volume_controls = QWidget()
+        volume_layout = QHBoxLayout(volume_controls)
+        volume_layout.setContentsMargins(5, 5, 5, 5)
+
         self.btn_headphone_volume_minus = CustomButton(0, 1, '-', size=(75, 75))
         self.sel_headphone_volume = Selector(1, 1, 'Volumen', Config.volumes, '{0:d}%', None, None, self.update_sound, parent=self)
         self.btn_headphone_volume_plus = CustomButton(2, 1, '+', size=(75, 75))
-        
+
         # Conectar botones de volumen
         self.btn_headphone_volume_plus.clicked.connect(self.sel_headphone_volume.next_value)
         self.btn_headphone_volume_minus.clicked.connect(self.sel_headphone_volume.prev_value)
-        
-        # Segunda fila: Controles de volumen
-        headphone_row2 = QHBoxLayout()
-        headphone_row2.addStretch()
-        headphone_row2.addWidget(self.btn_headphone_volume_minus)
-        headphone_row2.addWidget(self.sel_headphone_volume)
-        headphone_row2.addWidget(self.btn_headphone_volume_plus)
-        headphone_row2.addStretch()
-        
+
+        volume_layout.addStretch()
+        volume_layout.addWidget(self.btn_headphone_volume_minus)
+        volume_layout.addWidget(self.sel_headphone_volume)
+        volume_layout.addWidget(self.btn_headphone_volume_plus)
+        volume_layout.addStretch()
+
+        audio_volume_section.add_widget(volume_controls)
+
+        # Sección colapsable para tono
+        audio_tone_section = CollapsibleSection("TONO/DURACIÓN")
+
         # Controles de tono
+        tone_controls = QWidget()
+        tone_layout = QHBoxLayout(tone_controls)
+        tone_layout.setContentsMargins(5, 5, 5, 5)
+
         self.btn_headphone_tone_minus = CustomButton(0, 2, '<<', size=(75, 75))
         self.sel_headphone_tone = Selector(1, 2, 'Tono/Duración', Config.tones, '{0}', None, None, 
-                                         self.update_sound, cyclic=True, parent=self)
+                                        self.update_sound, cyclic=True, parent=self)
         self.btn_headphone_tone_plus = CustomButton(2, 2, '>>', size=(75, 75))
-        
+
         # Conectar botones de tono
         self.btn_headphone_tone_plus.clicked.connect(self.sel_headphone_tone.next_value)
         self.btn_headphone_tone_minus.clicked.connect(self.sel_headphone_tone.prev_value)
-        
-        # Tercera fila: Controles de tono
-        headphone_row3 = QHBoxLayout()
-        headphone_row3.addStretch()
-        headphone_row3.addWidget(self.btn_headphone_tone_minus)
-        headphone_row3.addWidget(self.sel_headphone_tone)
-        headphone_row3.addWidget(self.btn_headphone_tone_plus)
-        headphone_row3.addStretch()
-        
-        # Añadir todos los layouts al contenedor de auriculares
-        headphone_layout.addLayout(headphone_row1)
-        headphone_layout.addLayout(headphone_row2)
-        headphone_layout.addLayout(headphone_row3)
+
+        tone_layout.addStretch()
+        tone_layout.addWidget(self.btn_headphone_tone_minus)
+        tone_layout.addWidget(self.sel_headphone_tone)
+        tone_layout.addWidget(self.btn_headphone_tone_plus)
+        tone_layout.addStretch()
+
+        audio_tone_section.add_widget(tone_controls)
+
+        # Añadir todas las secciones al layout principal
+        headphone_layout.addWidget(audio_main_section)
+        headphone_layout.addWidget(audio_volume_section)
+        headphone_layout.addWidget(audio_tone_section)
         headphone_layout.addStretch()
         
         # 5.2 Pestaña de Estimulación Visual (Barra de Luz)
@@ -343,6 +505,7 @@ class EMDRControllerWidget(QWidget):
         
         # Conectar ACTION_EVENT con su manejador
         event_system.action_event.connect(self.action)
+        event_system.action_event.connect(self.update_visualizer)
         
         # Inicializar pero sin verificar USB
         self.config_mode()
@@ -739,6 +902,11 @@ class EMDRControllerWidget(QWidget):
         
         # Guardar la configuración actual
         self.save_config()
+
+    def update_visualizer(self):
+        """Actualiza el visualizador de patrón EMDR"""
+        if hasattr(self, 'pattern_visualizer') and hasattr(self, 'led_pos'):
+            self.pattern_visualizer.update_led_position(self.led_pos)
 
 
 # Esta sección del código se mantiene para permitir ejecutar el archivo independientemente
