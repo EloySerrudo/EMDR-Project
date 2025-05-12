@@ -1,5 +1,4 @@
 import sqlite3
-import os
 import datetime
 import hashlib
 import secrets
@@ -42,11 +41,23 @@ class DatabaseManager:
     def get_all_patients(conn=None) -> List[Dict[str, Any]]:
         """Obtiene todos los pacientes de la base de datos"""
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nombre, edad, notas FROM pacientes ORDER BY nombre")
+        cursor.execute("""
+            SELECT id, apellido_paterno, apellido_materno, nombre, edad, celular, notas 
+            FROM pacientes 
+            ORDER BY apellido_paterno, apellido_materno, nombre
+        """)
         patients = cursor.fetchall()
         
         return [
-            {"id": p[0], "nombre": p[1], "edad": p[2], "notas": p[3]}
+            {
+                "id": p[0], 
+                "apellido_paterno": p[1],
+                "apellido_materno": p[2],
+                "nombre": p[3],
+                "edad": p[4], 
+                "celular": p[5],
+                "notas": p[6]
+            }
             for p in patients
         ]
     
@@ -55,33 +66,47 @@ class DatabaseManager:
     def get_patient(patient_id: int, conn=None) -> Optional[Dict[str, Any]]:
         """Obtiene un paciente específico por su ID"""
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT id, nombre, edad, notas FROM pacientes WHERE id = ?", 
-            (patient_id,)
-        )
+        cursor.execute("""
+            SELECT id, apellido_paterno, apellido_materno, nombre, edad, celular, notas 
+            FROM pacientes 
+            WHERE id = ?
+        """, (patient_id,))
         patient = cursor.fetchone()
         
         if not patient:
             return None
             
         return {
-            "id": patient[0], 
-            "nombre": patient[1],
-            "edad": patient[2],
-            "notas": patient[3]
+            "id": patient[0],
+            "apellido_paterno": patient[1],
+            "apellido_materno": patient[2],
+            "nombre": patient[3],
+            "edad": patient[4],
+            "celular": patient[5],
+            "notas": patient[6]
         }
     
     @staticmethod
     @secure_connection
-    def add_patient(nombre: str, edad: Optional[int] = None, notas: str = "", conn=None) -> int:
+    def add_patient(
+        apellido_paterno: str,
+        apellido_materno: str,
+        nombre: str,
+        celular: str,
+        edad: Optional[int] = None, 
+        notas: str = "", 
+        conn=None
+    ) -> int:
         """
         Añade un nuevo paciente a la base de datos
         Retorna: ID del paciente creado
         """
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO pacientes (nombre, edad, notas) VALUES (?, ?, ?)",
-            (nombre, edad, notas)
+            """INSERT INTO pacientes 
+               (apellido_paterno, apellido_materno, nombre, edad, celular, notas) 
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (apellido_paterno, apellido_materno, nombre, edad, celular, notas)
         )
         conn.commit()
         return cursor.lastrowid
@@ -89,9 +114,12 @@ class DatabaseManager:
     @staticmethod
     @secure_connection
     def update_patient(
-        patient_id: int, 
-        nombre: Optional[str] = None, 
-        edad: Optional[int] = None, 
+        patient_id: int,
+        apellido_paterno: Optional[str] = None,
+        apellido_materno: Optional[str] = None,
+        nombre: Optional[str] = None,
+        edad: Optional[int] = None,
+        celular: Optional[str] = None, 
         notas: Optional[str] = None,
         conn=None
     ) -> bool:
@@ -105,14 +133,20 @@ class DatabaseManager:
             return False
             
         # Usar valores actuales para campos no proporcionados
+        apellido_paterno = apellido_paterno if apellido_paterno is not None else current["apellido_paterno"]
+        apellido_materno = apellido_materno if apellido_materno is not None else current["apellido_materno"]
         nombre = nombre if nombre is not None else current["nombre"]
         edad = edad if edad is not None else current["edad"]
+        celular = celular if celular is not None else current["celular"]
         notas = notas if notas is not None else current["notas"]
         
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE pacientes SET nombre = ?, edad = ?, notas = ? WHERE id = ?",
-            (nombre, edad, notas, patient_id)
+            """UPDATE pacientes 
+               SET apellido_paterno = ?, apellido_materno = ?, nombre = ?, 
+                   edad = ?, celular = ?, notas = ? 
+               WHERE id = ?""",
+            (apellido_paterno, apellido_materno, nombre, edad, celular, notas, patient_id)
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -133,22 +167,32 @@ class DatabaseManager:
     @secure_connection
     def search_patients(query: str, conn=None) -> List[Dict[str, Any]]:
         """
-        Busca pacientes por nombre o notas
+        Busca pacientes por nombre, apellidos o notas
         Retorna: Lista de pacientes que coinciden
         """
         cursor = conn.cursor()
         # Usar LIKE para búsqueda parcial case-insensitive
         search_query = f"%{query}%"
         cursor.execute(
-            "SELECT id, nombre, edad, notas FROM pacientes " +
-            "WHERE nombre LIKE ? OR notas LIKE ? " +
-            "ORDER BY nombre",
-            (search_query, search_query)
+            """SELECT id, apellido_paterno, apellido_materno, nombre, edad, celular, notas 
+               FROM pacientes 
+               WHERE nombre LIKE ? OR apellido_paterno LIKE ? OR 
+                     apellido_materno LIKE ? OR notas LIKE ? 
+               ORDER BY apellido_paterno, apellido_materno, nombre""",
+            (search_query, search_query, search_query, search_query)
         )
         patients = cursor.fetchall()
         
         return [
-            {"id": p[0], "nombre": p[1], "edad": p[2], "notas": p[3]}
+            {
+                "id": p[0],
+                "apellido_paterno": p[1],
+                "apellido_materno": p[2],
+                "nombre": p[3],
+                "edad": p[4],
+                "celular": p[5],
+                "notas": p[6]
+            }
             for p in patients
         ]
     
@@ -300,6 +344,62 @@ class DatabaseManager:
         conn.commit()
         return cursor.rowcount > 0
     
+    # ===== MÉTODOS PARA ADMINISTRADORES =====
+    
+    @staticmethod
+    @secure_connection
+    def validate_admin_credentials(user: str, password: str, conn=None) -> bool:
+        """
+        Valida las credenciales de un administrador usando hash seguro
+        Retorna: True si las credenciales son válidas
+        """
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT password FROM administradores WHERE user = ?", 
+            (user,)
+        )
+        stored = cursor.fetchone()
+        
+        if not stored:
+            return False
+        
+        # Verificar si la contraseña está en formato hash:salt o es un hash simple
+        if ':' in stored[0]:
+            # Extraer hash y salt
+            stored_hash, salt = stored[0].split(':')
+            
+            # Calcular hash de la contraseña proporcionada con el mismo salt
+            hash_value, _ = DatabaseManager._hash_password(password, salt)
+            
+            # Comparar los hashes
+            return hash_value == stored_hash
+        else:
+            # Para compatibilidad con contraseñas antiguas (hash simple)
+            simple_hash = hashlib.sha256(password.encode()).hexdigest()
+            return simple_hash == stored[0]
+            
+    @staticmethod
+    @secure_connection
+    def add_admin(user: str, password: str, conn=None) -> bool:
+        """
+        Añade un nuevo administrador con credenciales seguras
+        Retorna: True si el registro fue exitoso
+        """
+        # Crear hash seguro de la contraseña
+        password_hash, salt = DatabaseManager._hash_password(password)
+
+        # Almacenar usuario con hash y salt (almacenados juntos separados por :)
+        stored_password = f"{password_hash}:{salt}"
+        
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO administradores (user, password) VALUES (?, ?)",
+            (user, stored_password)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        return new_id
+    
     # ===== MÉTODOS PARA TERAPEUTAS =====
     
     @staticmethod
@@ -324,14 +424,21 @@ class DatabaseManager:
     
     @staticmethod
     @secure_connection
-    def register_therapist(usuario: str, password: str, conn=None) -> bool:
+    def register_therapist(
+        user: str, 
+        password: str, 
+        apellido_paterno: str,
+        apellido_materno: str,
+        nombre: str,
+        conn=None
+    ) -> bool:
         """
         Registra un nuevo terapeuta con credenciales seguras
         Retorna: True si el registro fue exitoso
         """
         # Verificar si el usuario ya existe
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM terapeutas WHERE usuario = ?", (usuario,))
+        cursor.execute("SELECT id FROM terapeutas WHERE user = ?", (user,))
         if cursor.fetchone():
             return False
             
@@ -342,53 +449,161 @@ class DatabaseManager:
         stored_password = f"{password_hash}:{salt}"
         
         cursor.execute(
-            "INSERT INTO terapeutas (usuario, password) VALUES (?, ?)",
-            (usuario, stored_password)
+            """INSERT INTO terapeutas 
+               (user, password, apellido_paterno, apellido_materno, nombre) 
+               VALUES (?, ?, ?, ?, ?)""",
+            (user, stored_password, apellido_paterno, apellido_materno, nombre)
         )
         conn.commit()
         return True
     
     @staticmethod
     @secure_connection
-    def validate_therapist(usuario: str, password: str, conn=None) -> bool:
+    def validate_therapist_credentials(user: str, password: str, conn=None) -> bool:
         """
-        Valida las credenciales de un terapeuta
+        Valida las credenciales de un terapeuta usando hash seguro
         Retorna: True si las credenciales son válidas
         """
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT password FROM terapeutas WHERE usuario = ?",
-            (usuario,)
+            "SELECT password FROM terapeutas WHERE user = ?",
+            (user,)
         )
         stored = cursor.fetchone()
         
         if not stored:
             return False
+        
+        # Verificar si la contraseña está en formato hash:salt o es un hash simple
+        if ':' in stored[0]:
+            # Extraer hash y salt
+            stored_hash, salt = stored[0].split(':')
             
-        # Extraer hash y salt
-        stored_hash, salt = stored[0].split(':')
-        
-        # Calcular hash de la contraseña proporcionada con el mismo salt
-        hash_value, _ = DatabaseManager._hash_password(password, salt)
-        
-        # Comparar los hashes
-        return hash_value == stored_hash
+            # Calcular hash de la contraseña proporcionada con el mismo salt
+            hash_value, _ = DatabaseManager._hash_password(password, salt)
+            
+            # Comparar los hashes
+            return hash_value == stored_hash
+        else:
+            # Para compatibilidad con contraseñas antiguas (hash simple)
+            simple_hash = hashlib.sha256(password.encode()).hexdigest()
+            return simple_hash == stored[0]
+    
+    @staticmethod
+    def get_all_therapists():
+        """Obtiene todos los terapeutas de la base de datos"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, user, apellido_paterno, apellido_materno, nombre 
+                FROM terapeutas 
+                ORDER BY apellido_paterno, apellido_materno, nombre
+            """)
+            
+            # Convertir resultados a lista de diccionarios
+            columns = [column[0] for column in cursor.description]
+            results = []
+            for row in cursor.fetchall():
+                results.append(dict(zip(columns, row)))
+                
+            conn.close()
+            return results
+        except Exception as e:
+            print(f"Error obteniendo terapeutas: {e}")
+            return []
 
-# Ejemplo de uso
+    @staticmethod
+    def add_therapist(user, password_hash, apellido_paterno, apellido_materno, nombre):
+        """Añade un nuevo terapeuta con hash simple"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO terapeutas (user, password, apellido_paterno, apellido_materno, nombre)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user, password_hash, apellido_paterno, apellido_materno, nombre))
+            conn.commit()
+            new_id = cursor.lastrowid
+            conn.close()
+            return new_id
+        except Exception as e:
+            print(f"Error añadiendo terapeuta: {e}")
+            raise e
+
+    @staticmethod
+    def update_therapist(id, user, password_hash, apellido_paterno, apellido_materno, nombre):
+        """Actualiza los datos de un terapeuta existente"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            # Si la contraseña está vacía, no la actualizamos
+            if password_hash:
+                cursor.execute("""
+                    UPDATE terapeutas 
+                    SET user = ?, password = ?, apellido_paterno = ?, apellido_materno = ?, nombre = ? 
+                    WHERE id = ?
+                """, (user, password_hash, apellido_paterno, apellido_materno, nombre, id))
+            else:
+                cursor.execute("""
+                    UPDATE terapeutas 
+                    SET user = ?, apellido_paterno = ?, apellido_materno = ?, nombre = ? 
+                    WHERE id = ?
+                """, (user, apellido_paterno, apellido_materno, nombre, id))
+                
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error actualizando terapeuta: {e}")
+            raise e
+
+    @staticmethod
+    def delete_therapist(id):
+        """Elimina un terapeuta de la base de datos"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM terapeutas WHERE id = ?", (id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error eliminando terapeuta: {e}")
+            raise e
+
+# Ejemplo de uso modificado para el nuevo esquema
 if __name__ == "__main__":
+    # Crear un administrador de prueba
+    admin_id = DatabaseManager.add_admin("eloysc", "akqjmhil")
+    if admin_id:
+        print(f"✅ Administrador creado con ID: {admin_id}")
+                
+        # Verificar credenciales
+        if DatabaseManager.validate_admin_credentials("eloysc", "akqjmhil"):
+            print("✅ Credenciales válidas")
+        else:
+            print("❌ Credenciales inválidas")
+    
     # Crear un terapeuta de prueba
-    if DatabaseManager.register_therapist("admin", "password123"):
+    if DatabaseManager.register_therapist(
+        "dra.valdivia", "password123", "Valdivia", "Belén", "Margarita"
+    ):
         print("✅ Terapeuta registrado exitosamente")
         
         # Verificar credenciales
-        if DatabaseManager.validate_therapist("admin", "password123"):
+        if DatabaseManager.validate_therapist_credentials("dra.valdivia", "password123"):
             print("✅ Credenciales válidas")
         else:
             print("❌ Credenciales inválidas")
     
     # Crear un paciente de prueba
     patient_id = DatabaseManager.add_patient(
-        nombre="Juan Pérez",
+        apellido_paterno="Pérez",
+        apellido_materno="González",
+        nombre="Juan",
+        celular="78551234",
         edad=35,
         notas="Paciente con historial de ansiedad"
     )

@@ -3,10 +3,11 @@ import os
 from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QApplication, QMessageBox, QFrame, QSizePolicy, QToolButton
+    QApplication, QMessageBox, QFrame, QSizePolicy, QToolButton, QComboBox
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QIcon
+import hashlib
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -18,7 +19,7 @@ class LoginWidget(QWidget):
     """Widget de login para el sistema EMDR Project"""
     
     # Señal emitida cuando el login es exitoso
-    login_successful = Signal(str)  # Emite el nombre de usuario
+    login_successful = Signal(str, str)  # Emite el nombre de usuario y el tipo
     
     def __init__(self):
         super().__init__()
@@ -27,7 +28,7 @@ class LoginWidget(QWidget):
     def init_ui(self):
         """Inicializa la interfaz de usuario"""
         self.setWindowTitle("EMDR Project - Login")
-        self.setFixedSize(550, 400)
+        self.setFixedSize(550, 450)  # Aumentar un poco la altura para acomodar el combobox
         self.setWindowFlag(Qt.MSWindowsFixedSizeDialogHint, True)  # Evita redimensionar en Windows
         self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'icon.png')))
         
@@ -54,6 +55,15 @@ class LoginWidget(QWidget):
         
         logo_layout.addWidget(logo_label, 0, Qt.AlignCenter)
         layout.addWidget(logo_frame)
+        
+        # Selector de tipo de usuario
+        type_layout = QHBoxLayout()
+        type_label = QLabel("Tipo de usuario:")
+        self.user_type_combo = QComboBox()
+        self.user_type_combo.addItems(["Terapeuta", "Administrador"])
+        type_layout.addWidget(type_label)
+        type_layout.addWidget(self.user_type_combo)
+        layout.addLayout(type_layout)
         
         # Campo de usuario
         user_layout = QHBoxLayout()
@@ -247,6 +257,7 @@ class LoginWidget(QWidget):
         """Intenta realizar el login con las credenciales proporcionadas"""
         username = self.user_input.text().strip()
         password = self.password_input.text()
+        user_type = "terapeutas" if self.user_type_combo.currentText() == "Terapeuta" else "administradores"
         
         if not username or not password:
             self.show_message("Por favor ingrese usuario y contraseña", error=True)
@@ -259,10 +270,17 @@ class LoginWidget(QWidget):
         
         # Validar credenciales usando DatabaseManager
         try:
-            if DatabaseManager.validate_therapist(username, password):
+            success = False
+            
+            if user_type == "terapeutas":
+                success = DatabaseManager.validate_therapist_credentials(username, password)
+            else:  # administradores
+                success = DatabaseManager.validate_admin_credentials(username, password)
+            
+            if success:
                 self.show_message("Login exitoso! Iniciando sesión...", error=False)
                 # Emitir señal de éxito después de un breve retraso para dar feedback visual
-                QTimer.singleShot(800, lambda: self.login_successful.emit(username))
+                QTimer.singleShot(800, lambda: self.login_successful.emit(username, user_type))
             else:
                 self.show_message("Usuario o contraseña incorrectos", error=True)
                 self.login_button.setEnabled(True)
@@ -299,7 +317,7 @@ if __name__ == "__main__":
     login_window = LoginWidget()
     
     # Para pruebas, conectamos la señal a una función de ejemplo
-    def on_login_success(username):
+    def on_login_success(username, user_type):
         QMessageBox.information(login_window, "Login Exitoso", 
                                f"Bienvenido/a, {username}!\nRedirigiendo al sistema principal...")
         login_window.close()

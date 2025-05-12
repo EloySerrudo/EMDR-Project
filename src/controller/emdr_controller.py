@@ -6,7 +6,7 @@ import os
 # PyQtGraph y PySide6 imports
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QApplication, QTabWidget, 
-    QPushButton, QLabel, QSpacerItem, QSizePolicy, QFrame
+    QPushButton, QLabel, QSpacerItem, QSizePolicy, QFrame, QCheckBox
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QPainter, QColor, QBrush, QPen
@@ -199,6 +199,20 @@ class EMDRControllerWidget(QWidget):
         top_button_row.addWidget(self.btn_stop)
         top_button_row.addWidget(self.btn_pause)
         
+        # Añadir checkbox para capturar señales
+        self.chk_capture_signals = QCheckBox("¿Capturar señales?")
+        self.chk_capture_signals.setStyleSheet("""
+            QCheckBox {
+                margin-top: 5px;
+                font-weight: bold;
+                color: #1565C0;
+            }
+        """)
+        capture_checkbox_row = QHBoxLayout()
+        capture_checkbox_row.addItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        capture_checkbox_row.addWidget(self.chk_capture_signals)
+        capture_checkbox_row.addItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        
         # Crear el botón Escanear en su propia fila
         self.btn_scan_usb = CustomButton(4, 0, 'Escanear', self.scan_usb_click)
         scan_button_row = QHBoxLayout()
@@ -206,6 +220,7 @@ class EMDRControllerWidget(QWidget):
         
         # Añadir todas las filas al layout de botones
         button_layout.addLayout(top_button_row)
+        button_layout.addLayout(capture_checkbox_row)
         button_layout.addLayout(scan_button_row)
         
         # Añadir el contenedor de botones al layout principal
@@ -305,6 +320,7 @@ class EMDRControllerWidget(QWidget):
         self.headphone_switch_container.add_switch(self.switch_headphone)
         self.switch_headphone.get_value = lambda: self.switch_headphone.isChecked()
         self.switch_headphone.set_value = lambda value: self.switch_headphone.setChecked(value)
+        # self.switch_headphone.set_value(True)
 
         # Botón de prueba
         self.btn_headphone_test = CustomButton(2, 0, 'Prueba', self.headphone_test_click)
@@ -663,6 +679,14 @@ class EMDRControllerWidget(QWidget):
         self.update_buzzer()
         self.update_sound()
         
+        # Iniciar captura de señales si el checkbox está marcado
+        if hasattr(self, 'chk_capture_signals') and self.chk_capture_signals.isChecked():
+            # Buscar el sensor_monitor a través de la ventana principal
+            main_window = self.window()
+            if hasattr(main_window, 'sensor_monitor') and main_window.sensor_monitor:
+                if not main_window.sensor_monitor.running:
+                    main_window.sensor_monitor.start_acquisition()
+        
         # Iniciar temporizador de acción
         self.adjust_action_timer()
         HighPerfTimer(self.action_delay, self.post_action).start()
@@ -672,7 +696,7 @@ class EMDRControllerWidget(QWidget):
         self.deactivate(self.btn_start24)
         self.activate(self.btn_stop)
         self.activate(self.btn_pause)
-    
+
     def start_click(self):
         """Maneja clic en el botón Start (Play)"""
         self.max_counter = 0
@@ -691,6 +715,13 @@ class EMDRControllerWidget(QWidget):
             self.btn_pause.setChecked(False)
         if self.mode == 'action':
             self.stopping = True
+            
+            # Detener captura de señales si el checkbox está marcado
+            if hasattr(self, 'chk_capture_signals') and self.chk_capture_signals.isChecked():
+                main_window = self.window()
+                if hasattr(main_window, 'sensor_monitor') and main_window.sensor_monitor:
+                    if main_window.sensor_monitor.running:
+                        main_window.sensor_monitor.stop_acquisition()
         else:
             self.config_mode()
             self.reset_action()
@@ -700,6 +731,13 @@ class EMDRControllerWidget(QWidget):
         if self.btn_pause.isChecked():
             # pause
             self.pausing = True
+            
+            # Detener captura de señales si el checkbox está marcado
+            if hasattr(self, 'chk_capture_signals') and self.chk_capture_signals.isChecked():
+                main_window = self.window()
+                if hasattr(main_window, 'sensor_monitor') and main_window.sensor_monitor:
+                    if main_window.sensor_monitor.running:
+                        main_window.sensor_monitor.stop_acquisition()
         else:
             # resume
             if self.mode != 'action':
@@ -708,6 +746,13 @@ class EMDRControllerWidget(QWidget):
                 self.pausing = False
                 self.action_extra_delay = 0
                 self.decay = False
+                
+                # Reanudar captura de señales si el checkbox está marcado y estábamos en pausa
+                if hasattr(self, 'chk_capture_signals') and self.chk_capture_signals.isChecked():
+                    main_window = self.window()
+                    if hasattr(main_window, 'sensor_monitor') and main_window.sensor_monitor:
+                        if not main_window.sensor_monitor.running:
+                            main_window.sensor_monitor.start_acquisition()
 
     def reset_action(self):
         """Reinicia la acción EMDR"""

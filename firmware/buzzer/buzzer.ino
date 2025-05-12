@@ -150,5 +150,4 @@ void setup() {
 
 void loop() {
   // El loop queda vacío porque todo se maneja mediante callbacks
-  // delay(100);
 }
