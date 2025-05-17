@@ -7,7 +7,7 @@
 
 #define PIN_LED 22     // Pin para controlar el NeoPixel strip
 #define STATUS_LED 16  // LED para indicar errores
-#define NUMLED 60      // Número de LEDs en la tira
+#define NUMLED 58      // Número de LEDs en la tira
 
 // Estructura para recibir los datos a través de ESP-NOW
 typedef struct {

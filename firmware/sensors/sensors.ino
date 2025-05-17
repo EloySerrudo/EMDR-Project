@@ -52,7 +52,7 @@ TaskHandle_t adcTaskHandle = NULL;
 TaskHandle_t transmitTaskHandle = NULL;
 
 // MAC del dispositivo maestro
-uint8_t masterAddress[] = {0x78, 0x21, 0x84, 0x79, 0x66, 0xD0};  // Reemplazar con la MAC real del maestro
+uint8_t masterAddress[] = {0xE4, 0x65, 0xB8, 0xA3, 0x7E, 0x4C};  // Reemplazar con la MAC real del maestro
 
 // Estructura para enviar los datos de la tarea ADC
 // Debe coincidir con una estructura receptora en el maestro
@@ -170,14 +170,14 @@ void adcTask(void *parameter) {
                 time = millis() - startTime;
                 adcValue_A0 *= -1;
                 // Aumentar la ganancia para la lectura del sensor de pulso
-                ads.setGain(GAIN_TWO);       // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+                ads.setGain(GAIN_EIGHT);       // 2x gain   +/- 2.048V  1 bit = 0.0625mV
                 ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_1_3, /*continuous=*/false);
             } else {
                 adcValue_A1 = ads.getLastConversionResults();
                 // Almacenar en el buffer circular
                 adcBuffer.write(time, adcValue_A0, adcValue_A1);
                 // Cambiar el canal para la próxima lectura
-                ads.setGain(GAIN_TWO);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
+                ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
                 ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
             }
         }
@@ -265,7 +265,7 @@ void setup() {
   
   // Configurar el ADS1115
   ads.setDataRate(RATE_ADS1115_475SPS); // Usar 475 SPS (similar al original)
-  ads.setGain(GAIN_TWO);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
+  ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
   // Inicialización correcta
   digitalWrite(STATUS_LED, HIGH);
   delay(500);
