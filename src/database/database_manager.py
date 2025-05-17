@@ -306,6 +306,7 @@ class DatabaseManager:
         session_id: int,
         datos_eog: Optional[bytes] = None,
         datos_ppg: Optional[bytes] = None,
+        datos_bpm: Optional[bytes] = None,  # Nuevo parámetro
         notas: Optional[str] = None,
         conn=None
     ) -> bool:
@@ -321,13 +322,14 @@ class DatabaseManager:
         # Solo actualizar campos proporcionados
         datos_eog = datos_eog if datos_eog is not None else current.get("datos_eog")
         datos_ppg = datos_ppg if datos_ppg is not None else current.get("datos_ppg")
+        datos_bpm = datos_bpm if datos_bpm is not None else current.get("datos_bpm")
         notas = notas if notas is not None else current.get("notas")
         
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE sesiones SET datos_eog = ?, datos_ppg = ?, notas = ? " +
+            "UPDATE sesiones SET datos_eog = ?, datos_ppg = ?, datos_bpm = ?, notas = ? " +
             "WHERE id = ?",
-            (datos_eog, datos_ppg, notas, session_id)
+            (datos_eog, datos_ppg, datos_bpm, notas, session_id)
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -572,6 +574,56 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error eliminando terapeuta: {e}")
             raise e
+
+    @staticmethod
+    def get_session_data(session_id: int):
+        """
+        Recupera los datos fisiológicos de una sesión específica
+        """
+        try:
+            import numpy as np
+            import pickle
+            import zlib
+            
+            # Obtener la sesión con todos los datos
+            session = DatabaseManager.get_session(session_id, include_data=True)
+            if not session:
+                return None
+                
+            result = {"session_info": session}
+            
+            # Descomprimir EOG si existe
+            if session.get("datos_eog"):
+                try:
+                    eog_decompressed = zlib.decompress(session["datos_eog"])
+                    eog_data = pickle.loads(eog_decompressed)
+                    result["eog_data"] = eog_data
+                except:
+                    result["eog_data"] = None
+                    
+            # Descomprimir PPG si existe  
+            if session.get("datos_ppg"):
+                try:
+                    ppg_decompressed = zlib.decompress(session["datos_ppg"])
+                    ppg_data = pickle.loads(ppg_decompressed)
+                    result["ppg_data"] = ppg_data
+                except:
+                    result["ppg_data"] = None
+                    
+            # Descomprimir BPM si existe
+            if session.get("datos_bpm"):
+                try:
+                    bpm_decompressed = zlib.decompress(session["datos_bpm"])
+                    bpm_data = pickle.loads(bpm_decompressed)
+                    result["bpm_data"] = bpm_data
+                except:
+                    result["bpm_data"] = None
+                
+            return result
+            
+        except Exception as e:
+            print(f"Error al recuperar datos de sesión: {e}")
+            return None
 
 # Ejemplo de uso modificado para el nuevo esquema
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.models.devices import Devices, KNOWN_SLAVES
 
 # Importación del filtro en tiempo real
-from src.utils.signal_processing import RealTimeFilter
+from src.utils.signal_processing import RealTimeFilter, PulseDetector  # Añadir PulseDetector
 
 # Configuración constantes
 SAMPLE_RATE = 125  # Hz (tasa efectiva: 250 SPS ÷ 2 canales)
@@ -80,14 +80,11 @@ class SensorMonitor(QWidget):
             filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.5, highcut=8.0, order=4
         )
         
-        # Stats tracking
-        self.samples_received = 0
-        self.packets_received = 0
-        self.invalid_packets = 0
-        self.duplicate_packets = 0
-        self.samples_per_second = 0
-        self.last_samples_count = 0
-        self.last_rate_update = time.time()
+        # Añadir detector de pulsos y variables para BPM
+        self.pulse_detector = PulseDetector(sample_rate=SAMPLE_RATE)
+        self.current_heart_rate = 0
+        self.bpm_values = deque(initial_values, maxlen=self.display_size)
+        self.bpm_datos = []  # Para almacenar BPM para CSV
         self.last_packet_id = -1  # Para detectar paquetes duplicados
         
         # Slave device tracking
@@ -106,83 +103,112 @@ class SensorMonitor(QWidget):
         # Layout principal (ahora se aplica directamente al QWidget)
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(5)
+        main_layout.setSpacing(3)  # Reducir spacing para aprovechar espacio vertical
         
         # Device status section
         self.device_status_label = QLabel("Estado de dispositivos: Desconocido")
-        self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+        self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 3px;")
+        self.device_status_label.setMaximumHeight(25)  # Limitar altura
         main_layout.addWidget(self.device_status_label)
         
-        # Create two plot widgets
-        # PPG signal plot (superior)
+        # 1. Gráfica PPG filtrada (superior)
         self.ppg_plot_widget = pg.PlotWidget()
-        self.ppg_plot_widget.setLabel('left', 'Señal PPG filtrada')
-        self.ppg_plot_widget.setLabel('bottom', 'Tiempo (s)')
+        self.ppg_plot_widget.setLabel('left', 'PPG')
+        self.ppg_plot_widget.setLabel('bottom', '')  # Sin etiqueta inferior para las dos primeras gráficas
         self.ppg_plot_widget.setYRange(-25000, 25000)
         self.ppg_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
-        self.ppg_plot_widget.setBackground('#f8f9fa')  # Fondo claro
+        self.ppg_plot_widget.setBackground('#f8f9fa')  
         self.ppg_plot_widget.showGrid(x=True, y=True, alpha=0.3)
-
-        # Primero configurar el espaciado de ticks y luego la cuadrícula
+        self.ppg_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
+        
+        # Configurar ticks
         x_axis_ppg = self.ppg_plot_widget.getAxis('bottom')
+        x_axis_ppg.setStyle(showValues=False)  # Ocultar valores para ahorrar espacio
         x_axis_ppg.setTickSpacing(major=1, minor=0.5)
-
-        # EOG signal plot (inferior)
+        
+        # 2. Gráfica BPM (medio)
+        self.bpm_plot_widget = pg.PlotWidget()
+        self.bpm_plot_widget.setLabel('left', 'BPM')
+        self.bpm_plot_widget.setLabel('bottom', '')
+        self.bpm_plot_widget.setYRange(40, 180)  # Rango típico para BPM humano
+        self.bpm_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
+        self.bpm_plot_widget.setBackground('#f8f9fa') 
+        self.bpm_plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        self.bpm_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
+        
+        # Configurar ticks
+        x_axis_bpm = self.bpm_plot_widget.getAxis('bottom')
+        x_axis_bpm.setStyle(showValues=False)
+        x_axis_bpm.setTickSpacing(major=1, minor=0.5)
+        
+        # 3. EOG signal plot (inferior)
         self.eog_plot_widget = pg.PlotWidget()
-        self.eog_plot_widget.setLabel('left', 'Señal EOG filtrada')
+        self.eog_plot_widget.setLabel('left', 'EOG')
         self.eog_plot_widget.setLabel('bottom', 'Tiempo (s)')
         self.eog_plot_widget.setYRange(-25000, 25000)
         self.eog_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
-        self.eog_plot_widget.setBackground('#f8f9fa')  # Fondo claro
+        self.eog_plot_widget.setBackground('#f8f9fa')
         self.eog_plot_widget.showGrid(x=True, y=True, alpha=0.3)
-
-        # Primero configurar el espaciado de ticks y luego la cuadrícula
+        self.eog_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
+        
+        # Configurar ticks - este sí muestra valores
         x_axis_eog = self.eog_plot_widget.getAxis('bottom')
         x_axis_eog.setTickSpacing(major=1, minor=0.5)
-
-        # Create curves for data - estilos más claros y definidos
-        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('#E91E63', width=2))
-        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('#2196F3', width=2))
-
-        # Añadir leyendas
-        ppg_legend = pg.LegendItem(offset=(70, 30))
+        
+        # Create curves for data
+        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('#E91E63', width=2))  # Rosa/rojo
+        self.bpm_curve = self.bpm_plot_widget.plot(pen=pg.mkPen('#FF9800', width=2))  # Naranja
+        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('#2196F3', width=2))  # Azul
+        
+        # Añadir leyendas compactas
+        ppg_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
         ppg_legend.setParentItem(self.ppg_plot_widget.graphicsItem())
-        ppg_legend.addItem(self.ppg_curve, "Señal Cardíaca (PPG)")
-
-        eog_legend = pg.LegendItem(offset=(70, 30))
+        ppg_legend.addItem(self.ppg_curve, "Señal PPG")
+        
+        # Añadir texto para mostrar el valor de BPM actual
+        self.bpm_text = pg.TextItem(text="BPM: --", color=(0, 0, 0), anchor=(0, 0))
+        self.bpm_text.setPos(-display_time * 0.95, 160)
+        self.bpm_plot_widget.addItem(self.bpm_text)
+        
+        bpm_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
+        bpm_legend.setParentItem(self.bpm_plot_widget.graphicsItem())
+        bpm_legend.addItem(self.bpm_curve, "Frecuencia Cardíaca")
+        
+        eog_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
         eog_legend.setParentItem(self.eog_plot_widget.graphicsItem())
-        eog_legend.addItem(self.eog_curve, "Movimiento Ocular (EOG)")
+        eog_legend.addItem(self.eog_curve, "Movimiento Ocular")
         
         # Add plots to layout
         main_layout.addWidget(self.ppg_plot_widget)
+        main_layout.addWidget(self.bpm_plot_widget)
         main_layout.addWidget(self.eog_plot_widget)
-        
-        # Stats display
-        self.stats_label = QLabel("Esperando datos...")
-        self.stats_label.setStyleSheet("background-color: rgba(255, 255, 200, 180); padding: 5px;")
-        main_layout.addWidget(self.stats_label)
         
         # Crear un layout horizontal para los botones
         button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(3, 0, 3, 3)
         
         # Botón de Iniciar/Detener
         self.btn_start_stop = QPushButton("Iniciar Adquisición")
+        self.btn_start_stop.setMaximumHeight(25)
         self.btn_start_stop.clicked.connect(self.toggle_acquisition)
         button_layout.addWidget(self.btn_start_stop)
         
         # Botón de Escanear Dispositivos
         self.btn_scan_usb = QPushButton("Escanear")
+        self.btn_scan_usb.setMaximumHeight(25)
         self.btn_scan_usb.clicked.connect(self.check_slave_connections)
         button_layout.addWidget(self.btn_scan_usb)
         
         # Botón de Guardar Datos
         self.btn_save = QPushButton("Guardar")
+        self.btn_save.setMaximumHeight(25)
         self.btn_save.clicked.connect(self.save_data_to_csv)
         button_layout.addWidget(self.btn_save)
         
         # Botón de Salir (solo visible si se ejecuta como ventana independiente)
         if not self.parent():
             self.btn_exit = QPushButton("Salir")
+            self.btn_exit.setMaximumHeight(25)
             self.btn_exit.clicked.connect(self.close)
             button_layout.addWidget(self.btn_exit)
         
@@ -209,22 +235,20 @@ class SensorMonitor(QWidget):
         if not Devices.master_plugged_in() or self.running:
             print("No hay conexión con el controlador maestro o ya está adquiriendo datos")
             return
-            
+        
         if not self.required_devices_connected:
             print("\nNo se puede iniciar la adquisición: dispositivos requeridos no conectados.")
             print("Use el botón 'Escanear Dispositivos' para verificar conexiones.\n")
             return
         
-        # Reset stats and filter
-        self.samples_received = 0
-        self.packets_received = 0
-        self.invalid_packets = 0
-        self.duplicate_packets = 0
-        self.last_samples_count = 0
-        self.last_rate_update = time.time()
         self.last_packet_id = -1
+        # Reset filter
         self.eog_filter.reset()
         self.ppg_filter.reset()
+        
+        # Reset pulse detector
+        self.pulse_detector.reset()
+        self.current_heart_rate = 0
 
         # Clear and reset data buffers
         self.times.clear()
@@ -232,6 +256,7 @@ class SensorMonitor(QWidget):
         self.filtered_eog_values.clear()
         self.ppg_values.clear()
         self.filtered_ppg_values.clear()
+        self.bpm_values.clear()  # Limpiar buffer de BPM
         
         initial_times = [-DISPLAY_TIME + i * self.sample_interval for i in range(self.display_size)]
         initial_values = [0] * self.display_size
@@ -240,6 +265,7 @@ class SensorMonitor(QWidget):
         self.filtered_eog_values.extend(initial_values)
         self.ppg_values.extend(initial_values)
         self.filtered_ppg_values.extend(initial_values)
+        self.bpm_values.extend(initial_values)  # Inicializar buffer de BPM
         
         # Clear lists for CSV data storage
         self.idx = []
@@ -248,6 +274,7 @@ class SensorMonitor(QWidget):
         self.eog_datos_filtrados = []
         self.ppg_datos = []
         self.ppg_datos_filtrados = []
+        self.bpm_datos = []  # Limpiar datos de BPM
         
         # Send command to ESP32 to start capture usando Devices
         Devices.start_sensor()
@@ -271,7 +298,7 @@ class SensorMonitor(QWidget):
             self.running = False
             if self.reading_thread:
                 self.reading_thread.join(timeout=1.0)
-            print(f"Adquisición detenida. Total paquetes: {self.packets_received}")
+            print("Adquisición detenida")
 
     def _find_packet_start(self, buffer):
         """Find the start of a packet in the buffer"""
@@ -439,16 +466,28 @@ class SensorMonitor(QWidget):
                                 filtered_ppg_value = self.ppg_filter.filter(ppg_value)
                                 filtered_eog_value = self.eog_filter.filter(eog_value)
                                 
+                                # Detectar pulso y actualizar BPM
+                                pulse_detected, pulse_state = self.pulse_detector.add_sample(
+                                    filtered_ppg_value, timestamp_s
+                                )
+                                
+                                # Actualizar frecuencia cardíaca cuando hay un pulso
+                                if pulse_detected:
+                                    self.current_heart_rate = self.pulse_detector.get_heart_rate()
+                                
                                 # Add to deques for display
                                 self.times.append(timestamp_s)
                                 
-                                # PPG data
+                                # PPG data (para procesamiento y datos crudos)
                                 self.ppg_values.append(ppg_value)
                                 self.filtered_ppg_values.append(filtered_ppg_value)
                                 
                                 # EOG data
                                 self.eog_values.append(eog_value)
                                 self.filtered_eog_values.append(filtered_eog_value)
+                                
+                                # BPM data
+                                self.bpm_values.append(self.current_heart_rate)
                                 
                                 # Add to lists for CSV storage
                                 self.idx.append(packet_id)
@@ -462,12 +501,10 @@ class SensorMonitor(QWidget):
                                 self.eog_datos.append(eog_value)
                                 self.eog_datos_filtrados.append(filtered_eog_value)
                                 
-                                # Update counters
-                                self.samples_received += 1
-                                self.packets_received += 1
+                                # BPM data for storage
+                                self.bpm_datos.append(self.current_heart_rate)
                             else:
                                 # Invalid header, discard initial byte and continue
-                                self.invalid_packets += 1
                                 data_buffer = data_buffer[1:]
                                 continue
                                 
@@ -477,16 +514,6 @@ class SensorMonitor(QWidget):
                             print(f"Error processing packet: {e}")
                             # On error, discard initial byte and continue
                             data_buffer = data_buffer[1:]
-                
-                # Update stats every second
-                current_time = time.time()
-                if current_time - self.last_rate_update >= 1.0:
-                    elapsed = current_time - self.last_rate_update
-                    new_samples = self.samples_received - self.last_samples_count
-                    self.samples_per_second = int(new_samples / elapsed)
-                    
-                    self.last_samples_count = self.samples_received
-                    self.last_rate_update = current_time
                 
                 # Small pause to not saturate CPU
                 time.sleep(0.001)
@@ -501,8 +528,9 @@ class SensorMonitor(QWidget):
             # Convert deques to numpy arrays for plotting
             x_data = np.array(self.times)
             
-            # Datos filtrados para mostrar
+            # Datos para mostrar
             filtered_ppg_data = np.array(self.filtered_ppg_values)
+            bpm_data = np.array(self.bpm_values)
             filtered_eog_data = np.array(self.filtered_eog_values)
             
             if self.running:
@@ -515,18 +543,17 @@ class SensorMonitor(QWidget):
                 
             # Update plot data con los tiempos normalizados
             self.ppg_curve.setData(normalized_x, filtered_ppg_data)
+            self.bpm_curve.setData(normalized_x, bpm_data)
             self.eog_curve.setData(normalized_x, filtered_eog_data)
+            
+            # Actualizar el texto de BPM
+            hr_str = f"BPM: {int(self.current_heart_rate)}" if self.current_heart_rate > 0 else "BPM: --"
+            self.bpm_text.setText(hr_str)
             
             # Fijar siempre el rango X entre -5 y 0
             self.ppg_plot_widget.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
+            self.bpm_plot_widget.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
             self.eog_plot_widget.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
-            
-            # Update stats label
-            stats_str = (f"Paquetes: {self.packets_received} | "
-                        f"Muestras/s: {self.samples_per_second} | "
-                        f"Inválidos: {self.invalid_packets} | "
-                        f"Duplicados: {self.duplicate_packets}")
-            self.stats_label.setText(stats_str)
     
     def save_data_to_csv(self):
         """Save collected data to CSV file"""
@@ -535,10 +562,11 @@ class SensorMonitor(QWidget):
                 print("No hay datos para guardar")
                 return
                 
-            # Create DataFrame with data including both PPG and EOG
+            # Create DataFrame with data including BPM, PPG and EOG
             data = {
                 'ID': self.idx,
                 'Timestamp_ms': self.tiempos,
+                'BPM': self.bpm_datos,  # Añadir BPM al CSV
                 'PPG_raw': self.ppg_datos,
                 'PPG_filtrado': self.ppg_datos_filtrados,
                 'EOG_raw': self.eog_datos,

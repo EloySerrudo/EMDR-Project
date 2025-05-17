@@ -31,7 +31,7 @@ class Note(pygame.mixer.Sound):
         return samples
 
 class Devices():
-    led_num = 60
+    led_num = 58
     _buzzer_duration = 100
     pygame.mixer.pre_init(44100, -16, 2, 1024)
     pygame.init()
@@ -69,7 +69,6 @@ class Devices():
                         ser.write(bytes([ord('I'), 0, 0, 0, 0]))
                         ser.flush()
                         id_str = ser.read_until().strip()
-                        print(id_str)  # Imprimir la cadena de identificación para depuración
                         # Verificar si es el controlador maestro
                         if b'EMDR Master Controller' in id_str:
                             cls._found_devices.append("Master Controller")

@@ -177,3 +177,23 @@ class PulseDetector:
         
         # Limitar valores razonables (40-200 BPM)
         return max(40, min(200, heart_rate))
+    
+    def reset(self):
+        """Reinicia el detector de pulsos a su estado inicial"""
+        self.last_beat_time = 0
+        self.bpm = 0
+        self.beat_detected = False
+        self.ibi = 0  # Intervalo entre latidos (Inter-Beat Interval)
+        self.beats = []  # Lista para almacenar los últimos tiempos de latido
+        self.pulse_state = 0  # Estado del pulso (0 = esperando, 1 = detectado)
+        
+        # Reiniciar variables para la detección 
+        self.threshold = 0
+        self.peak = 0
+        self.trough = 0
+        self.average_peak = 0
+        self.average_trough = 0
+        
+        # Si tienes filtros internos, también reinícialos
+        if hasattr(self, '_filter'):
+            self._filter.reset()

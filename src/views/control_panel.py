@@ -4,10 +4,10 @@ import time
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
     QTabWidget, QSplitter, QGridLayout, QMessageBox, QFrame, QComboBox,
-    QPushButton, QStackedWidget
+    QPushButton, QStackedWidget, QDialog, QFormLayout, QLineEdit, QTextEdit
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QObject
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QFont, QIcon, QIntValidator  # QIntValidator añadido aquí
 import pyqtgraph as pg
 
 # Ajustar el path para importaciones absolutas
@@ -35,16 +35,17 @@ class EMDRControlPanel(QMainWindow):
         self.current_session = None
         
         self.setWindowTitle(f"EMDR Project - Dashboard Terapéutico")
-        self.resize(1200, 800)
+        # Ajustar el tamaño inicial para pantallas más pequeñas
+        self.resize(1000, 700)
         
         # Widget central
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # Layout principal
+        # Layout principal - reducir márgenes
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(5)
+        main_layout.setContentsMargins(3, 3, 3, 3)
+        main_layout.setSpacing(3)
         
         # ===== 1. BARRA SUPERIOR CON INFORMACIÓN CONTEXTUAL =====
         self.header_widget = self.create_header_bar(username)
@@ -96,7 +97,7 @@ class EMDRControlPanel(QMainWindow):
         
         # Título del panel
         left_header = QLabel("CONTROL DE ESTIMULACIÓN")
-        left_header.setStyleSheet("font-size: 16px; font-weight: bold; color: #1565C0; padding: 5px;")
+        left_header.setStyleSheet("font-size: 14px; font-weight: bold; color: #1565C0; padding: 3px;")
         left_header.setAlignment(Qt.AlignCenter)
         left_layout.addWidget(left_header)
         
@@ -112,7 +113,7 @@ class EMDRControlPanel(QMainWindow):
         
         # Título del panel
         right_header = QLabel("MONITOR DE SEÑALES")
-        right_header.setStyleSheet("font-size: 16px; font-weight: bold; color: #1565C0; padding: 5px;")
+        right_header.setStyleSheet("font-size: 14px; font-weight: bold; color: #1565C0; padding: 3px;")
         right_header.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(right_header)
         
@@ -160,13 +161,15 @@ class EMDRControlPanel(QMainWindow):
         # ===== 6. AÑADIR PANELES AL SPLITTER =====
         self.splitter.addWidget(self.left_panel)
         self.splitter.addWidget(self.right_panel)
-        self.splitter.setSizes([400, 800])  # 33% control, 67% monitor
+        # Ajustar proporción para pantallas más pequeñas (35% - 65%)
+        self.splitter.setSizes([350, 650])
         
         # ===== 7. BARRA INFERIOR DE ESTADO Y ACCIONES =====
         footer_frame = QFrame()
         footer_frame.setFrameShape(QFrame.StyledPanel)
         footer_frame.setStyleSheet("background-color: #E8EAF6; border-radius: 4px;")
         footer_layout = QHBoxLayout(footer_frame)
+        footer_layout.setContentsMargins(8, 3, 8, 3)  # Reducir márgenes
         
         # Información de sesión
         self.session_info = QLabel("Sesión: No iniciada")
@@ -182,7 +185,8 @@ class EMDRControlPanel(QMainWindow):
                 background-color: #4CAF50;
                 color: white;
                 border-radius: 4px;
-                padding: 5px 15px;
+                padding: 3px 10px;
+                font-size: 11px;
             }
             QPushButton:hover {
                 background-color: #66BB6A;
@@ -197,7 +201,8 @@ class EMDRControlPanel(QMainWindow):
                 background-color: #2196F3;
                 color: white;
                 border-radius: 4px;
-                padding: 5px 15px;
+                padding: 3px 10px;
+                font-size: 11px;
             }
             QPushButton:hover {
                 background-color: #42A5F5;
@@ -212,7 +217,8 @@ class EMDRControlPanel(QMainWindow):
                 background-color: #F44336;
                 color: white;
                 border-radius: 4px;
-                padding: 5px 15px;
+                padding: 3px 10px;
+                font-size: 11px;
             }
             QPushButton:hover {
                 background-color: #EF5350;
@@ -289,24 +295,27 @@ class EMDRControlPanel(QMainWindow):
         header_frame = QFrame()
         header_frame.setFrameShape(QFrame.StyledPanel)
         header_frame.setStyleSheet("background-color: #1565C0; border-radius: 4px;")
-        header_frame.setMinimumHeight(50)
+        # Reducir altura mínima
+        header_frame.setMinimumHeight(40)
         
+        # Reducir márgenes
         header_layout = QHBoxLayout(header_frame)
-        header_layout.setContentsMargins(15, 5, 15, 5)
+        header_layout.setContentsMargins(10, 3, 10, 3)
         
-        # Logo o título
+        # Logo o título con fuente más pequeña
         logo_label = QLabel("EMDR THERAPY")
-        logo_label.setStyleSheet("color: white; font-size: 20px; font-weight: bold;")
+        logo_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
         header_layout.addWidget(logo_label)
         
         header_layout.addStretch()
         
-        # Información del terapeuta
+        # Información del terapeuta con fuente más pequeña
         therapist_label = QLabel(f"Terapeuta: {username}")
-        therapist_label.setStyleSheet("color: white; font-size: 14px;")
+        therapist_label.setStyleSheet("color: white; font-size: 12px;")
         header_layout.addWidget(therapist_label)
         
-        header_layout.addSpacing(30)
+        # Menor espaciado
+        header_layout.addSpacing(15)
         
         # Selector de paciente
         patient_label = QLabel("Paciente:")
@@ -318,12 +327,31 @@ class EMDRControlPanel(QMainWindow):
             QComboBox {
                 background-color: white;
                 border-radius: 3px;
-                padding: 3px 10px;
-                min-width: 150px;
+                padding: 2px 8px;
+                min-width: 140px;
             }
         """)
         self.patient_selector.currentIndexChanged.connect(self.change_patient)
         header_layout.addWidget(self.patient_selector)
+        
+        # Botón más compacto
+        add_patient_btn = QPushButton("Crear paciente")
+        add_patient_btn.setToolTip("Añadir nuevo paciente")
+        add_patient_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #757575;
+                color: white;
+                border-radius: 3px;
+                padding: 2px 8px;
+                margin-left: 3px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #9E9E9E;
+            }
+        """)
+        add_patient_btn.clicked.connect(self.add_new_patient)
+        header_layout.addWidget(add_patient_btn)
         
         return header_frame
     
@@ -386,9 +414,6 @@ class EMDRControlPanel(QMainWindow):
             # Si el monitor está en ejecución, detenerlo primero
             if self.sensor_monitor.running:
                 self.sensor_monitor.stop_acquisition()
-                
-            # Iniciar la adquisición de datos
-            self.sensor_monitor.start_acquisition()
             
             QMessageBox.information(self, "Sesión iniciada", 
                                   f"Se ha iniciado una nueva sesión para {self.current_patient['nombre']}.")
@@ -404,17 +429,64 @@ class EMDRControlPanel(QMainWindow):
             return
             
         try:
-            # Primero guardar datos del sensor si hay alguno
+            # Si el sensor_monitor está ejecutándose, detenerlo primero
+            was_running = False
             if self.sensor_monitor.running:
+                was_running = True
+                self.sensor_monitor.stop_acquisition()
+            
+            # Preparar los datos para almacenamiento
+            if len(self.sensor_monitor.eog_datos_filtrados) > 0:
+                # Serializar datos usando numpy para eficiencia
+                import numpy as np
+                import pickle
+                import zlib
+                
+                # Comprimir EOG (señal filtrada)
+                eog_data = np.array(self.sensor_monitor.eog_datos_filtrados)
+                eog_bytes = pickle.dumps(eog_data)
+                eog_compressed = zlib.compress(eog_bytes)
+                
+                # Comprimir PPG (señal filtrada)
+                ppg_data = np.array(self.sensor_monitor.ppg_datos_filtrados)
+                ppg_bytes = pickle.dumps(ppg_data)
+                ppg_compressed = zlib.compress(ppg_bytes)
+                
+                # Comprimir BPM
+                bpm_data = np.array(self.sensor_monitor.bpm_datos)
+                bpm_bytes = pickle.dumps(bpm_data)
+                bpm_compressed = zlib.compress(bpm_bytes)
+                
+                # Actualizar registro en la base de datos
+                DatabaseManager.update_session(
+                    self.current_session,
+                    datos_eog=eog_compressed,
+                    datos_ppg=ppg_compressed,
+                    datos_bpm=bpm_compressed,
+                    notas=f"Sesión actualizada el {time.strftime('%Y-%m-%d %H:%M:%S')}. "
+                          f"Datos almacenados: {len(eog_data)} muestras."
+                )
+                
+                # Mensaje de éxito
+                QMessageBox.information(
+                    self, 
+                    "Datos guardados", 
+                    f"Se han guardado {len(eog_data)} muestras de datos en la sesión #{self.current_session}."
+                )
+                
+                # Opcionalmente, también guardar en CSV como respaldo
                 self.sensor_monitor.save_data_to_csv()
+            else:
+                QMessageBox.warning(
+                    self, 
+                    "Sin datos", 
+                    "No hay datos de sensores para guardar en esta sesión."
+                )
             
-            # Aquí podríamos implementar la lógica para guardar los datos
-            # actualizados en la base de datos, posiblemente usando los
-            # datos del SensorMonitor
-            
-            QMessageBox.information(self, "Datos guardados", 
-                                  "Los datos de la sesión han sido guardados correctamente.")
-                                  
+            # Reiniciar adquisición si estaba corriendo
+            if was_running:
+                self.sensor_monitor.start_acquisition()
+                
         except Exception as e:
             print(f"Error al guardar datos de sesión: {e}")
             QMessageBox.critical(self, "Error", f"No se pudieron guardar los datos: {str(e)}")
@@ -607,3 +679,172 @@ class EMDRControlPanel(QMainWindow):
         
         # Continuar con el cierre normal
         event.accept()
+
+    def add_new_patient(self):
+        """Muestra un diálogo para añadir un nuevo paciente"""
+        # Crear el diálogo
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Añadir Nuevo Paciente")
+        dialog.setMinimumWidth(400)
+        dialog.setModal(True)
+        
+        # Layout principal
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Título
+        title_label = QLabel("DATOS DEL PACIENTE")
+        title_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #1565C0;")
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Formulario
+        form_layout = QFormLayout()
+        form_layout.setSpacing(10)
+        form_layout.setLabelAlignment(Qt.AlignRight)
+        
+        # Campos del formulario
+        nombre_edit = QLineEdit()
+        nombre_edit.setPlaceholderText("Ingrese el nombre")
+        
+        apellido_paterno_edit = QLineEdit()
+        apellido_paterno_edit.setPlaceholderText("Ingrese el apellido paterno")
+        
+        apellido_materno_edit = QLineEdit()
+        apellido_materno_edit.setPlaceholderText("Ingrese el apellido materno")
+        
+        edad_edit = QLineEdit()
+        edad_edit.setPlaceholderText("Edad (opcional)")
+        # Solo permitir números enteros
+        edad_edit.setValidator(QIntValidator(0, 120))
+        
+        celular_edit = QLineEdit()
+        celular_edit.setPlaceholderText("Número de contacto")
+        
+        notas_edit = QTextEdit()
+        notas_edit.setPlaceholderText("Notas adicionales (opcional)")
+        notas_edit.setMaximumHeight(100)
+        
+        # Añadir campos al formulario
+        form_layout.addRow("Nombre:", nombre_edit)
+        form_layout.addRow("Apellido paterno:", apellido_paterno_edit)
+        form_layout.addRow("Apellido materno:", apellido_materno_edit)
+        form_layout.addRow("Edad:", edad_edit)
+        form_layout.addRow("Celular:", celular_edit)
+        form_layout.addRow("Notas:", notas_edit)
+        
+        layout.addLayout(form_layout)
+        
+        # Botones de acción
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancelar")
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F44336;
+                color: white;
+                border-radius: 4px;
+                padding: 5px 15px;
+            }
+            QPushButton:hover {
+                background-color: #EF5350;
+            }
+        """)
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        save_btn = QPushButton("Guardar")
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 4px;
+                padding: 5px 15px;
+            }
+            QPushButton:hover {
+                background-color: #66BB6A;
+            }
+        """)
+        save_btn.clicked.connect(lambda: self.save_new_patient(
+            dialog,
+            nombre_edit.text(),
+            apellido_paterno_edit.text(),
+            apellido_materno_edit.text(),
+            edad_edit.text(),
+            celular_edit.text(),
+            notas_edit.toPlainText()
+        ))
+        
+        button_layout.addWidget(cancel_btn)
+        button_layout.addWidget(save_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # Mostrar diálogo
+        dialog.exec()
+
+    def save_new_patient(self, dialog, nombre, apellido_paterno, apellido_materno, edad, celular, notas):
+        """Guarda el nuevo paciente en la base de datos"""
+        # Validar campos obligatorios
+        if not nombre or not apellido_paterno or not celular:
+            QMessageBox.warning(
+                dialog,
+                "Datos incompletos",
+                "Los campos Nombre, Apellido paterno y Celular son obligatorios."
+            )
+            return
+    
+        # Convertir edad a entero (si está presente)
+        edad_int = None
+        if edad:
+            try:
+                edad_int = int(edad)
+            except ValueError:
+                QMessageBox.warning(
+                    dialog,
+                    "Dato inválido",
+                    "La edad debe ser un número entero."
+                )
+                return
+    
+        # Guardar en la base de datos
+        try:
+            patient_id = DatabaseManager.add_patient(
+                apellido_paterno=apellido_paterno,
+                apellido_materno=apellido_materno,
+                nombre=nombre,
+                edad=edad_int,
+                celular=celular,
+                notas=notas
+            )
+            
+            if patient_id:
+                # Actualizar la lista de pacientes
+                self.load_patients()
+                
+                # Seleccionar el paciente recién creado
+                index = -1
+                for i in range(self.patient_selector.count()):
+                    if self.patient_selector.itemData(i) == patient_id:
+                        index = i
+                        break
+                        
+                if index >= 0:
+                    self.patient_selector.setCurrentIndex(index)
+                    
+                # Mostrar mensaje de éxito
+                QMessageBox.information(
+                    self,
+                    "Paciente registrado",
+                    f"El paciente {nombre} {apellido_paterno} ha sido registrado correctamente."
+                )
+                
+                # Cerrar el diálogo
+                dialog.accept()
+                
+        except Exception as e:
+            QMessageBox.critical(
+                dialog,
+                "Error de registro",
+                f"No se pudo registrar el paciente: {str(e)}"
+            )

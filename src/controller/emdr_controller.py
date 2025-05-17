@@ -6,7 +6,7 @@ import os
 # PyQtGraph y PySide6 imports
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QApplication, QTabWidget, 
-    QPushButton, QLabel, QSpacerItem, QSizePolicy, QFrame, QCheckBox
+    QPushButton, QLabel, QSpacerItem, QSizePolicy, QFrame, QCheckBox, QScrollArea
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QPainter, QColor, QBrush, QPen
@@ -61,7 +61,8 @@ class CollapsibleSection(QWidget):
         self.main_layout.setSpacing(0)
         
         # Botón de título (header)
-        self.toggle_button = QPushButton(f" ▼ {title}")
+        self.title = title
+        self.toggle_button = QPushButton(f" ▼  {self.title}")
         self.toggle_button.clicked.connect(self.toggle_content)
         self.main_layout.addWidget(self.toggle_button)
         
@@ -80,8 +81,9 @@ class CollapsibleSection(QWidget):
         
         # Actualizar el ícono
         icon = "▶" if self.is_collapsed else "▼"
-        title = self.toggle_button.text().split(" ", 1)[1]
-        self.toggle_button.setText(f" {icon} {title}")
+
+        title = self.title #self.toggle_button.text().split(" ", 1)[1]
+        self.toggle_button.setText(f" {icon}  {title}")
     
     def add_widget(self, widget):
         """Añade un widget al contenido"""
@@ -245,9 +247,9 @@ class EMDRControllerWidget(QWidget):
         speed_control_row = QHBoxLayout()
         
         # Botones de velocidad
-        self.btn_speed_minus = CustomButton(0, 1, '-', size=(75, 75))
+        self.btn_speed_minus = CustomButton(0, 1, '-', size=(30, 30))
         self.sel_speed = Selector(1, 1, 'Velocidad', Config.speeds, '{0:d}/min', None, None, self.update_speed, parent=self)
-        self.btn_speed_plus = CustomButton(2, 1, '+', size=(75, 75))
+        self.btn_speed_plus = CustomButton(2, 1, '+', size=(30, 30))
         
         # Conectar botones de velocidad
         self.btn_speed_plus.clicked.connect(self.sel_speed.next_value)
@@ -299,6 +301,12 @@ class EMDRControllerWidget(QWidget):
         # 5. Crear contenido de pestañas
         
         # 5.1 Pestaña de Estimulación Auditiva (Auriculares)
+        headphone_scroll = QScrollArea()
+        headphone_scroll.setWidgetResizable(True)
+        headphone_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        headphone_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        headphone_scroll.setFrameShape(QFrame.NoFrame)
+
         headphone_container = QWidget()
         headphone_layout = QVBoxLayout(headphone_container)
         headphone_layout.setContentsMargins(5, 5, 5, 5)
@@ -388,10 +396,19 @@ class EMDRControllerWidget(QWidget):
         headphone_layout.addWidget(audio_tone_section)
         headphone_layout.addStretch()
         
+        headphone_scroll.setWidget(headphone_container)
+
         # 5.2 Pestaña de Estimulación Visual (Barra de Luz)
+        lightbar_scroll = QScrollArea()
+        lightbar_scroll.setWidgetResizable(True)
+        lightbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        lightbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        lightbar_scroll.setFrameShape(QFrame.NoFrame)
+
         lightbar_container = QWidget()
         lightbar_layout = QVBoxLayout(lightbar_container)
-        
+        lightbar_layout.setContentsMargins(5, 5, 5, 5)
+
         # Switch para la barra de luz
         self.light_switch_container = SwitchContainer("On/Off:", 0, 0)
         self.switch_light = PyQtSwitch()
@@ -453,10 +470,19 @@ class EMDRControllerWidget(QWidget):
         lightbar_layout.addLayout(lightbar_row3)
         lightbar_layout.addStretch()
         
+        lightbar_scroll.setWidget(lightbar_container)
+
         # 5.3 Pestaña de Estimulación Táctil (Buzzer)
+        buzzer_scroll = QScrollArea()
+        buzzer_scroll.setWidgetResizable(True)
+        buzzer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        buzzer_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        buzzer_scroll.setFrameShape(QFrame.NoFrame)
+
         buzzer_container = QWidget()
         buzzer_layout = QVBoxLayout(buzzer_container)
-        
+        buzzer_layout.setContentsMargins(5, 5, 5, 5)
+
         # Switch para el buzzer
         self.buzzer_switch_container = SwitchContainer("On/Off:", 0, 0)
         self.switch_buzzer = PyQtSwitch()
@@ -498,10 +524,12 @@ class EMDRControllerWidget(QWidget):
         buzzer_layout.addLayout(buzzer_row2)
         buzzer_layout.addStretch()  # Añadir espacio al final
         
+        buzzer_scroll.setWidget(buzzer_container)
+
         # Añadir las pestañas al TabWidget
-        self.tab_widget.addTab(headphone_container, "Estimulación Auditiva")
-        self.tab_widget.addTab(lightbar_container, "Estimulación Visual")
-        self.tab_widget.addTab(buzzer_container, "Estimulación Táctil")
+        self.tab_widget.addTab(headphone_scroll, "Estimulación Auditiva")
+        self.tab_widget.addTab(lightbar_scroll, "Estimulación Visual")
+        self.tab_widget.addTab(buzzer_scroll, "Estimulación Táctil")
         
         # Deshabilitar pestañas inicialmente hasta verificar conexiones
         # Excepto la auditiva que siempre está disponible
@@ -657,7 +685,7 @@ class EMDRControllerWidget(QWidget):
     
     def adjust_action_timer(self):
         """Ajusta el temporizador de acción basado en la velocidad"""
-        self.action_delay = (60 / self.sel_speed.get_value() / Devices.led_num / 2)
+        self.action_delay = (Devices.led_num / self.sel_speed.get_value() / Devices.led_num / 2)
         self.action_extra_delay = 0
     
     def action_mode(self):
