@@ -190,7 +190,7 @@ class EMDRControllerWidget(QWidget):
         
         # Crear botones principales
         self.btn_start = CustomButton(0, 0, 'Play', self.start_click)
-        self.btn_start24 = CustomButton(1, 0, 'Play24', self.start24_click)
+        self.btn_start24 = CustomButton(1, 0, 'Play 24', self.start24_click)
         self.btn_stop = CustomButton(2, 0, 'Stop', self.stop_click)
         self.btn_pause = CustomButton(3, 0, 'Pause', self.pause_click, togglable=True)
         
@@ -228,23 +228,12 @@ class EMDRControllerWidget(QWidget):
         # Añadir el contenedor de botones al layout principal
         self.main_layout.addWidget(button_container)
         
-        # 3. Crear widget de velocidad (siempre visible)
-        speed_container = QWidget()
-        speed_layout = QVBoxLayout(speed_container)
-        
-        # Crear el selector de contador
-        self.sel_counter = Selector(1, 0, 'Contador', None, '{0:d}', None, None, show_slider=False, parent=self)
-        self.sel_counter.set_value(0)
-        
-        # Layout para el contador
-        counter_row = QHBoxLayout()
-        counter_row.addStretch()
-        counter_row.addWidget(self.sel_counter)
-        counter_row.addStretch()
-        speed_layout.addLayout(counter_row)
+        # 3. Crear widget de velocidad y contador (siempre visible)
+        speed_counter_container = QWidget()
+        speed_counter_layout = QHBoxLayout(speed_counter_container)
         
         # Crear layout para controles de velocidad
-        speed_control_row = QHBoxLayout()
+        speed_control_box = QHBoxLayout()
         
         # Botones de velocidad
         self.btn_speed_minus = CustomButton(0, 1, '-', size=(30, 30))
@@ -256,19 +245,32 @@ class EMDRControllerWidget(QWidget):
         self.btn_speed_minus.clicked.connect(self.sel_speed.prev_value)
         
         # Añadir controles de velocidad al layout
-        speed_control_row.addStretch()
-        speed_control_row.addWidget(self.btn_speed_minus)
-        speed_control_row.addWidget(self.sel_speed)
-        speed_control_row.addWidget(self.btn_speed_plus)
-        speed_control_row.addStretch()
+        speed_control_box.addStretch()
+        speed_control_box.addWidget(self.btn_speed_minus)
+        speed_control_box.addWidget(self.sel_speed)
+        speed_control_box.addWidget(self.btn_speed_plus)
+        speed_control_box.addStretch()
         
-        speed_layout.addLayout(speed_control_row)
+        speed_counter_layout.addLayout(speed_control_box)
+        
+        # Crear el selector de contador
+        self.sel_counter = Selector(1, 0, 'Contador', None, '{0:d}', None, None, show_slider=False, parent=self)
+        self.sel_counter.set_value(0)
+        
+        # Layout para el contador
+        counter_box = QHBoxLayout()
+        counter_box.addStretch()
+        counter_box.addWidget(self.sel_counter)
+        counter_box.addStretch()
+        
+        speed_counter_layout.addLayout(counter_box)
+        
+        self.main_layout.addWidget(speed_counter_container)
 
         # Añadir visualizador de patrón EMDR
         self.pattern_visualizer = EMDRPatternVisualizer()
-        speed_layout.addWidget(self.pattern_visualizer)
 
-        self.main_layout.addWidget(speed_container)
+        self.main_layout.addWidget(self.pattern_visualizer)
         
         # 4. Crear el widget de pestañas
         self.tab_widget = QTabWidget()
@@ -420,13 +422,17 @@ class EMDRControllerWidget(QWidget):
         self.switch_light.set_value = lambda value: self.switch_light.setChecked(value)
 
         # Botón de prueba de luz
-        self.btn_light_test = CustomButton(2, 0, 'Prueba', self.light_test_click, togglable=True)
+        self.btn_light_test = CustomButton(1, 0, 'Prueba', self.light_test_click, togglable=True)
         
-        # Primera fila: Switch y botón prueba
+        # Botón para cambiar entre tiras LED
+        self.btn_light_switch_strip = CustomButton(2, 0, 'Cambiar', self.switch_strip_click)
+        
+        # Primera fila: Switch, botón prueba y botón cambiar
         lightbar_row1 = QHBoxLayout()
         lightbar_row1.addWidget(self.light_switch_container)
         lightbar_row1.addStretch()
         lightbar_row1.addWidget(self.btn_light_test)
+        lightbar_row1.addWidget(self.btn_light_switch_strip)
 
         # Controles de color
         self.btn_light_color_minus = CustomButton(0, 1, '<<', size=(75, 75))
@@ -620,6 +626,13 @@ class EMDRControllerWidget(QWidget):
         if self.mode == 'action':
             self.adjust_action_timer()
     
+    def switch_strip_click(self):
+        """Cambia a la siguiente tira LED"""
+        Devices.switch_to_next_strip()
+        # Actualizar LED actual después de cambiar de tira
+        if self.switch_light.get_value():
+            Devices.set_led(self.led_pos)
+
     def set_area(self, area):
         """Cambia el área visible"""
         if area != 'speed' and area in self.areas:
