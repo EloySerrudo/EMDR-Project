@@ -5,9 +5,12 @@
 // Identificador único de este dispositivo
 #define DEVICE_ID 2  // EMDR Lightbar
 
-#define PIN_LED 22     // Pin para controlar el NeoPixel strip
 #define STATUS_LED 16  // LED para indicar errores
 #define NUMLED 58      // Número de LEDs en la tira
+#define NUM_STRIPS 3   // Número de tiras LED
+
+// Definición de pines para las tiras LED
+const uint8_t LED_PINS[NUM_STRIPS] = {22, 21, 18}; // Pines para las tiras 1, 2 y 3
 
 // Estructura para recibir los datos a través de ESP-NOW
 typedef struct {
@@ -27,13 +30,22 @@ typedef struct ack_packet {
 // Información del peer para ESP-NOW
 esp_now_peer_info_t peerInfo;
 
-// Inicialización de la tira NeoPixel
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMLED, PIN_LED, NEO_GRB + NEO_KHZ800);
+// Inicialización de las tiras NeoPixel como un arreglo
+Adafruit_NeoPixel strips[NUM_STRIPS] = {
+  Adafruit_NeoPixel(NUMLED, LED_PINS[0], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(NUMLED, LED_PINS[1], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(NUMLED, LED_PINS[2], NEO_GRB + NEO_KHZ800)
+};
+
+// Índice de la tira LED actualmente activa (0-2)
+uint8_t activeStripIndex = 0;
 
 // Variables para el control de color y LED
 uint8_t red = 0x0F;
 uint8_t green = 0;
 uint8_t blue = 0;
+uint8_t ledNum;
+uint32_t color = strips[activeStripIndex].Color(red, green, blue);
 
 // Variables para el último estado de envío ESP-NOW
 volatile bool lastSendStatus = true;
@@ -41,15 +53,43 @@ volatile bool lastSendStatus = true;
 // Dirección MAC del dispositivo maestro
 uint8_t masterAddress[] = {0xE4, 0x65, 0xB8, 0xA3, 0x7E, 0x4C};  // Reemplazar con la MAC real del maestro
 
-// Función para probar la tira de LEDs al inicio
+// Función para cambiar a la siguiente tira
+void switchToNextStrip() {
+  // Apagar la tira actual
+  strips[activeStripIndex].clear();
+  strips[activeStripIndex].show();
+  
+  // Cambiar a la siguiente tira (cíclico: 0->1->2->0...)
+  activeStripIndex = (activeStripIndex + 1) % NUM_STRIPS;
+  strips[activeStripIndex].setPixelColor(ledNum - 1, color);
+  strips[activeStripIndex].show();
+  Serial.print("Switched to strip: ");
+  Serial.println(activeStripIndex + 1); // Mostrar número de tira (1-based para legibilidad)
+}
+
+// Función para probar la tira de LEDs actual
 void test() {
-  strip.clear();  // clear LEDs: limpiar todos los LEDs
-  strip.setPixelColor(0, strip.Color(0, 0x20, 0));
-  strip.setPixelColor(NUMLED - 1, strip.Color(0x20, 0, 0));
-  strip.show();
+  strips[activeStripIndex].clear();
+  strips[activeStripIndex].setPixelColor(0, strips[activeStripIndex].Color(0, 0x20, 0));
+  strips[activeStripIndex].setPixelColor(NUMLED - 1, strips[activeStripIndex].Color(0x20, 0, 0));
+  strips[activeStripIndex].show();
   delay(500);
-  strip.clear();
-  strip.show();
+  strips[activeStripIndex].clear();
+  strips[activeStripIndex].show();
+}
+
+// Función para probar la tira de LEDs al inicio
+void initial_test() {
+  for (int i = 0; i < NUM_STRIPS; i++) {
+    strips[i].clear();
+    strips[i].setPixelColor(0, strips[i].Color(0, 0x20, 0));
+    strips[i].setPixelColor(NUMLED - 1, strips[i].Color(0x20, 0, 0));
+    strips[i].show();
+    delay(500);
+    strips[i].clear();
+    strips[i].show();
+  }
+  test()
 }
 
 // Callback cuando se envían datos
@@ -64,7 +104,6 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int data_len) {
     CommandPacket cmd;
     memcpy(&cmd, incomingData, sizeof(cmd));
 
-    uint8_t ledNum;
     // Convertir comando a minúsculas para procesar tanto mayúsculas como minúsculas
     char command = tolower(cmd.cmd);
     
@@ -74,24 +113,29 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int data_len) {
         red = cmd.data1;
         green = cmd.data2;
         blue = cmd.data3;
+        color = strips[activeStripIndex].Color(red, green, blue);
         break;
 
       case 'l':  // Comando de LED
         // El segundo byte es para la posición
         ledNum = cmd.data1;
 
-        strip.clear();
+        strips[activeStripIndex].clear();
         if (ledNum > 0 && ledNum <= NUMLED) {
-          strip.setPixelColor(ledNum - 1, strip.Color(red, green, blue));
+          strips[activeStripIndex].setPixelColor(ledNum - 1, color);
         }
-        strip.show();
+        strips[activeStripIndex].show();
         break;
 
       case 't':  // Comando test
-        strip.clear();
-        strip.setPixelColor(0, strip.Color(red, green, blue));
-        strip.setPixelColor(NUMLED - 1, strip.Color(red, green, blue));
-        strip.show();
+        strips[activeStripIndex].clear();
+        strips[activeStripIndex].setPixelColor(0, color);
+        strips[activeStripIndex].setPixelColor(NUMLED - 1, color);
+        strips[activeStripIndex].show();
+        break;
+      
+      case 'n':  // Comando para cambiar a la siguiente tira
+        switchToNextStrip();
         break;
         
       case 'a': // Comando acknowledge (acepta 'a' o 'A')
@@ -119,11 +163,14 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int data_len) {
 void setup() {
   // Inicializar Serial (para debugging)
   Serial.begin(115200);
-  // Inicialización de la tira NeoPixel
-  strip.begin();
-  strip.clear();
-  strip.show();
-  delay(1000);
+  
+  // Inicializar todas las tiras LED
+  for (int i = 0; i < NUM_STRIPS; i++) {
+    strips[i].begin();
+    strips[i].clear();
+    strips[i].show();
+    delay(300);
+  }
 
   // Configuración del pin de status
   pinMode(STATUS_LED, OUTPUT);
@@ -158,10 +205,12 @@ void setup() {
   delay(500);
   digitalWrite(STATUS_LED, LOW);
 
-  // Mostrar patrón de prueba inicial
-  test();
+  // Mostrar patrón de prueba inicial en la tira activa
+  initial_test();
   
   Serial.println("EMDR Lightbar ready with ESP-NOW");
+  Serial.print("Active strip: ");
+  Serial.println(activeStripIndex + 1);
 }
 
 void loop() {

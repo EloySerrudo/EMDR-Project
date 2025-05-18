@@ -154,6 +154,11 @@ class Devices():
         b = col & 0xFF
         # Enviar 5 bytes: comando 'c' + ID + r + g + b
         cls.write(cls._master_controller, bytes([ord('c'), 2, r, g, b]))
+    
+    @classmethod
+    def switch_to_next_strip(cls):
+        # Enviar 5 bytes: comando 'n' + ID + 3 bytes a cero
+        cls.write(cls._master_controller, bytes([ord('n'), 2, 0, 0, 0]))
 
     @classmethod
     def set_buzzer_duration(cls, duration):
