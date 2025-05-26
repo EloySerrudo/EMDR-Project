@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt, Signal
 class Selector(QWidget):
     """Selector numérico implementado con QSlider horizontal"""
     
-    def __init__(self, x, y, title, values, format_str, btn_plus, btn_minus, updater=None, cyclic=False, show_slider=True, parent=None):
+    def __init__(self, x, y, title, values, format_str, btn_plus, btn_minus, updater=None, cyclic=False, show_slider=True, ticks=None, parent=None):
         super().__init__(parent)
         
         # Guardar posición para compatibilidad
@@ -30,12 +30,22 @@ class Selector(QWidget):
         # Crear slider
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setFixedWidth(100)
+        
+        # Aumentar la altura para que haya suficiente espacio para los ticks
+        self.slider.setFixedHeight(40)  # Mayor altura para acomodar los ticks
+        
+        # Establecer pageStep como en el ejemplo funcional
+        self.slider.setPageStep(10)
+        
+        # Aquí está el problema principal - el estilo CSS debe modificarse
+        # para permitir que se vean los ticks adecuadamente
         self.slider.setStyleSheet("""
             QSlider::groove:horizontal {
                 height: 8px;
                 background: #f0f0f0;
                 border: 1px solid #c0c0c0;
                 border-radius: 4px;
+                margin: 2px 0;
             }
             QSlider::handle:horizontal {
                 width: 16px;
@@ -43,6 +53,21 @@ class Selector(QWidget):
                 border: 1px solid #5080ff;
                 border-radius: 8px;
                 margin: -8px 0;
+            }
+            QSlider::sub-page:horizontal {
+                background: #c0e0ff;
+                border: 1px solid #8080c0;
+                border-radius: 4px;
+            }
+            QSlider::add-page:horizontal {
+                background: #f0f0f0;
+            }
+            /* Modificado para que los ticks sean más visibles */
+            QSlider::tick-mark {
+                background: #505050;
+                width: 2px;
+                height: 10px;
+                margin-top: 10px;  /* Importante: dejar espacio para los ticks */
             }
         """)
         
@@ -66,6 +91,7 @@ class Selector(QWidget):
         self.value_index = 0
         self.cyclic = cyclic
         self.show_slider = show_slider
+        self.ticks = ticks  # Guardar referencia a ticks
         
         # Configurar slider según los valores
         if values and show_slider:
@@ -74,11 +100,34 @@ class Selector(QWidget):
             self.slider.setValue(0)
             self.slider.setSingleStep(1)
             self.slider.valueChanged.connect(self._slider_changed)
+            
+            # Configurar los ticks (marcas de escala)
+            if ticks is not None:
+                # IMPORTANTE: Usar TicksAbove en lugar de TicksBelow
+                self.slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+                
+                if isinstance(ticks, range) or isinstance(ticks, list):
+                    # Si ticks es una lista o range, usar distancia entre valores
+                    if len(ticks) > 1:
+                        # Mostrar todas las posiciones
+                        self.slider.setTickInterval(1)
+                else:
+                    # Caso personalizado - usar intervalo de 1
+                    self.slider.setTickInterval(1)
         elif show_slider:
             self.slider.setMinimum(0)
             self.slider.setMaximum(100)
             self.slider.setValue(0)
             self.slider.valueChanged.connect(lambda v: self.set_value(v))
+        
+            # Configurar los ticks para slider numérico
+            if ticks is not None:
+                # IMPORTANTE: Usar TicksAbove en lugar de TicksBelow
+                self.slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+                if isinstance(ticks, range) or isinstance(ticks, list):
+                    if len(ticks) > 1:
+                        # Mostrar todas las posiciones
+                        self.slider.setTickInterval(1)
             
         # Guardar referencias a los botones para compatibilidad
         self.btn_plus = btn_plus

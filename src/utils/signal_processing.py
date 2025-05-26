@@ -103,8 +103,16 @@ class PulseDetector:
         
         # Valores adaptables
         self.threshold = 0
-        self.minimum_delay_samples = int(0.3 * sample_rate)  # 300 ms mínimo entre pulsos (200 BPM máx)
+        # Aumentar el período refractario a 500ms (adecuado para detectar un solo pico por ciclo)
+        self.minimum_delay_samples = int(0.5 * sample_rate)  # 500 ms mínimo entre pulsos
         self.samples_since_last_pulse = self.minimum_delay_samples
+        
+        # Nuevos parámetros para detección de pico dominante
+        self.peak_values = deque(maxlen=5)  # Almacenar los últimos valores pico
+        self.in_potential_pulse = False
+        self.current_pulse_height = 0
+        self.current_pulse_count = 0
+        self.last_peak_time = 0
     
     def add_sample(self, filtered_value, timestamp):
         """
@@ -134,23 +142,55 @@ class PulseDetector:
         # Ajustar umbral
         self.threshold = signal_min + signal_range * self.threshold_factor
         
-        # Detectar pulso (subida por encima del umbral)
+        # Detectar estado de pulso (subida por encima del umbral)
         pulse_state = 1 if filtered_value > self.threshold else 0
         pulse_detected = False
         
-        # Detectamos un nuevo pulso cuando:
-        # 1. La señal cruza el umbral de abajo hacia arriba (flanco ascendente)
-        # 2. Ha pasado suficiente tiempo desde el último pulso
-        if pulse_state == 1 and self.prev_pulse_state == 0 and self.samples_since_last_pulse >= self.minimum_delay_samples:
-            pulse_detected = True
-            
-            # Calcular periodo entre pulsos
-            if self.last_pulse_time > 0:
-                period = timestamp - self.last_pulse_time
-                self.pulse_periods.append(period)
-            
-            self.last_pulse_time = timestamp
-            self.samples_since_last_pulse = 0
+        # Algoritmo mejorado para detectar picos dominantes
+        if pulse_state == 1:
+            # Estamos por encima del umbral
+            if not self.in_potential_pulse:
+                # Comenzando un nuevo pulso potencial
+                self.in_potential_pulse = True
+                self.current_pulse_height = filtered_value
+                self.current_pulse_count = 0
+            else:
+                # Actualizamos la altura si encontramos un valor mayor (buscando pico)
+                if filtered_value > self.current_pulse_height:
+                    self.current_pulse_height = filtered_value
+        else:
+            # Estamos por debajo del umbral
+            if self.in_potential_pulse:
+                # Terminó un pulso potencial, verificamos si es válido
+                time_since_last_peak = timestamp - self.last_peak_time
+                
+                # Solo consideramos un pulso completo si:
+                # 1. Ha pasado suficiente tiempo desde el último pico principal
+                # 2. El pulso es lo suficientemente alto (al menos 70% del promedio de picos anteriores)
+                avg_peak = np.mean(self.peak_values) if self.peak_values else self.current_pulse_height
+                peak_threshold = avg_peak * 0.7
+                
+                if (time_since_last_peak > 0.4 and  # Mínimo 400ms entre picos principales
+                    self.samples_since_last_pulse >= self.minimum_delay_samples and 
+                    self.current_pulse_height > peak_threshold):
+                    
+                    # Es un pico dominante (principal)
+                    pulse_detected = True
+                    self.peak_values.append(self.current_pulse_height)
+                    
+                    # Calcular periodo entre pulsos
+                    if self.last_pulse_time > 0:
+                        period = timestamp - self.last_pulse_time
+                        if 0.3 < period < 2.0:  # 30-200 BPM es fisiológicamente razonable
+                            self.pulse_periods.append(period)
+                    
+                    self.last_pulse_time = timestamp
+                    self.last_peak_time = timestamp
+                    self.samples_since_last_pulse = 0
+                
+                # Reset para el siguiente pulso
+                self.in_potential_pulse = False
+                self.current_pulse_count = 0
         
         self.prev_pulse_state = pulse_state
         self.pulse_detected = pulse_detected

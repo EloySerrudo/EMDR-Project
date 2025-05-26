@@ -29,73 +29,6 @@ from src.utils.hiperf_timer import HighPerfTimer
 from src.utils.events import event_system
 
 
-class CollapsibleSection(QWidget):
-    """Sección colapsable para agrupar controles relacionados"""
-    def __init__(self, title, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet("""
-            QFrame {
-                border: 1px solid #C0C0C0;
-                border-radius: 4px;
-                background-color: #F8F9FA;
-            }
-            QPushButton {
-                text-align: left;
-                padding: 5px;
-                background-color: #E3F2FD;
-                border-top-left-radius: 3px;
-                border-top-right-radius: 3px;
-                border: none;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #BBDEFB;
-            }
-            QPushButton:pressed {
-                background-color: #90CAF9;
-            }
-        """)
-        
-        self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(0)
-        
-        # Botón de título (header)
-        self.title = title
-        self.toggle_button = QPushButton(f" ▼  {self.title}")
-        self.toggle_button.clicked.connect(self.toggle_content)
-        self.main_layout.addWidget(self.toggle_button)
-        
-        # Contenedor para el contenido
-        self.content_frame = QFrame()
-        self.content_layout = QVBoxLayout(self.content_frame)
-        self.content_layout.setContentsMargins(10, 10, 10, 10)
-        self.main_layout.addWidget(self.content_frame)
-        
-        self.is_collapsed = False
-    
-    def toggle_content(self):
-        """Alterna entre mostrar/ocultar el contenido"""
-        self.is_collapsed = not self.is_collapsed
-        self.content_frame.setVisible(not self.is_collapsed)
-        
-        # Actualizar el ícono
-        icon = "▶" if self.is_collapsed else "▼"
-
-        title = self.title #self.toggle_button.text().split(" ", 1)[1]
-        self.toggle_button.setText(f" {icon}  {title}")
-    
-    def add_widget(self, widget):
-        """Añade un widget al contenido"""
-        self.content_layout.addWidget(widget)
-    
-    def add_layout(self, layout):
-        """Añade un layout al contenido"""
-        self.content_layout.addLayout(layout)
-
-
-# Agregar esta clase antes de EMDRControllerWidget
-
 class EMDRPatternVisualizer(QWidget):
     """Widget para visualizar el patrón actual de movimiento EMDR"""
     def __init__(self, parent=None):
@@ -237,7 +170,8 @@ class EMDRControllerWidget(QWidget):
         
         # Botones de velocidad
         self.btn_speed_minus = CustomButton(0, 1, '-', size=(30, 30))
-        self.sel_speed = Selector(1, 1, 'Velocidad', Config.speeds, '{0:d}/min', None, None, self.update_speed, parent=self)
+        self.sel_speed = Selector(1, 1, 'Velocidad', Config.speeds, '{0:d}/min', None, None, 
+                                 self.update_speed, ticks=Config.speeds, parent=self)
         self.btn_speed_plus = CustomButton(2, 1, '+', size=(30, 30))
         
         # Conectar botones de velocidad
@@ -261,6 +195,7 @@ class EMDRControllerWidget(QWidget):
         counter_box = QHBoxLayout()
         counter_box.addStretch()
         counter_box.addWidget(self.sel_counter)
+        counter_box.addStretch()
         counter_box.addStretch()
         
         speed_counter_layout.addLayout(counter_box)
@@ -313,8 +248,11 @@ class EMDRControllerWidget(QWidget):
         headphone_layout = QVBoxLayout(headphone_container)
         headphone_layout.setContentsMargins(5, 5, 5, 5)
 
-        # Sección colapsable para controles principales
-        audio_main_section = CollapsibleSection("CONTROLES DE AUDIO")
+        # Título para controles de audio
+        audio_title = QLabel("CONTROLES DE AUDIO")
+        audio_title.setStyleSheet("font-weight: bold; color: #1565C0; background-color: #E3F2FD; padding: 5px;")
+        audio_title.setAlignment(Qt.AlignCenter)
+        headphone_layout.addWidget(audio_title)
 
         # Layout para los controles de audio
         audio_controls = QWidget()
@@ -339,21 +277,21 @@ class EMDRControllerWidget(QWidget):
         control_row.addStretch()
         control_row.addWidget(self.btn_headphone_test)
         audio_controls_layout.addLayout(control_row)
+        headphone_layout.addWidget(audio_controls)
 
-        # Añadir controles a la sección
-        audio_main_section.add_widget(audio_controls)
-
-        # Sección colapsable para volumen
-        audio_volume_section = CollapsibleSection("VOLUMEN")
+        # Layout para controles de volumen y tono/duración
+        volume_tone_controls = QWidget()
+        volume_tone_layout = QHBoxLayout(volume_tone_controls)
 
         # Controles de volumen
         volume_controls = QWidget()
         volume_layout = QHBoxLayout(volume_controls)
         volume_layout.setContentsMargins(5, 5, 5, 5)
 
-        self.btn_headphone_volume_minus = CustomButton(0, 1, '-', size=(75, 75))
-        self.sel_headphone_volume = Selector(1, 1, 'Volumen', Config.volumes, '{0:d}%', None, None, self.update_sound, parent=self)
-        self.btn_headphone_volume_plus = CustomButton(2, 1, '+', size=(75, 75))
+        self.btn_headphone_volume_minus = CustomButton(0, 1, '-', size=(30, 30))
+        self.sel_headphone_volume = Selector(1, 1, 'Volumen', Config.volumes, '{0:d}%', None, None, 
+                                           self.update_sound, ticks=Config.volumes, parent=self)
+        self.btn_headphone_volume_plus = CustomButton(2, 1, '+', size=(30, 30))
 
         # Conectar botones de volumen
         self.btn_headphone_volume_plus.clicked.connect(self.sel_headphone_volume.next_value)
@@ -364,21 +302,17 @@ class EMDRControllerWidget(QWidget):
         volume_layout.addWidget(self.sel_headphone_volume)
         volume_layout.addWidget(self.btn_headphone_volume_plus)
         volume_layout.addStretch()
-
-        audio_volume_section.add_widget(volume_controls)
-
-        # Sección colapsable para tono
-        audio_tone_section = CollapsibleSection("TONO/DURACIÓN")
+        volume_tone_layout.addWidget(volume_controls)
 
         # Controles de tono
         tone_controls = QWidget()
         tone_layout = QHBoxLayout(tone_controls)
         tone_layout.setContentsMargins(5, 5, 5, 5)
 
-        self.btn_headphone_tone_minus = CustomButton(0, 2, '<<', size=(75, 75))
+        self.btn_headphone_tone_minus = CustomButton(0, 2, '◀', size=(30, 30))
         self.sel_headphone_tone = Selector(1, 2, 'Tono/Duración', Config.tones, '{0}', None, None, 
-                                        self.update_sound, cyclic=True, parent=self)
-        self.btn_headphone_tone_plus = CustomButton(2, 2, '>>', size=(75, 75))
+                                        self.update_sound, cyclic=True, ticks=range(len(Config.tones)), parent=self)
+        self.btn_headphone_tone_plus = CustomButton(2, 2, '▶', size=(30, 30))
 
         # Conectar botones de tono
         self.btn_headphone_tone_plus.clicked.connect(self.sel_headphone_tone.next_value)
@@ -389,15 +323,13 @@ class EMDRControllerWidget(QWidget):
         tone_layout.addWidget(self.sel_headphone_tone)
         tone_layout.addWidget(self.btn_headphone_tone_plus)
         tone_layout.addStretch()
+        volume_tone_layout.addWidget(tone_controls)
 
-        audio_tone_section.add_widget(tone_controls)
+        # Añadir controles de volumen y tono al layout principal
+        headphone_layout.addWidget(volume_tone_controls)
 
-        # Añadir todas las secciones al layout principal
-        headphone_layout.addWidget(audio_main_section)
-        headphone_layout.addWidget(audio_volume_section)
-        headphone_layout.addWidget(audio_tone_section)
+        # Añadir espacio al final
         headphone_layout.addStretch()
-        
         headphone_scroll.setWidget(headphone_container)
 
         # 5.2 Pestaña de Estimulación Visual (Barra de Luz)
@@ -410,6 +342,12 @@ class EMDRControllerWidget(QWidget):
         lightbar_container = QWidget()
         lightbar_layout = QVBoxLayout(lightbar_container)
         lightbar_layout.setContentsMargins(5, 5, 5, 5)
+
+        # Título para controles de luz
+        light_title = QLabel("CONTROLES DE LUZ")
+        light_title.setStyleSheet("font-weight: bold; color: #1565C0; background-color: #E3F2FD; padding: 5px;")
+        light_title.setAlignment(Qt.AlignCenter)
+        lightbar_layout.addWidget(light_title)
 
         # Switch para la barra de luz
         self.light_switch_container = SwitchContainer("On/Off:", 0, 0)
@@ -432,48 +370,46 @@ class EMDRControllerWidget(QWidget):
         lightbar_row1.addWidget(self.light_switch_container)
         lightbar_row1.addStretch()
         lightbar_row1.addWidget(self.btn_light_test)
+        lightbar_row1.addStretch()
         lightbar_row1.addWidget(self.btn_light_switch_strip)
 
+        # Segunda fila: Controles combinados de color y brillo
+        lightbar_row2 = QHBoxLayout()
+        
         # Controles de color
-        self.btn_light_color_minus = CustomButton(0, 1, '<<', size=(75, 75))
+        self.btn_light_color_minus = CustomButton(0, 1, '◀', size=(30, 30))
         self.sel_light_color = Selector(1, 1, 'Color', Config.colors, '{0}', None, None,
-                                      self.update_light, cyclic=True, parent=self)
-        self.btn_light_color_plus = CustomButton(2, 1, '>>', size=(75, 75))
+                                      self.update_light, cyclic=True, ticks=range(len(Config.colors)), parent=self)
+        self.btn_light_color_plus = CustomButton(2, 1, '▶', size=(30, 30))
 
         # Conectar botones de color
         self.btn_light_color_plus.clicked.connect(self.sel_light_color.next_value)
         self.btn_light_color_minus.clicked.connect(self.sel_light_color.prev_value)
         
-        # Segunda fila: Controles de color
-        lightbar_row2 = QHBoxLayout()
-        lightbar_row2.addStretch()
-        lightbar_row2.addWidget(self.btn_light_color_minus)
-        lightbar_row2.addWidget(self.sel_light_color)
-        lightbar_row2.addWidget(self.btn_light_color_plus)
-        lightbar_row2.addStretch()
-
         # Controles de intensidad
-        self.btn_light_intens_minus = CustomButton(0, 2, '-', size=(75, 75))
+        self.btn_light_intens_minus = CustomButton(0, 2, '-', size=(30, 30))
         self.sel_light_intens = Selector(1, 2, 'Brillo', Config.intensities, '{0:d}%',
-                                       None, None, self.update_light, parent=self)
-        self.btn_light_intens_plus = CustomButton(2, 2, '+', size=(75, 75))
+                                       None, None, self.update_light, ticks=Config.intensities, parent=self)
+        self.btn_light_intens_plus = CustomButton(2, 2, '+', size=(30, 30))
 
         # Conectar botones de intensidad
         self.btn_light_intens_plus.clicked.connect(self.sel_light_intens.next_value)
         self.btn_light_intens_minus.clicked.connect(self.sel_light_intens.prev_value)
         
-        # Tercera fila: Controles de intensidad
-        lightbar_row3 = QHBoxLayout()
-        lightbar_row3.addStretch()
-        lightbar_row3.addWidget(self.btn_light_intens_minus)
-        lightbar_row3.addWidget(self.sel_light_intens)
-        lightbar_row3.addWidget(self.btn_light_intens_plus)
-        lightbar_row3.addStretch()
+        # Añadir todos los controles a la fila 2 (color y brillo juntos)
+        lightbar_row2.addStretch()
+        lightbar_row2.addWidget(self.btn_light_color_minus)
+        lightbar_row2.addWidget(self.sel_light_color)
+        lightbar_row2.addWidget(self.btn_light_color_plus)
+        lightbar_row2.addSpacing(20)  # Espacio entre controles de color y brillo
+        lightbar_row2.addWidget(self.btn_light_intens_minus)
+        lightbar_row2.addWidget(self.sel_light_intens)
+        lightbar_row2.addWidget(self.btn_light_intens_plus)
+        lightbar_row2.addStretch()
         
-        # Añadir todas las filas al layout de la barra de luz
+        # Añadir las filas al layout de la barra de luz
         lightbar_layout.addLayout(lightbar_row1)
         lightbar_layout.addLayout(lightbar_row2)
-        lightbar_layout.addLayout(lightbar_row3)
         lightbar_layout.addStretch()
         
         lightbar_scroll.setWidget(lightbar_container)
@@ -488,6 +424,12 @@ class EMDRControllerWidget(QWidget):
         buzzer_container = QWidget()
         buzzer_layout = QVBoxLayout(buzzer_container)
         buzzer_layout.setContentsMargins(5, 5, 5, 5)
+
+        # Título para controles de vibración
+        buzzer_title = QLabel("CONTROLES DE VIBRACIÓN")
+        buzzer_title.setStyleSheet("font-weight: bold; color: #1565C0; background-color: #E3F2FD; padding: 5px;")
+        buzzer_title.setAlignment(Qt.AlignCenter)
+        buzzer_layout.addWidget(buzzer_title)
 
         # Switch para el buzzer
         self.buzzer_switch_container = SwitchContainer("On/Off:", 0, 0)
@@ -508,10 +450,10 @@ class EMDRControllerWidget(QWidget):
         buzzer_row1.addWidget(self.btn_buzzer_test)
         
         # Controles de duración
-        self.btn_buzzer_duration_minus = CustomButton(0, 1, '-', size=(75, 75))
+        self.btn_buzzer_duration_minus = CustomButton(0, 1, '-', size=(30, 30))
         self.sel_buzzer_duration = Selector(1, 1, 'Duración', Config.durations, '{0:d} ms', 
-                                          None, None, self.update_buzzer, parent=self)
-        self.btn_buzzer_duration_plus = CustomButton(2, 1, '+', size=(75, 75))
+                                          None, None, self.update_buzzer, ticks=Config.durations, parent=self)
+        self.btn_buzzer_duration_plus = CustomButton(2, 1, '+', size=(30, 30))
         
         # Conectar botones de duración
         self.btn_buzzer_duration_plus.clicked.connect(self.sel_buzzer_duration.next_value)
@@ -834,6 +776,14 @@ class EMDRControllerWidget(QWidget):
             if self.decay:
                 self.config_mode()
                 self.reset_action()
+                
+                # Detener captura de señales si el checkbox está marcado
+                if hasattr(self, 'chk_capture_signals') and self.chk_capture_signals.isChecked():
+                    main_window = self.window()
+                    if hasattr(main_window, 'sensor_monitor') and main_window.sensor_monitor:
+                        if main_window.sensor_monitor.running:
+                            main_window.sensor_monitor.stop_acquisition()  # Esto llama a stop_sensor()
+                
                 return
             else:
                 cntr += 1

@@ -74,7 +74,7 @@ class SensorMonitor(QWidget):
         
         # Filtros para ambas señales
         self.eog_filter = RealTimeFilter(
-            filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.1, highcut=30.0, order=4
+            filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.1, highcut=20.0, order=6
         )
         self.ppg_filter = RealTimeFilter(
             filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.5, highcut=8.0, order=4
@@ -111,59 +111,59 @@ class SensorMonitor(QWidget):
         self.device_status_label.setMaximumHeight(25)  # Limitar altura
         main_layout.addWidget(self.device_status_label)
         
-        # 1. Gráfica PPG filtrada (superior)
-        self.ppg_plot_widget = pg.PlotWidget()
-        self.ppg_plot_widget.setLabel('left', 'PPG')
-        self.ppg_plot_widget.setLabel('bottom', '')  # Sin etiqueta inferior para las dos primeras gráficas
-        self.ppg_plot_widget.setYRange(-25000, 25000)
-        self.ppg_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
-        self.ppg_plot_widget.setBackground('#f8f9fa')  
-        self.ppg_plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.ppg_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
-        
-        # Configurar ticks
-        x_axis_ppg = self.ppg_plot_widget.getAxis('bottom')
-        x_axis_ppg.setStyle(showValues=False)  # Ocultar valores para ahorrar espacio
-        x_axis_ppg.setTickSpacing(major=1, minor=0.5)
-        
-        # 2. Gráfica BPM (medio)
-        self.bpm_plot_widget = pg.PlotWidget()
-        self.bpm_plot_widget.setLabel('left', 'BPM')
-        self.bpm_plot_widget.setLabel('bottom', '')
-        self.bpm_plot_widget.setYRange(40, 180)  # Rango típico para BPM humano
-        self.bpm_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
-        self.bpm_plot_widget.setBackground('#f8f9fa') 
-        self.bpm_plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.bpm_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
-        
-        # Configurar ticks
-        x_axis_bpm = self.bpm_plot_widget.getAxis('bottom')
-        x_axis_bpm.setStyle(showValues=False)
-        x_axis_bpm.setTickSpacing(major=1, minor=0.5)
-        
-        # 3. EOG signal plot (inferior)
+        # 1. Gráfica EOG (superior) - INTERCAMBIADA
         self.eog_plot_widget = pg.PlotWidget()
         self.eog_plot_widget.setLabel('left', 'EOG')
-        self.eog_plot_widget.setLabel('bottom', 'Tiempo (s)')
-        self.eog_plot_widget.setYRange(-25000, 25000)
+        self.eog_plot_widget.setLabel('bottom', '')  # Sin etiqueta inferior para las dos primeras gráficas
+        self.eog_plot_widget.setYRange(-50000, 50000)
         self.eog_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
         self.eog_plot_widget.setBackground('#f8f9fa')
         self.eog_plot_widget.showGrid(x=True, y=True, alpha=0.3)
         self.eog_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
         
-        # Configurar ticks - este sí muestra valores
+        # Configurar ticks EOG
         x_axis_eog = self.eog_plot_widget.getAxis('bottom')
+        x_axis_eog.setStyle(showValues=False)  # Ocultar valores para ahorrar espacio
         x_axis_eog.setTickSpacing(major=1, minor=0.5)
         
-        # Create curves for data
-        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('#E91E63', width=2))  # Rosa/rojo
-        self.bpm_curve = self.bpm_plot_widget.plot(pen=pg.mkPen('#FF9800', width=2))  # Naranja
-        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('#2196F3', width=2))  # Azul
+        # 2. Gráfica BPM (medio) - SE MANTIENE EN EL MEDIO
+        self.bpm_plot_widget = pg.PlotWidget()
+        self.bpm_plot_widget.setLabel('left', 'BPM')
+        self.bpm_plot_widget.setLabel('bottom', '')
+        self.bpm_plot_widget.setYRange(40, 150)  # Rango típico para BPM humano
+        self.bpm_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
+        self.bpm_plot_widget.setBackground('#f8f9fa') 
+        self.bpm_plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        self.bpm_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
+        
+        # Configurar ticks BPM
+        x_axis_bpm = self.bpm_plot_widget.getAxis('bottom')
+        x_axis_bpm.setStyle(showValues=False)
+        x_axis_bpm.setTickSpacing(major=1, minor=0.5)
+        
+        # 3. Gráfica PPG filtrada (inferior) - INTERCAMBIADA
+        self.ppg_plot_widget = pg.PlotWidget()
+        self.ppg_plot_widget.setLabel('left', 'PPG')
+        self.ppg_plot_widget.setLabel('bottom', 'Tiempo (s)')  # Añadir etiqueta de tiempo al gráfico inferior
+        self.ppg_plot_widget.setYRange(-35000, 35000)
+        self.ppg_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
+        self.ppg_plot_widget.setBackground('#f8f9fa')  
+        self.ppg_plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        self.ppg_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
+        
+        # Configurar ticks PPG - este sí muestra valores por ser el inferior
+        x_axis_ppg = self.ppg_plot_widget.getAxis('bottom')
+        x_axis_ppg.setTickSpacing(major=1, minor=0.5)
+        
+        # Create curves for data - mantener colores consistentes
+        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('#2196F3', width=2))  # Azul para EOG
+        self.bpm_curve = self.bpm_plot_widget.plot(pen=pg.mkPen('#FF9800', width=2))  # Naranja para BPM
+        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('#E91E63', width=2))  # Rosa/rojo para PPG
         
         # Añadir leyendas compactas
-        ppg_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
-        ppg_legend.setParentItem(self.ppg_plot_widget.graphicsItem())
-        ppg_legend.addItem(self.ppg_curve, "Señal PPG")
+        eog_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
+        eog_legend.setParentItem(self.eog_plot_widget.graphicsItem())
+        eog_legend.addItem(self.eog_curve, "Movimiento Ocular")
         
         # Añadir texto para mostrar el valor de BPM actual
         self.bpm_text = pg.TextItem(text="BPM: --", color=(0, 0, 0), anchor=(0, 0))
@@ -174,14 +174,14 @@ class SensorMonitor(QWidget):
         bpm_legend.setParentItem(self.bpm_plot_widget.graphicsItem())
         bpm_legend.addItem(self.bpm_curve, "Frecuencia Cardíaca")
         
-        eog_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
-        eog_legend.setParentItem(self.eog_plot_widget.graphicsItem())
-        eog_legend.addItem(self.eog_curve, "Movimiento Ocular")
+        ppg_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
+        ppg_legend.setParentItem(self.ppg_plot_widget.graphicsItem())
+        ppg_legend.addItem(self.ppg_curve, "Señal PPG")
         
-        # Add plots to layout
-        main_layout.addWidget(self.ppg_plot_widget)
-        main_layout.addWidget(self.bpm_plot_widget)
+        # Add plots to layout en el nuevo orden
         main_layout.addWidget(self.eog_plot_widget)
+        main_layout.addWidget(self.bpm_plot_widget)
+        main_layout.addWidget(self.ppg_plot_widget)
         
         # Crear un layout horizontal para los botones
         button_layout = QHBoxLayout()
@@ -246,10 +246,10 @@ class SensorMonitor(QWidget):
         self.eog_filter.reset()
         self.ppg_filter.reset()
         
-        # Reset pulse detector
-        self.pulse_detector.reset()
+        # Crear una nueva instancia:
+        self.pulse_detector = PulseDetector(sample_rate=SAMPLE_RATE)
         self.current_heart_rate = 0
-
+        
         # Clear and reset data buffers
         self.times.clear()
         self.eog_values.clear()
