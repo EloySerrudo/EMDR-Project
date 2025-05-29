@@ -42,7 +42,7 @@ class LoginWidget(QWidget):
         header_frame.setFrameShape(QFrame.StyledPanel)
         header_frame.setStyleSheet("""
             QFrame {
-                background-color: #1565C0;
+                background-color: #00A99D;
                 border-radius: 12px;
                 padding: 5px 20px;
             }
@@ -75,11 +75,11 @@ class LoginWidget(QWidget):
             """)
         
         # Subtítulo
-        subtitle_label = QLabel("Iniciar Sesión")
+        subtitle_label = QLabel("INGRESO AL SISTEMA")
         subtitle_label.setAlignment(Qt.AlignCenter)
         subtitle_label.setStyleSheet("""
             QLabel {
-                color: #E3F2FD;
+                color: #FFFFFF;
                 font-size: 18px;
                 font-weight: bold;
                 background: transparent;
@@ -96,9 +96,9 @@ class LoginWidget(QWidget):
         form_frame.setFrameShape(QFrame.StyledPanel)
         form_frame.setStyleSheet("""
             QFrame {
-                background-color: #FAFAFA;
+                background-color: #323232;
                 border-radius: 10px;
-                border: 1px solid #E0E0E0;
+                border: 2px solid #444444;
                 padding: 5px;
             }
         """)
@@ -111,10 +111,10 @@ class LoginWidget(QWidget):
         role_container = QFrame()
         role_container.setStyleSheet("""
             QFrame {
-                background-color: #F5F5F5;
+                background-color: #424242;
                 border-radius: 8px;
                 padding: 12px;
-                border: 1px solid #DADADA;
+                border: 1px solid #555555;
             }
         """)
         
@@ -124,7 +124,7 @@ class LoginWidget(QWidget):
         role_label = QLabel("Seleccione su Rol:")
         role_label.setStyleSheet("""
             QLabel {
-                color: #424242;
+                color: #FFFFFF;
                 font-size: 14px;
                 font-weight: 600;
                 background: transparent;
@@ -136,13 +136,23 @@ class LoginWidget(QWidget):
         self.user_type_combo.setStyleSheet("""
             QComboBox {
                 padding: 8px 12px;
-                border: 2px solid #BDBDBD;
-                        border-radius: 6px;
+                border: 2px solid #555555;
+                border-radius: 6px;
                 font-size: 14px;
                 min-width: 150px;
+                background-color: #424242;
+                color: white;
             }
             QComboBox:focus {
-                border: 2px solid #1565C0;
+                border: 2px solid #00A99D;
+            }
+            QComboBox::drop-down {
+                border: 0px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #424242;
+                color: white;
+                selection-background-color: #00A99D;
             }
         """)
         
@@ -158,18 +168,18 @@ class LoginWidget(QWidget):
         self.user_input.setStyleSheet("""
             QLineEdit {
                 padding: 12px 12px;
-                border: 2px solid #E0E0E0;
+                border: 2px solid #555555;
                 border-radius: 8px;
-                background-color: white;
+                background-color: #424242;
                 font-size: 14px;
-                color: #333333;
+                color: white;
             }
             QLineEdit:focus {
-                border: 2px solid #1565C0;
-                background-color: #FAFAFA;
+                border: 2px solid #00A99D;
+                background-color: #383838;
             }
             QLineEdit::placeholder {
-                color: #9E9E9E;
+                color: #AAAAAA;
                 font-style: italic;
             }
         """)
@@ -196,23 +206,23 @@ class LoginWidget(QWidget):
         self.password_input.setStyleSheet("""
             QLineEdit {
                 padding: 12px 12px;
-                border: 2px solid #E0E0E0;
+                border: 2px solid #555555;
                 border-top-left-radius: 8px;
                 border-bottom-left-radius: 8px;
                 border-top-right-radius: 0px;
                 border-bottom-right-radius: 0px;
                 border-right: none;
-                background-color: white;
+                background-color: #424242;
                 font-size: 14px;
-                color: #333333;
+                color: white;
             }
             QLineEdit:focus {
-                border: 2px solid #1565C0;
+                border: 2px solid #00A99D;
                 border-right: none;
-                background-color: #FAFAFA;
+                background-color: #383838;
             }
             QLineEdit::placeholder {
-                color: #9E9E9E;
+                color: #AAAAAA;
                 font-style: italic;
             }
         """)
@@ -225,19 +235,19 @@ class LoginWidget(QWidget):
         self.toggle_password_button.setCursor(Qt.PointingHandCursor)
         self.toggle_password_button.setStyleSheet("""
             QToolButton {
-                border: 2px solid #E0E0E0;
+                border: 2px solid #555555;
                 border-left: none;
                 border-top-right-radius: 8px;
                 border-bottom-right-radius: 8px;
-                background-color: #F5F5F5;
+                background-color: #333333;
                 font-size: 16px;
+                color: #FFFFFF;
             }
             QToolButton:hover {
-                background-color: #EEEEEE;
-                border-color: #BDBDBD;
+                background-color: #424242;
             }
             QToolButton:pressed {
-                background-color: #E0E0E0;
+                background-color: #00A99D;
             }
         """)
         
@@ -271,25 +281,25 @@ class LoginWidget(QWidget):
         self.login_button.setFixedSize(180, 50)
         self.login_button.setStyleSheet("""
             QPushButton {
-                background-color: #4CAF50;
+                background-color: #00A99D;
                 color: white;
                 border-radius: 10px;
                 font-weight: bold;
                 font-size: 16px;
-                border: 2px solid #4CAF50;
+                border: 2px solid #00A99D;
             }
             QPushButton:hover {
-                background-color: #66BB6A;
-                border: 2px solid #66BB6A;
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
             }
             QPushButton:pressed {
-                background-color: #388E3C;
-                border: 2px solid #388E3C;
+                background-color: #008C82;
+                border: 2px solid #008C82;
             }
             QPushButton:disabled {
-                background-color: #BDBDBD;
-                border: 2px solid #BDBDBD;
-                color: #757575;
+                background-color: #555555;
+                border: 2px solid #555555;
+                color: #888888;
             }
         """)
         
@@ -298,20 +308,20 @@ class LoginWidget(QWidget):
         self.exit_button.setFixedSize(180, 50)
         self.exit_button.setStyleSheet("""
             QPushButton {
-                background-color: #F44336;
+                background-color: #424242;
                 color: white;
                 border-radius: 10px;
                 font-weight: bold;
                 font-size: 16px;
-                border: 2px solid #F44336;
+                border: 2px solid #424242;
             }
             QPushButton:hover {
-                background-color: #EF5350;
-                border: 2px solid #EF5350;
+                background-color: #555555;
+                border: 2px solid #555555;
             }
             QPushButton:pressed {
-                background-color: #D32F2F;
-                border: 2px solid #D32F2F;
+                background-color: #333333;
+                border: 2px solid #333333;
             }
         """)
         
@@ -334,6 +344,7 @@ class LoginWidget(QWidget):
                 font-weight: 600;
                 padding: 5px;
                 border-radius: 5px;
+                background: transparent;
             }
         """)
         main_layout.addWidget(self.message_label)
@@ -346,9 +357,10 @@ class LoginWidget(QWidget):
         footer_label.setAlignment(Qt.AlignCenter)
         footer_label.setStyleSheet("""
             QLabel {
-                color: #757575;
+                color: #AAAAAA;
                 font-size: 12px;
                 font-style: italic;
+                background: transparent;
             }
         """)
         main_layout.addWidget(footer_label)
@@ -363,7 +375,13 @@ class LoginWidget(QWidget):
         self.setStyleSheet("""
             QWidget {
                 font-family: 'Segoe UI', Arial, sans-serif;
-                background-color: #F8F9FA;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #323232,
+                                          stop: 0.3 #2c2c2c,
+                                          stop: 0.6 #252525,
+                                          stop: 0.8 #1a1a1a,
+                                          stop: 1 #000000);
+                color: #FFFFFF;
             }
         """)
         
@@ -431,9 +449,9 @@ class LoginWidget(QWidget):
         self.message_label.setText(message)
         
         if error:
-            self.message_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self.message_label.setStyleSheet("color: #e74c3c; font-weight: bold; background: transparent;")
         else:
-            self.message_label.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.message_label.setStyleSheet("color: #27ae60; font-weight: bold; background: transparent;")
 
     def keyPressEvent(self, event):
         """Maneja eventos de teclado"""
