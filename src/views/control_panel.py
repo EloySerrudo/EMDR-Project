@@ -187,6 +187,7 @@ class EMDRControlPanel(QMainWindow):
                 border-radius: 4px;
                 padding: 3px 10px;
                 font-size: 11px;
+                min-width: 110px;
             }
             QPushButton:hover {
                 background-color: #66BB6A;
@@ -203,6 +204,7 @@ class EMDRControlPanel(QMainWindow):
                 border-radius: 4px;
                 padding: 3px 10px;
                 font-size: 11px;
+                min-width: 110px;
             }
             QPushButton:hover {
                 background-color: #42A5F5;
@@ -219,6 +221,7 @@ class EMDRControlPanel(QMainWindow):
                 border-radius: 4px;
                 padding: 3px 10px;
                 font-size: 11px;
+                min-width: 110px;
             }
             QPushButton:hover {
                 background-color: #EF5350;

@@ -61,8 +61,7 @@ void switchToNextStrip() {
   
   // Cambiar a la siguiente tira (cíclico: 0->1->2->0...)
   activeStripIndex = (activeStripIndex + 1) % NUM_STRIPS;
-  strips[activeStripIndex].setPixelColor(ledNum - 1, color);
-  strips[activeStripIndex].show();
+  
   Serial.print("Switched to strip: ");
   Serial.println(activeStripIndex + 1); // Mostrar número de tira (1-based para legibilidad)
 }
@@ -89,7 +88,7 @@ void initial_test() {
     strips[i].clear();
     strips[i].show();
   }
-  test()
+  test();
 }
 
 // Callback cuando se envían datos
