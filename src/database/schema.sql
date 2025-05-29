@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS sesiones (
     fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     datos_eog BLOB,
     datos_ppg BLOB,
+    datos_bpm BLOB,
     notas TEXT,
     FOREIGN KEY (id_paciente) REFERENCES pacientes(id)
 );
