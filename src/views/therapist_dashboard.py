@@ -53,7 +53,7 @@ class TherapistDashboard(QMainWindow):
     def setup_window(self):
         """Configura las propiedades básicas de la ventana"""
         self.setWindowTitle("EMDR Project - Dashboard Terapéutico")
-        self.setFixedSize(600, 700)
+        self.setFixedSize(600, 600)
         self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'icon.png')))
         
         # Centrar ventana en pantalla
@@ -115,7 +115,7 @@ class TherapistDashboard(QMainWindow):
             QFrame {
                 background-color: #E3F2FD;
                 border-radius: 8px;
-                padding: 20px;
+                padding: 10px;
             }
         """)
         
@@ -131,7 +131,7 @@ class TherapistDashboard(QMainWindow):
             saludo = "Bienvenido" if genero == 0 else "Bienvenida"
             
             # Etiqueta de saludo
-            greeting_label = QLabel(f"Hola, {nombre_completo}")
+            greeting_label = QLabel(f"Hola, Lic. {nombre_completo}")
             greeting_label.setAlignment(Qt.AlignCenter)
             greeting_label.setStyleSheet("""
                 QLabel {
@@ -148,7 +148,7 @@ class TherapistDashboard(QMainWindow):
             welcome_label.setStyleSheet("""
                 QLabel {
                     color: #1976D2;
-                    font-size: 16px;
+                    font-size: 20px;
                     background: transparent;
                 }
             """)
