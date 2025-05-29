@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS terapeutas (
     password TEXT NOT NULL,
     apellido_paterno TEXT NOT NULL,
     apellido_materno TEXT NOT NULL,
-    nombre TEXT NOT NULL
+    nombre TEXT NOT NULL,
+    genero INTEGER NOT NULL CHECK (genero IN (0, 1))
 );
 
 -- pacientes

@@ -498,7 +498,7 @@ class DatabaseManager:
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, user, apellido_paterno, apellido_materno, nombre 
+                SELECT id, user, apellido_paterno, apellido_materno, nombre, genero 
                 FROM terapeutas 
                 ORDER BY apellido_paterno, apellido_materno, nombre
             """)
@@ -514,7 +514,41 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error obteniendo terapeutas: {e}")
             return []
-
+    
+    @staticmethod
+    def get_therapist_by_username(username):
+        """Obtiene los datos completos de un terapeuta por su nombre de usuario"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT id, user, apellido_paterno, apellido_materno, nombre, genero
+                FROM terapeutas 
+                WHERE user = ?
+            """, (username,))
+            
+            row = cursor.fetchone()
+            
+            if row:
+                return {
+                    'id': row[0],
+                    'user': row[1], 
+                    'apellido_paterno': row[2],
+                    'apellido_materno': row[3],
+                    'nombre': row[4],
+                    'genero': row[5]
+                }
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error al obtener datos del terapeuta: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+    
     @staticmethod
     def add_therapist(user, password_hash, apellido_paterno, apellido_materno, nombre):
         """Añade un nuevo terapeuta con hash simple"""
