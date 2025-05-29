@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QPixmap, QIcon
 from pathlib import Path
+from datetime import datetime  # Añadir esta importación
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -76,7 +77,7 @@ class TherapistDashboard(QMainWindow):
         # Layout principal
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(30, 30, 30, 30)
-        main_layout.setSpacing(25)
+        main_layout.setSpacing(20)  # Reducido de 25 a 20
         
         # === HEADER CON LOGO ===
         header_frame = QFrame()
@@ -85,12 +86,12 @@ class TherapistDashboard(QMainWindow):
             QFrame {
                 background-color: #1565C0;
                 border-radius: 10px;
-                padding: 15px;
+                padding: 12px;
             }
         """)
         
         header_layout = QVBoxLayout(header_frame)
-        header_layout.setSpacing(10)
+        header_layout.setSpacing(8)
         
         # Logo o título
         logo_label = QLabel("EMDR PROJECT")
@@ -98,10 +99,10 @@ class TherapistDashboard(QMainWindow):
         logo_label.setStyleSheet("""
             QLabel {
                 color: white;
-                font-size: 24px;
+                font-size: 22px;
                 font-weight: bold;
                 background: transparent;
-                padding: 5px;
+                padding: 3px;
             }
         """)
         header_layout.addWidget(logo_label)
@@ -115,12 +116,12 @@ class TherapistDashboard(QMainWindow):
             QFrame {
                 background-color: #E3F2FD;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 12px;
             }
         """)
         
         greeting_layout = QVBoxLayout(greeting_frame)
-        greeting_layout.setSpacing(8)
+        greeting_layout.setSpacing(6)
         
         # Mensaje de saludo personalizado
         if self.therapist_data:
@@ -128,27 +129,37 @@ class TherapistDashboard(QMainWindow):
             
             # Determinar saludo según género (0 = masculino, 1 = femenino)
             genero = self.therapist_data.get('genero', 0)
-            saludo = "Bienvenido" if genero == 0 else "Bienvenida"
+            saludo_genero = "Bienvenido" if genero == 0 else "Bienvenida"
+            
+            # Determinar saludo según la hora del día
+            hora_actual = datetime.now().hour
+            
+            if 5 <= hora_actual < 12:
+                saludo_hora = "Buenos días"
+            elif 12 <= hora_actual < 18:
+                saludo_hora = "Buenas tardes"
+            else:
+                saludo_hora = "Buenas noches"
             
             # Etiqueta de saludo
-            greeting_label = QLabel(f"Hola, Lic. {nombre_completo}")
+            greeting_label = QLabel(f"{saludo_hora}, Lic. {nombre_completo}")
             greeting_label.setAlignment(Qt.AlignCenter)
             greeting_label.setStyleSheet("""
                 QLabel {
                     color: #1565C0;
-                    font-size: 20px;
+                    font-size: 18px;
                     font-weight: bold;
                     background: transparent;
                 }
             """)
             
             # Etiqueta de bienvenida
-            welcome_label = QLabel(f"{saludo} al Sistema EMDR")
+            welcome_label = QLabel(f"{saludo_genero} al Sistema EMDR")
             welcome_label.setAlignment(Qt.AlignCenter)
             welcome_label.setStyleSheet("""
                 QLabel {
                     color: #1976D2;
-                    font-size: 20px;
+                    font-size: 16px;
                     background: transparent;
                 }
             """)
@@ -162,7 +173,7 @@ class TherapistDashboard(QMainWindow):
             fallback_label.setStyleSheet("""
                 QLabel {
                     color: #1565C0;
-                    font-size: 18px;
+                    font-size: 16px;
                     font-weight: bold;
                     background: transparent;
                 }
@@ -171,21 +182,40 @@ class TherapistDashboard(QMainWindow):
         
         main_layout.addWidget(greeting_frame)
         
+        # === MENSAJE INSTRUCTIVO ===
+        # Mensaje instructivo (sin QFrame)
+        instruction_label = QLabel("💡 Seleccione una opción para continuar con su sesión de trabajo")
+        instruction_label.setAlignment(Qt.AlignCenter)
+        instruction_label.setStyleSheet("""
+            QLabel {
+                background-color: #FFF3E0;
+                border-radius: 6px;
+                border: 1px solid #FFB74D;
+                padding: 8px;
+                color: #E65100;
+                font-size: 14px;
+                font-weight: 500;
+                font-style: italic;
+            }
+        """)
+
+        main_layout.addWidget(instruction_label)
+        
         # === BOTONES PRINCIPALES GRANDES ===
         main_buttons_frame = QFrame()
         main_buttons_layout = QGridLayout(main_buttons_frame)
-        main_buttons_layout.setSpacing(20)
+        main_buttons_layout.setSpacing(18)  # Reducido de 20 a 18
         
         # Botón Control Panel
         self.control_panel_btn = QPushButton()
         self.control_panel_btn.setText("Panel de Control\nEMDR")
-        self.control_panel_btn.setFixedSize(220, 120)
+        self.control_panel_btn.setFixedSize(210, 110)  # Reducido ligeramente
         self.control_panel_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
                 border-radius: 10px;
-                font-size: 16px;
+                font-size: 15px;
                 font-weight: bold;
                 border: 2px solid #4CAF50;
             }
@@ -203,13 +233,13 @@ class TherapistDashboard(QMainWindow):
         # Botón Patient Manager
         self.patient_manager_btn = QPushButton()
         self.patient_manager_btn.setText("Gestión de\nPacientes")
-        self.patient_manager_btn.setFixedSize(220, 120)
+        self.patient_manager_btn.setFixedSize(210, 110)  # Reducido ligeramente
         self.patient_manager_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
                 color: white;
                 border-radius: 10px;
-                font-size: 16px;
+                font-size: 15px;
                 font-weight: bold;
                 border: 2px solid #2196F3;
             }
@@ -237,13 +267,13 @@ class TherapistDashboard(QMainWindow):
         
         # Botón Cerrar Sesión
         self.logout_btn = QPushButton("Cerrar Sesión")
-        self.logout_btn.setFixedSize(150, 40)
+        self.logout_btn.setFixedSize(140, 35)  # Reducido ligeramente
         self.logout_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FF9800;
                 color: white;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: bold;
                 border: 1px solid #FF9800;
             }
@@ -260,13 +290,13 @@ class TherapistDashboard(QMainWindow):
         
         # Botón Salir
         self.exit_btn = QPushButton("Salir")
-        self.exit_btn.setFixedSize(150, 40)
+        self.exit_btn.setFixedSize(140, 35)  # Reducido ligeramente
         self.exit_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F44336;
                 color: white;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: bold;
                 border: 1px solid #F44336;
             }
@@ -298,7 +328,7 @@ class TherapistDashboard(QMainWindow):
         footer_label.setStyleSheet("""
             QLabel {
                 color: #757575;
-                font-size: 12px;
+                font-size: 11px;
                 font-style: italic;
             }
         """)
