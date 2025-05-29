@@ -28,14 +28,14 @@ class LoginWidget(QWidget):
     def init_ui(self):
         """Inicializa la interfaz de usuario"""
         self.setWindowTitle("EMDR Project - Iniciar Sesión")
-        self.setFixedSize(550, 750)
+        self.setFixedSize(550, 650)
         self.setWindowFlag(Qt.MSWindowsFixedSizeDialogHint, True)
         self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'icon.png')))
         
         # Layout principal
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(40, 35, 40, 35)
-        main_layout.setSpacing(25)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(20)
         
         # === HEADER CON TÍTULO ===
         header_frame = QFrame()
@@ -49,7 +49,7 @@ class LoginWidget(QWidget):
         """)
         
         header_layout = QVBoxLayout(header_frame)
-        header_layout.setSpacing(8)
+        header_layout.setSpacing(5)
         
         # Logo o título principal
         logo_label = QLabel()
@@ -58,7 +58,7 @@ class LoginWidget(QWidget):
         logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
         if logo_path.exists():
             pixmap = QPixmap(str(logo_path))
-            pixmap = pixmap.scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             logo_label.setPixmap(pixmap)
             logo_label.setAlignment(Qt.AlignCenter)
         else:
@@ -113,13 +113,13 @@ class LoginWidget(QWidget):
             QFrame {
                 background-color: #424242;
                 border-radius: 8px;
-                padding: 12px;
+                padding: 8px;
                 border: 1px solid #555555;
             }
         """)
         
         role_layout = QHBoxLayout(role_container)
-        role_layout.setContentsMargins(10, 5, 10, 5)
+        role_layout.setContentsMargins(10, 2, 10, 2)
         
         role_label = QLabel("Seleccione su Rol:")
         role_label.setStyleSheet("""
@@ -128,6 +128,7 @@ class LoginWidget(QWidget):
                 font-size: 14px;
                 font-weight: 600;
                 background: transparent;
+                padding: 2px;
             }
         """)
         
