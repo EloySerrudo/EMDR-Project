@@ -28,7 +28,7 @@ class LoginWidget(QWidget):
     def init_ui(self):
         """Inicializa la interfaz de usuario"""
         self.setWindowTitle("EMDR Project - Iniciar Sesión")
-        self.setFixedSize(550, 650)
+        self.setFixedSize(400, 650)
         self.setWindowFlag(Qt.MSWindowsFixedSizeDialogHint, True)
         self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'icon.png')))
         
@@ -42,8 +42,18 @@ class LoginWidget(QWidget):
         header_frame.setFrameShape(QFrame.StyledPanel)
         header_frame.setStyleSheet("""
             QFrame {
-                background-color: #00A99D;
+                background: qconicalgradient(cx: 0.5, cy: 0.5, angle: 0,
+                                           stop: 0 rgba(120, 255, 180, 0.9),
+                                           stop: 0.2 rgba(0, 230, 140, 0.8),
+                                           stop: 0.4 rgba(0, 169, 157, 0.85),
+                                           stop: 0.6 rgba(0, 140, 130, 0.8),
+                                           stop: 0.8 rgba(0, 200, 160, 0.85),
+                                           stop: 1 rgba(120, 255, 180, 0.9));
                 border-radius: 12px;
+                border-top: 2px solid rgba(200, 255, 220, 0.8);
+                border-left: 1px solid rgba(255, 255, 255, 0.6);
+                border-right: 1px solid rgba(0, 0, 0, 0.3);
+                border-bottom: 2px solid rgba(0, 0, 0, 0.4);
                 padding: 5px 20px;
             }
         """)
@@ -61,6 +71,13 @@ class LoginWidget(QWidget):
             pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             logo_label.setPixmap(pixmap)
             logo_label.setAlignment(Qt.AlignCenter)
+            logo_label.setStyleSheet("""
+                QLabel {
+                    border: none;
+                    outline: none;
+                    background: transparent;
+                }
+            """)
         else:
             # Si no hay logo, usar texto estilizado
             logo_label.setText("EMDR PROJECT")
@@ -84,6 +101,8 @@ class LoginWidget(QWidget):
                 font-weight: bold;
                 background: transparent;
                 margin-top: 5px;
+                border: none;
+                outline: none;
             }
         """)
         
@@ -114,12 +133,12 @@ class LoginWidget(QWidget):
                 background-color: #424242;
                 border-radius: 8px;
                 padding: 8px;
-                border: 1px solid #555555;
+                border: 2px solid #555555;
             }
         """)
         
         role_layout = QHBoxLayout(role_container)
-        role_layout.setContentsMargins(10, 2, 10, 2)
+        role_layout.setContentsMargins(7, 2, 7, 2)
         
         role_label = QLabel("Seleccione su Rol:")
         role_label.setStyleSheet("""
@@ -128,7 +147,9 @@ class LoginWidget(QWidget):
                 font-size: 14px;
                 font-weight: 600;
                 background: transparent;
-                padding: 2px;
+                padding: 0px;
+                border: none;
+                outline: none;
             }
         """)
         
@@ -140,7 +161,7 @@ class LoginWidget(QWidget):
                 border: 2px solid #555555;
                 border-radius: 6px;
                 font-size: 14px;
-                min-width: 150px;
+                min-width: 100px;
                 background-color: #424242;
                 color: white;
             }
@@ -279,7 +300,7 @@ class LoginWidget(QWidget):
         
         # Botón de login
         self.login_button = QPushButton("Ingresar")
-        self.login_button.setFixedSize(180, 50)
+        self.login_button.setFixedSize(150, 50)
         self.login_button.setStyleSheet("""
             QPushButton {
                 background-color: #00A99D;
@@ -306,7 +327,7 @@ class LoginWidget(QWidget):
         
         # Botón de salir
         self.exit_button = QPushButton("Salir")
-        self.exit_button.setFixedSize(180, 50)
+        self.exit_button.setFixedSize(150, 50)
         self.exit_button.setStyleSheet("""
             QPushButton {
                 background-color: #424242;
