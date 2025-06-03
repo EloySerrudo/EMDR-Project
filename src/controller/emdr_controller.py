@@ -547,26 +547,32 @@ class EMDRControllerWidget(QWidget):
             Devices.set_led(-1)
         else:
             Devices.set_led(Devices.led_num / 2 + 1 if self.switch_light.get_value() else 0)
-        self.save_config()
+        # self.save_config()
     
     def update_buzzer(self):
         """Actualiza la configuración del buzzer"""
         duration = self.sel_buzzer_duration.get_value()
         Devices.set_buzzer_duration(duration // 10)
-        self.save_config()
+        # self.save_config()
     
     def update_sound(self):
         """Actualiza la configuración de sonido"""
-        (tone_name, frequency, duration) = self.sel_headphone_tone.get_value()
+        tone_data = self.sel_headphone_tone.get_value()
         volume = self.sel_headphone_volume.get_value() / 100
-        Devices.set_tone(frequency, duration, volume)
-        self.save_config()
+        Devices.set_tone(tone_data, volume) # El nuevo método maneja tanto WAV como tonos generados
+        # El nuevo método set_tone maneja tanto WAV como tonos generados
+        Devices.set_tone(tone_data, volume)
+        
+        print(f"Actualizando sonido: Tono={tone_data[0] if tone_data else 'None'}, "
+              f"Volumen={volume}")
+        
+        # self.save_config()
     
     def update_speed(self):
         """Actualiza la velocidad"""
-        self.save_config()
         if self.mode == 'action':
             self.adjust_action_timer()
+        # self.save_config()
     
     def switch_strip_click(self):
         """Cambia a la siguiente tira LED"""
@@ -598,11 +604,22 @@ class EMDRControllerWidget(QWidget):
             self.switch_buzzer.set_value(True)
             self.sel_buzzer_duration.set_value(Config.data.get('buzzer.duration'))
             self.switch_headphone.set_value(True)
-            self.sel_headphone_tone.set_value(Config.data.get('headphone.tone'))
+            
+            # Cargar tono guardado o usar el primero disponible
+            saved_tone = Config.data.get('headphone.tone')
+            if saved_tone and saved_tone in Config.tones:
+                self.sel_headphone_tone.set_value(saved_tone)
+            elif Config.tones:
+                self.sel_headphone_tone.set_value(Config.tones[0])
+                Config.data['headphone.tone'] = Config.tones[0]
+            
             self.sel_headphone_volume.set_value(Config.data.get('headphone.volume'))
-        except:
+        except Exception as e:
+            print(f"Error cargando configuración: {e}")
             # No fallar con archivo de configuración corrupto
-            pass
+            if Config.tones:
+                self.sel_headphone_tone.set_value(Config.tones[0])
+        
         self.in_load = False
     
     def save_config(self):

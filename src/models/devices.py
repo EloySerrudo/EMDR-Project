@@ -4,6 +4,7 @@ from time import sleep
 import pygame
 from array import array
 from src.models.device_config import DEVICE_CONFIG
+from pathlib import Path
 
 # Diccionario de esclavos: {ID: (nombre, requerido_para_captura)}
 KNOWN_SLAVES = {
@@ -39,6 +40,13 @@ class Devices():
     _channel_left.set_volume(1, 0)
     _channel_right = pygame.mixer.Channel(1)
     _channel_right.set_volume(0, 1)
+    
+    # Variables para manejo de sonidos WAV
+    _current_left_sound = None
+    _current_right_sound = None
+    _current_volume = 0.5
+    
+    # Mantener compatibilidad con el sistema anterior
     _beep = Note(440)
     _sound_duration = 50
     _master_controller = (None, None)
@@ -169,15 +177,95 @@ class Devices():
         cls.write(cls._master_controller, bytes([ord('l' if left else 'r'), 3, cls._buzzer_duration, 0, 0]))
 
     @classmethod
-    def do_sound(cls, left):
-        if left:
-            cls._channel_left.play(cls._beep, cls._sound_duration)
-        else:
-            cls._channel_right.play(cls._beep, cls._sound_duration)
+    def load_wav_sounds(cls, left_file_path, right_file_path):
+        """Carga los archivos WAV para estimulación bilateral"""
+        try:
+            # Verificar que los archivos existen
+            left_path = Path(left_file_path)
+            right_path = Path(right_file_path)
+            
+            if not left_path.exists():
+                print(f"Advertencia: No se encontró archivo izquierdo: {left_path}")
+                return False
+                
+            if not right_path.exists():
+                print(f"Advertencia: No se encontró archivo derecho: {right_path}")
+                return False
+            
+            # Cargar los sonidos WAV
+            cls._current_left_sound = pygame.mixer.Sound(str(left_path))
+            cls._current_right_sound = pygame.mixer.Sound(str(right_path))
+            
+            # Aplicar volumen actual
+            cls._current_left_sound.set_volume(cls._current_volume)
+            cls._current_right_sound.set_volume(cls._current_volume)
+            
+            print(f"Sonidos WAV cargados exitosamente:")
+            print(f"  Izquierdo: {left_path.name}")
+            print(f"  Derecho: {right_path.name}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error cargando archivos WAV: {e}")
+            cls._current_left_sound = None
+            cls._current_right_sound = None
+            return False
 
     @classmethod
-    def set_tone(cls, frequency, duration, volume):
-        cls._beep = Note(frequency)
-        cls._sound_duration = duration
-        cls._channel_left.set_volume(1 * volume, 0)
-        cls._channel_right.set_volume(0, 1 * volume)
+    def do_sound(cls, left):
+        """Reproduce sonido en el canal especificado"""
+        if cls._current_left_sound and cls._current_right_sound:
+            # Usar archivos WAV si están disponibles
+            if left:
+                cls._channel_left.stop()  # Detener sonido anterior
+                cls._channel_left.play(cls._current_left_sound)
+            else:
+                cls._channel_right.stop()  # Detener sonido anterior
+                cls._channel_right.play(cls._current_right_sound)
+        else:
+            # Fallback al sistema anterior con Note
+            if left:
+                cls._channel_left.play(cls._beep, cls._sound_duration)
+            else:
+                cls._channel_right.play(cls._beep, cls._sound_duration)
+
+    @classmethod
+    def set_tone(cls, tone_data, volume):
+        """Establece el tono usando archivos WAV o frecuencia tradicional"""
+        cls._current_volume = volume
+        
+        # Determinar si es un tono WAV (tupla de 4 elementos) o tradicional (tupla de 3)
+        if len(tone_data) == 4:
+            # Formato WAV: (nombre, descripción, archivo_izq, archivo_der)
+            name, description, left_file, right_file = tone_data
+            
+            print(f"Configurando tono WAV: {name}")
+            success = cls.load_wav_sounds(left_file, right_file)
+            
+            if not success:
+                print("Fallback a tono generado")
+                # Si falla, usar tono por defecto
+                cls._beep = Note(440)
+                cls._sound_duration = 50
+                cls._current_left_sound = None
+                cls._current_right_sound = None
+        else:
+            # Formato tradicional: (nombre, frecuencia, duración)
+            name, frequency, duration = tone_data
+            print(f"Configurando tono generado: {name} ({frequency}Hz, {duration}ms)")
+            
+            cls._beep = Note(frequency)
+            cls._sound_duration = duration
+            cls._current_left_sound = None
+            cls._current_right_sound = None
+        
+        # Actualizar volumen de canales
+        cls._channel_left.set_volume(cls._current_volume, 0)
+        cls._channel_right.set_volume(0, cls._current_volume)
+
+    @classmethod 
+    def stop_all_sounds(cls):
+        """Detiene todos los sonidos de audio"""
+        cls._channel_left.stop()
+        cls._channel_right.stop()
