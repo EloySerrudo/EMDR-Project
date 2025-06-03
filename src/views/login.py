@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QIcon
 import hashlib
+import qtawesome as qta
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -30,7 +31,7 @@ class LoginWidget(QWidget):
         self.setWindowTitle("EMDR Project - Iniciar Sesión")
         self.setFixedSize(400, 650)
         self.setWindowFlag(Qt.MSWindowsFixedSizeDialogHint, True)
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
         
         # Layout principal
         main_layout = QVBoxLayout(self)
@@ -132,7 +133,7 @@ class LoginWidget(QWidget):
             QFrame {
                 background-color: #424242;
                 border-radius: 8px;
-                padding: 8px;
+                padding: 4px 8px;
                 border: 2px solid #555555;
             }
         """)
@@ -155,32 +156,104 @@ class LoginWidget(QWidget):
         
         self.user_type_combo = QComboBox()
         self.user_type_combo.addItems(["Terapeuta", "Administrador"])
+
+        # Configurar íconos para el combo box usando setItemIcon
+        self.combo_arrow_down = qta.icon('fa6s.chevron-down', color='#FFFFFF')
+        self.combo_arrow_up = qta.icon('fa6s.chevron-up', color='#FFFFFF')
+        self.user_icon = qta.icon('fa6s.user', color='#FFFFFF')
+        self.admin_icon = qta.icon('fa6s.user-shield', color='#FFFFFF')
+
+        # Establecer íconos para cada elemento del combo
+        self.user_type_combo.setItemIcon(0, self.user_icon)  # Terapeuta
+        self.user_type_combo.setItemIcon(1, self.admin_icon)  # Administrador
+
         self.user_type_combo.setStyleSheet("""
             QComboBox {
-                padding: 8px 12px;
+                padding: 8px 12px 8px 12px;
                 border: 2px solid #555555;
                 border-radius: 6px;
                 font-size: 14px;
                 min-width: 100px;
                 background-color: #424242;
                 color: white;
+                icon-size: 16px;
             }
             QComboBox:focus {
                 border: 2px solid #00A99D;
             }
             QComboBox::drop-down {
-                border: 0px;
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 30px;
+                border-left: 1px solid #555555;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                background-color: #333333;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border: none;
+                width: 16px;
+                height: 16px;
             }
             QComboBox QAbstractItemView {
                 background-color: #424242;
                 color: white;
                 selection-background-color: #00A99D;
+                border: 1px solid #555555;
+                outline: none;
+            }
+            QComboBox QAbstractItemView::item {
+                height: 30px;
+                padding: 5px;
+                border: none;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #00A99D;
             }
         """)
-        
+
+        # Para el ícono del dropdown, usaremos un QLabel personalizado
+        self.dropdown_arrow_label = QLabel()
+        self.dropdown_arrow_label.setPixmap(self.combo_arrow_down.pixmap(16, 16))
+        self.dropdown_arrow_label.setStyleSheet("""
+            QLabel {
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }
+        """)
+
+        # Crear un layout para superponer el ícono de flecha
+        combo_container = QFrame()
+        combo_container.setStyleSheet("""
+            QFrame { 
+                border: none; 
+                background: transparent; 
+                padding: 0px; 
+            }
+        """)
+        combo_layout = QHBoxLayout(combo_container)
+        combo_layout.setContentsMargins(0, 0, 0, 0)
+        combo_layout.setSpacing(0)
+
+        combo_layout.addWidget(self.user_type_combo)
+
+        # Posicionar el ícono de flecha sobre el combo box
+        self.dropdown_arrow_label.setParent(self.user_type_combo)
+        self.dropdown_arrow_label.move(self.user_type_combo.width() - 25, 
+                                       (self.user_type_combo.height() - 16) // 2)
+
+        # Conectar eventos para cambiar el ícono cuando se despliega/colapsa
+        self.user_type_combo.showPopup = self.combo_show_popup
+        self.user_type_combo.hidePopup = self.combo_hide_popup
+
+        # También conectar el evento de resize para reposicionar la flecha
+        self.user_type_combo.resizeEvent = self.combo_resize_event
+
         role_layout.addWidget(role_label)
         role_layout.addStretch()
-        role_layout.addWidget(self.user_type_combo)
+        role_layout.addWidget(combo_container)
         
         form_layout.addWidget(role_container)
         
@@ -252,10 +325,19 @@ class LoginWidget(QWidget):
         # Botón para ver contraseña
         self.toggle_password_button = QToolButton()
         self.toggle_password_button.setToolTip("Mantener presionado para ver contraseña")
-        self.toggle_password_button.setText("👁")
+        
+        # Configurar ícono inicial (ojo cerrado/tachado)
+        self.eye_closed_icon = qta.icon('fa6s.eye-slash', color='#FFFFFF')
+        self.eye_open_icon = qta.icon('fa6s.eye', color='#FFFFFF')
+        
+        # Establecer ícono inicial (cerrado)
+        self.toggle_password_button.setIcon(self.eye_closed_icon)
+        
         self.toggle_password_button.setFixedSize(50, 49)
         self.toggle_password_button.setCursor(Qt.PointingHandCursor)
-        self.toggle_password_button.setStyleSheet("""
+        
+        # Estilos inicial y focused para el botón
+        self.toggle_button_normal_style = """
             QToolButton {
                 border: 2px solid #555555;
                 border-left: none;
@@ -269,9 +351,38 @@ class LoginWidget(QWidget):
                 background-color: #424242;
             }
             QToolButton:pressed {
+                border: 2px solid #00A99D;
+                border-left: none;
                 background-color: #00A99D;
             }
-        """)
+        """
+        
+        self.toggle_button_focused_style = """
+            QToolButton {
+                border: 2px solid #00A99D;
+                border-left: none;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+                background-color: #333333;
+                font-size: 16px;
+                color: #FFFFFF;
+            }
+            QToolButton:hover {
+                background-color: #424242;
+            }
+            QToolButton:pressed {
+                border: 2px solid #00A99D;
+                border-left: none;
+                background-color: #00A99D;
+            }
+        """
+        
+        # Aplicar estilo inicial
+        self.toggle_password_button.setStyleSheet(self.toggle_button_normal_style)
+        
+        # Conectar eventos de focus del password_input
+        self.password_input.focusInEvent = self.on_password_focus_in
+        self.password_input.focusOutEvent = self.on_password_focus_out
         
         # Eventos para mostrar/ocultar contraseña
         self.toggle_password_button.pressed.connect(self.show_password)
@@ -413,10 +524,14 @@ class LoginWidget(QWidget):
     def show_password(self):
         """Muestra la contraseña en texto plano mientras se presiona el botón"""
         self.password_input.setEchoMode(QLineEdit.Normal)
+        # Cambiar ícono a ojo abierto
+        self.toggle_password_button.setIcon(self.eye_open_icon)
         
     def hide_password(self):
         """Oculta la contraseña cuando se suelta el botón"""
         self.password_input.setEchoMode(QLineEdit.Password)
+        # Cambiar ícono a ojo cerrado/tachado
+        self.toggle_password_button.setIcon(self.eye_closed_icon)
         
     def center_on_screen(self):
         """Centra la ventana en la pantalla"""
@@ -482,6 +597,44 @@ class LoginWidget(QWidget):
             self.close()
         else:
             super().keyPressEvent(event)
+
+    def on_password_focus_in(self, event):
+        """Se ejecuta cuando password_input recibe el focus"""
+        # Aplicar estilo con border azul al botón
+        self.toggle_password_button.setStyleSheet(self.toggle_button_focused_style)
+        # Llamar al evento original
+        QLineEdit.focusInEvent(self.password_input, event)
+
+    def on_password_focus_out(self, event):
+        """Se ejecuta cuando password_input pierde el focus"""
+        # Aplicar estilo normal al botón
+        self.toggle_password_button.setStyleSheet(self.toggle_button_normal_style)
+        # Llamar al evento original
+        QLineEdit.focusOutEvent(self.password_input, event)
+
+    def combo_show_popup(self):
+        """Sobrescribe el método showPopup para cambiar el ícono"""
+        self.dropdown_arrow_label.setPixmap(self.combo_arrow_up.pixmap(16, 16))
+        QComboBox.showPopup(self.user_type_combo)
+
+    def combo_hide_popup(self):
+        """Sobrescribe el método hidePopup para cambiar el ícono"""
+        self.dropdown_arrow_label.setPixmap(self.combo_arrow_down.pixmap(16, 16))
+        QComboBox.hidePopup(self.user_type_combo)
+
+    def combo_resize_event(self, event):
+        """Reposiciona la flecha cuando el combo se redimensiona"""
+        QComboBox.resizeEvent(self.user_type_combo, event)
+        self.dropdown_arrow_label.move(self.user_type_combo.width() - 25, 
+                                       (self.user_type_combo.height() - 16) // 2)
+
+    def on_combo_expanded(self):
+        """Se ejecuta cuando el combo box se expande"""
+        self.dropdown_arrow_label.setPixmap(self.combo_arrow_up.pixmap(16, 16))
+
+    def on_combo_collapsed(self):
+        """Se ejecuta cuando el combo box se colapsa"""
+        self.dropdown_arrow_label.setPixmap(self.combo_arrow_down.pixmap(16, 16))
 
 
 # Para pruebas independientes

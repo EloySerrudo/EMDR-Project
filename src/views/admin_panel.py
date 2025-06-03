@@ -335,7 +335,7 @@ class AdminPanel(QMainWindow):
         self.username = username
         
         self.setWindowTitle("EMDR Project - Panel de Administración")
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
         self.resize(1000, 700)
         
         # Centrar ventana en pantalla

@@ -56,7 +56,7 @@ class TherapistDashboard(QMainWindow):
         """Configura las propiedades básicas de la ventana"""
         self.setWindowTitle("EMDR Project - Dashboard Terapéutico")
         self.setFixedSize(600, 650)
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
         
         # Centrar ventana en pantalla
         self.center_on_screen()
@@ -487,16 +487,26 @@ class TherapistDashboard(QMainWindow):
             # Cerrar ventana anterior si existe
             if self.patient_manager_window:
                 self.patient_manager_window.close()
-            
+    
             # Crear nueva ventana del gestor de pacientes
             self.patient_manager_window = PatientManagerWidget(self.username)
+            
+            # Conectar señal personalizada para mostrar el dashboard cuando se cierre
+            self.patient_manager_window.window_closed.connect(self.show_dashboard_on_return)
+            
             self.patient_manager_window.showMaximized()
             
             # Ocultar el dashboard
             self.hide()
-            
+    
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo abrir el gestor de pacientes: {str(e)}")
+    
+    def show_dashboard_on_return(self):
+        """Muestra el dashboard cuando se regresa desde otra ventana"""
+        self.show()
+        self.raise_()
+        self.activateWindow()
     
     def logout(self):
         """Cierra la sesión actual y regresa al login"""

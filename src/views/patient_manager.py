@@ -1,5 +1,6 @@
 import sys
 import os
+import winsound
 from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -8,7 +9,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QScrollArea
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QFont, QIcon, QPixmap
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -52,7 +53,15 @@ class PatientDetailsDialog(QDialog):
         # Título con nombre del paciente
         if self.patient_data:
             title = QLabel(f"Información de {self.patient_data.get('nombre', '')} {self.patient_data.get('apellido_paterno', '')}")
-            title.setStyleSheet("font-size: 18px; font-weight: bold; color: #1565C0; padding: 10px;")
+            title.setStyleSheet("""
+                QLabel {
+                    font-size: 18px; 
+                    font-weight: bold; 
+                    color: #00A99D; 
+                    padding: 10px;
+                    background: transparent;
+                }
+            """)
             title.setAlignment(Qt.AlignCenter)
             layout.addWidget(title)
         
@@ -60,6 +69,12 @@ class PatientDetailsDialog(QDialog):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+        """)
         
         # Widget contenedor para el contenido
         content_widget = QWidget()
@@ -72,16 +87,18 @@ class PatientDetailsDialog(QDialog):
             QGroupBox {
                 font-weight: bold;
                 font-size: 14px;
-                border: 2px solid #E3F2FD;
+                border: 2px solid #00A99D;
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
+                background-color: #424242;
+                color: white;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 subcontrol-position: top left;
                 padding: 0 10px;
-                color: #1565C0;
+                color: #00A99D;
             }
         """)
         
@@ -104,16 +121,18 @@ class PatientDetailsDialog(QDialog):
             QGroupBox {
                 font-weight: bold;
                 font-size: 14px;
-                border: 2px solid #E8F5E8;
+                border: 2px solid #00A99D;
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
+                background-color: #424242;
+                color: white;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 subcontrol-position: top left;
                 padding: 0 10px;
-                color: #2E7D32;
+                color: #00A99D;
             }
         """)
         
@@ -125,11 +144,12 @@ class PatientDetailsDialog(QDialog):
         self.notes_display.setMaximumHeight(150)
         self.notes_display.setStyleSheet("""
             QTextEdit {
-                background-color: #FAFAFA;
-                border: 1px solid #E0E0E0;
+                background-color: #323232;
+                border: 1px solid #555555;
                 border-radius: 4px;
                 padding: 8px;
                 font-family: 'Segoe UI', Arial, sans-serif;
+                color: white;
             }
         """)
         
@@ -147,16 +167,18 @@ class PatientDetailsDialog(QDialog):
             QGroupBox {
                 font-weight: bold;
                 font-size: 14px;
-                border: 2px solid #FFF3E0;
+                border: 2px solid #00A99D;
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
+                background-color: #424242;
+                color: white;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 subcontrol-position: top left;
                 padding: 0 10px;
-                color: #F57C00;
+                color: #00A99D;
             }
         """)
         
@@ -178,15 +200,21 @@ class PatientDetailsDialog(QDialog):
         edit_button = QPushButton("Editar Datos")
         edit_button.setStyleSheet("""
             QPushButton {
-                background-color: #2196F3;
+                background-color: #00A99D;
                 color: white;
                 padding: 10px 20px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 13px;
+                border: 2px solid #00A99D;
             }
             QPushButton:hover {
-                background-color: #1976D2;
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
             }
         """)
         edit_button.clicked.connect(self.edit_patient)
@@ -195,57 +223,94 @@ class PatientDetailsDialog(QDialog):
         new_session_button = QPushButton("Nueva Sesión")
         new_session_button.setStyleSheet("""
             QPushButton {
-                background-color: #4CAF50;
+                background-color: #00A99D;
                 color: white;
                 padding: 10px 20px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 13px;
+                border: 2px solid #00A99D;
             }
             QPushButton:hover {
-                background-color: #388E3C;
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
             }
         """)
         new_session_button.clicked.connect(self.new_session)
         
         # Botón para cerrar
-        close_button = QPushButton("Cerrar")
-        close_button.setStyleSheet("""
+        cancel_button = QPushButton("Cancelar")
+        cancel_button.setStyleSheet("""
             QPushButton {
-                background-color: #757575;
+                background-color: #424242;
                 color: white;
                 padding: 10px 20px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 13px;
+                border: 2px solid #424242;
             }
             QPushButton:hover {
-                background-color: #616161;
+                background-color: #555555;
+                border: 2px solid #555555;
+            }
+            QPushButton:pressed {
+                background-color: #333333;
+                border: 2px solid #333333;
             }
         """)
-        close_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.accept)
         
         button_layout.addWidget(edit_button)
         button_layout.addWidget(new_session_button)
         button_layout.addStretch()
-        button_layout.addWidget(close_button)
+        button_layout.addWidget(cancel_button)
         
         layout.addLayout(button_layout)
+        
+        # Estilo global del diálogo
+        self.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #323232,
+                                          stop: 0.3 #2c2c2c,
+                                          stop: 0.6 #252525,
+                                          stop: 0.8 #1a1a1a,
+                                          stop: 1 #000000);
+                color: #FFFFFF;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+        """)
     
     def create_info_field(self, layout, label_text, value_text):
         """Crea un campo de información con etiqueta y valor"""
+        label = QLabel(label_text)
+        label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-weight: bold;
+                background: transparent;
+                font-size: 14px;
+            }
+        """)
+        
         value_label = QLabel(str(value_text))
         value_label.setStyleSheet("""
             QLabel {
-                background-color: #F5F5F5;
-                border: 1px solid #E0E0E0;
+                background-color: #323232;
+                border: 1px solid #555555;
                 border-radius: 4px;
                 padding: 8px;
                 font-weight: normal;
+                color: white;
             }
         """)
         value_label.setWordWrap(True)
-        layout.addRow(label_text, value_label)
+        layout.addRow(label, value_label)
     
     def load_session_history(self, layout):
         """Carga el historial de sesiones del paciente"""
@@ -254,7 +319,14 @@ class PatientDetailsDialog(QDialog):
             
             if not sessions:
                 no_sessions_label = QLabel("No hay sesiones registradas para este paciente.")
-                no_sessions_label.setStyleSheet("color: #757575; font-style: italic; padding: 10px;")
+                no_sessions_label.setStyleSheet("""
+                    QLabel {
+                        color: #AAAAAA; 
+                        font-style: italic; 
+                        padding: 10px;
+                        background: transparent;
+                    }
+                """)
                 layout.addWidget(no_sessions_label)
             else:
                 # Crear tabla para mostrar las sesiones
@@ -268,6 +340,31 @@ class PatientDetailsDialog(QDialog):
                 sessions_table.setSelectionBehavior(QTableWidget.SelectRows)
                 sessions_table.verticalHeader().setVisible(False)
                 sessions_table.setMaximumHeight(200)
+                sessions_table.setStyleSheet("""
+                    QTableWidget {
+                        background-color: #323232;
+                        alternate-background-color: #2a2a2a;
+                        border: 1px solid #555555;
+                        border-radius: 4px;
+                        color: white;
+                        gridline-color: #555555;
+                    }
+                    QHeaderView::section {
+                        background-color: #00A99D;
+                        padding: 8px;
+                        font-weight: bold;
+                        border: 1px solid #008C82;
+                        color: white;
+                    }
+                    QTableWidget::item {
+                        padding: 8px;
+                        border-bottom: 1px solid #555555;
+                    }
+                    QTableWidget::item:selected {
+                        background-color: #00A99D;
+                        color: white;
+                    }
+                """)
                 
                 # Llenar tabla con datos de sesiones
                 for i, session in enumerate(sessions):
@@ -283,7 +380,13 @@ class PatientDetailsDialog(QDialog):
                 
         except Exception as e:
             error_label = QLabel(f"Error al cargar sesiones: {str(e)}")
-            error_label.setStyleSheet("color: #F44336; padding: 10px;")
+            error_label.setStyleSheet("""
+                QLabel {
+                    color: #FF6B6B; 
+                    padding: 10px;
+                    background: transparent;
+                }
+            """)
             layout.addWidget(error_label)
     
     def edit_patient(self):
@@ -303,13 +406,17 @@ class PatientManagerWidget(QMainWindow):
     # Señal emitida cuando se selecciona un paciente
     patient_selected = Signal(int, str)  # ID del paciente, nombre completo
     
+    # Señal emitida cuando la ventana se cierra
+    window_closed = Signal()  # Nueva señal personalizada
+    
     def __init__(self, username=None):
         super().__init__()
         self.username = username
-        self.patients_data = []
         
         self.setWindowTitle("EMDR Project - Gestión de Pacientes")
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
         self.resize(800, 600)
+        self.patients_data = []
         
         self.setup_ui()
         self.load_patients()
@@ -328,22 +435,93 @@ class PatientManagerWidget(QMainWindow):
         # === HEADER ===
         header_frame = QFrame()
         header_frame.setFrameShape(QFrame.StyledPanel)
-        header_frame.setStyleSheet("background-color: #1565C0; border-radius: 8px;")
+        header_frame.setStyleSheet("""
+            QFrame {
+                background: qconicalgradient(cx: 0.5, cy: 0.5, angle: 0,
+                                           stop: 0 rgba(120, 255, 180, 0.9),
+                                           stop: 0.2 rgba(0, 230, 140, 0.8),
+                                           stop: 0.4 rgba(0, 169, 157, 0.85),
+                                           stop: 0.6 rgba(0, 140, 130, 0.8),
+                                           stop: 0.8 rgba(0, 200, 160, 0.85),
+                                           stop: 1 rgba(120, 255, 180, 0.9));
+                border-radius: 12px;
+                border-top: 2px solid rgba(200, 255, 220, 0.8);
+                border-left: 1px solid rgba(255, 255, 255, 0.6);
+                border-right: 1px solid rgba(0, 0, 0, 0.3);
+                border-bottom: 2px solid rgba(0, 0, 0, 0.4);
+                padding: 5px 20px;
+            }
+        """)
         
         header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(15, 15, 15, 15)
         
+        # Logo o título principal
+        logo_label = QLabel()
+        
+        # Intentar cargar logo desde recursos
+        logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        if logo_path.exists():
+            pixmap = QPixmap(str(logo_path))
+            pixmap = pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_label.setPixmap(pixmap)
+            logo_label.setAlignment(Qt.AlignCenter)
+            logo_label.setStyleSheet("""
+                QLabel {
+                    border: none;
+                    outline: none;
+                    background: transparent;
+                }
+            """)
+        else:
+            # Si no hay logo, usar texto estilizado
+            logo_label.setText("EMDR")
+            logo_label.setAlignment(Qt.AlignCenter)
+            logo_label.setStyleSheet("""
+                QLabel {
+                    color: white;
+                    font-size: 20px;
+                    font-weight: bold;
+                    background: transparent;
+                }
+            """)
+        
         title_label = QLabel("GESTIÓN DE PACIENTES")
-        title_label.setStyleSheet("color: white; font-size: 20px; font-weight: bold;")
+        title_label.setStyleSheet("""
+            QLabel {
+                color: white; 
+                font-size: 20px; 
+                font-weight: bold;
+                background: transparent;
+            }
+        """)
         
         if self.username:
-            user_label = QLabel(f"Terapeuta: {self.username}")
-            user_label.setStyleSheet("color: white; font-size: 14px;")
+            # Cargar datos del terapeuta para mostrar nombre completo
+            try:
+                therapist_data = DatabaseManager.get_therapist_by_username(self.username)
+                if therapist_data:
+                    nombre_completo = f"Lic. {therapist_data['nombre']} {therapist_data['apellido_paterno']}"
+                else:
+                    nombre_completo = self.username  # Fallback
+            except Exception:
+                nombre_completo = self.username  # Fallback en caso de error
             
+            user_label = QLabel(f"Terapeuta: {nombre_completo}")
+            user_label.setStyleSheet("""
+                QLabel {
+                    color: #003454; 
+                    font-size: 16px;
+                    background: transparent;
+                }
+            """)
+            
+            header_layout.addWidget(logo_label)
             header_layout.addWidget(title_label)
             header_layout.addStretch()
             header_layout.addWidget(user_label)
         else:
+            header_layout.addWidget(logo_label)
             header_layout.addWidget(title_label, 0, Qt.AlignCenter)
         
         main_layout.addWidget(header_frame)
@@ -351,25 +529,42 @@ class PatientManagerWidget(QMainWindow):
         # === BARRA DE BÚSQUEDA ===
         search_frame = QFrame()
         search_frame.setFrameShape(QFrame.StyledPanel)
-        search_frame.setStyleSheet("background-color: #F5F5F5; border-radius: 6px;")
+        search_frame.setStyleSheet("""
+            QFrame {
+                background-color: #424242; 
+                border-radius: 6px;
+                border: 1px solid #555555;
+            }
+        """)
         
         search_layout = QHBoxLayout(search_frame)
         search_layout.setContentsMargins(10, 10, 10, 10)
         
         search_label = QLabel("Buscar paciente:")
-        search_label.setStyleSheet("font-weight: bold;")
+        search_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                color: white;
+                background: transparent;
+            }
+        """)
         
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Escriba el nombre, apellido o ID del paciente...")
         self.search_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px;
-                border: 2px solid #E0E0E0;
+                border: 2px solid #555555;
                 border-radius: 4px;
                 font-size: 13px;
+                background-color: #323232;
+                color: white;
             }
             QLineEdit:focus {
-                border: 2px solid #2196F3;
+                border: 2px solid #00A99D;
+            }
+            QLineEdit::placeholder {
+                color: #AAAAAA;
             }
         """)
         self.search_input.textChanged.connect(self.filter_patients)
@@ -377,14 +572,20 @@ class PatientManagerWidget(QMainWindow):
         self.search_button = QPushButton("Buscar")
         self.search_button.setStyleSheet("""
             QPushButton {
-                background-color: #2196F3;
+                background-color: #00A99D;
                 color: white;
                 padding: 8px 16px;
                 border-radius: 4px;
                 font-weight: bold;
+                border: 2px solid #00A99D;
             }
             QPushButton:hover {
-                background-color: #1976D2;
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
             }
         """)
         self.search_button.clicked.connect(self.filter_patients)
@@ -411,27 +612,28 @@ class PatientManagerWidget(QMainWindow):
         # Estilo de la tabla
         self.patients_table.setStyleSheet("""
             QTableWidget {
-                background-color: white;
-                alternate-background-color: #F8F9FA;
-                border: 1px solid #E0E0E0;
+                background-color: #323232;
+                alternate-background-color: #2a2a2a;
+                border: 1px solid #555555;
                 border-radius: 6px;
-                gridline-color: #E0E0E0;
+                gridline-color: #555555;
+                color: white;
             }
             QHeaderView::section {
-                background-color: #E3F2FD;
+                background-color: #00A99D;
                 padding: 10px;
                 font-weight: bold;
                 border: 0;
-                color: #1565C0;
-                border-bottom: 2px solid #2196F3;
+                color: white;
+                border-bottom: 2px solid #008C82;
             }
             QTableWidget::item {
                 padding: 8px;
-                border-bottom: 1px solid #E0E0E0;
+                border-bottom: 1px solid #555555;
             }
             QTableWidget::item:selected {
-                background-color: #BBDEFB;
-                color: #0D47A1;
+                background-color: #00A99D;
+                color: white;
             }
         """)
         
@@ -457,19 +659,26 @@ class PatientManagerWidget(QMainWindow):
         self.details_button = QPushButton("Ver Detalles")
         self.details_button.setStyleSheet("""
             QPushButton {
-                background-color: #4CAF50;
+                background-color: #00A99D;
                 color: white;
                 padding: 10px 20px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 13px;
+                border: 2px solid #00A99D;
             }
             QPushButton:hover {
-                background-color: #388E3C;
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
             }
             QPushButton:disabled {
-                background-color: #CCCCCC;
-                color: #666666;
+                background-color: #555555;
+                border: 2px solid #555555;
+                color: #AAAAAA;
             }
         """)
         self.details_button.clicked.connect(self.show_patient_details)
@@ -479,50 +688,126 @@ class PatientManagerWidget(QMainWindow):
         refresh_button = QPushButton("Actualizar Lista")
         refresh_button.setStyleSheet("""
             QPushButton {
-                background-color: #FF9800;
+                background-color: #00A99D;
                 color: white;
                 padding: 10px 20px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 13px;
+                border: 2px solid #00A99D;
             }
             QPushButton:hover {
-                background-color: #F57C00;
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
             }
         """)
         refresh_button.clicked.connect(self.load_patients)
         
-        # Botón para cerrar
-        close_button = QPushButton("Cerrar")
-        close_button.setStyleSheet("""
+        # Botón para salir
+        exit_btn = QPushButton("Salir")
+        exit_btn.setFixedSize(134, 43)
+        exit_btn.setStyleSheet("""
             QPushButton {
-                background-color: #757575;
+                background-color: #424242;
                 color: white;
                 padding: 10px 20px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 13px;
+                border: 2px solid #424242;
             }
             QPushButton:hover {
-                background-color: #616161;
+                background-color: #555555;
+                border: 2px solid #555555;
+            }
+            QPushButton:pressed {
+                background-color: #333333;
+                border: 2px solid #333333;
             }
         """)
-        close_button.clicked.connect(self.close)
+        exit_btn.clicked.connect(self.exit_application)
         
+        # Botón para regresar al dashboard
+        back_btn = QPushButton("Regresar")
+        back_btn.setFixedSize(134, 43)
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #6c757d;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+                border: 2px solid #5a6268;
+            }
+            QPushButton:pressed {
+                background-color: #545b62;
+                border: 2px solid #545b62;
+            }
+        """)
+        back_btn.clicked.connect(self.return_to_dashboard)
+
         button_layout.addWidget(self.details_button)
         button_layout.addWidget(refresh_button)
         button_layout.addStretch()
-        button_layout.addWidget(close_button)
+        button_layout.addWidget(back_btn)
+        button_layout.addWidget(exit_btn)
         
         main_layout.addWidget(button_frame)
         
         # === BARRA DE ESTADO ===
+        footer_layout = QHBoxLayout()
+        
         self.status_label = QLabel("Cargando pacientes...")
-        self.status_label.setStyleSheet("color: #666666; font-style: italic;")
-        main_layout.addWidget(self.status_label)
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #AAAAAA; 
+                font-style: italic;
+                background: transparent;
+            }
+        """)
+        
+        footer_label = QLabel("Sistema de Terapia EMDR - Versión 1.0")
+        footer_label.setStyleSheet("""
+            QLabel {
+                color: #AAAAAA;
+                font-size: 12px;
+                font-style: italic;
+                background: transparent;
+            }
+        """)
+        
+        footer_layout.addWidget(self.status_label)
+        footer_layout.addStretch()
+        footer_layout.addWidget(footer_label)
+        footer_layout.addStretch()
+        
+        main_layout.addLayout(footer_layout)
         
         # Conectar selección de tabla
         self.patients_table.selectionModel().selectionChanged.connect(self.on_selection_changed)
+        
+        # Estilo global de la ventana
+        self.setStyleSheet("""
+            QMainWindow {
+                font-family: 'Segoe UI', Arial, sans-serif;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #323232,
+                                          stop: 0.3 #2c2c2c,
+                                          stop: 0.6 #252525,
+                                          stop: 0.8 #1a1a1a,
+                                          stop: 1 #000000);
+                color: #FFFFFF;
+            }
+        """)
     
     def load_patients(self):
         """Carga la lista de pacientes desde la base de datos"""
@@ -619,6 +904,127 @@ class PatientManagerWidget(QMainWindow):
             QMessageBox.warning(self, "Error", "ID de paciente inválido")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al mostrar detalles: {str(e)}")
+
+    def exit_application(self):
+        """Cierra completamente la aplicación"""
+        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Salir")
+        msg_box.setText("¿Está seguro de que desea salir de la aplicación?")
+        msg_box.setIcon(QMessageBox.Question)
+        
+        # Crear botones personalizados
+        yes_button = msg_box.addButton("Sí", QMessageBox.YesRole)
+        no_button = msg_box.addButton("No", QMessageBox.NoRole)
+        msg_box.setDefaultButton(no_button)
+        
+        # Aplicar estilo personalizado
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: #323232;
+                color: #FFFFFF;
+                border-top: none;
+                border-left: 2px solid #555555;
+                border-right: 2px solid #555555;
+                border-bottom: 2px solid #555555;
+            }
+            QMessageBox QLabel {
+                color: #FFFFFF;
+                background: transparent;
+                font-size: 14px;
+            }
+            QMessageBox QPushButton {
+                background-color: #00A99D;
+                color: white;
+                border: 2px solid #00A99D;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 50px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QMessageBox QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+        """)
+        
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == yes_button:
+            # Cerrar aplicación completamente
+            QApplication.quit()
+
+    def return_to_dashboard(self):
+        """Regresa al dashboard del terapeuta"""
+        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Regresar")
+        msg_box.setText("¿Está seguro de que desea regresar al Control de Usuario?")
+        msg_box.setIcon(QMessageBox.Question)
+        
+        # Crear botones personalizados
+        yes_button = msg_box.addButton("Sí", QMessageBox.YesRole)
+        no_button = msg_box.addButton("No", QMessageBox.NoRole)
+        msg_box.setDefaultButton(no_button)
+        
+        # Aplicar estilo personalizado
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: #323232;
+                color: #FFFFFF;
+                border-top: none;
+                border-left: 2px solid #555555;
+                border-right: 2px solid #555555;
+                border-bottom: 2px solid #555555;
+            }
+            QMessageBox QLabel {
+                color: #FFFFFF;
+                background: transparent;
+                font-size: 14px;
+            }
+            QMessageBox QPushButton {
+                background-color: #00A99D;
+                color: white;
+                border: 2px solid #00A99D;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 50px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QMessageBox QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+        """)
+        
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == yes_button:
+            try:
+                # Emitir señal antes de cerrar
+                self.window_closed.emit()
+                
+                # Cerrar la ventana actual
+                self.close()
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"No se pudo regresar al dashboard: {str(e)}")
+
+    def closeEvent(self, event):
+        """Maneja el evento de cierre de la ventana"""
+        # Emitir señal cuando la ventana se cierre
+        self.window_closed.emit()
+        event.accept()
 
 
 # Para pruebas independientes
