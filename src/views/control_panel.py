@@ -260,17 +260,10 @@ class EMDRControlPanel(QMainWindow):
         
         # Ocultar los botones redundantes de escaneo en los componentes
         self.emdr_controller.btn_scan_usb.hide()
-        self.sensor_monitor.btn_scan_usb.hide()
         
         # Mantener las conexiones para centralizar la lógica en scan_devices
         self.emdr_controller.scan_usb_click = self.scan_devices
         self.sensor_monitor.check_slave_connections = self.scan_devices
-        
-        self.sensor_monitor.btn_exit.hide()  # Ocultar botón de salida del monitor de sensores
-        self.sensor_monitor.btn_save.hide()  # Ocultar botón de guardar datos del monitor de sensores
-        
-        # Ocultar el botón de inicio/detención de adquisición ya que ahora es controlado por el checkbox
-        self.sensor_monitor.btn_start_stop.hide()
         
         # Mantener registro de dispositivos conectados
         self.connected_devices = []
@@ -281,14 +274,10 @@ class EMDRControlPanel(QMainWindow):
         
         # Ocultar los botones redundantes de escaneo en los componentes
         self.emdr_controller.btn_scan_usb.hide()  # Ocultar en lugar de desconectar
-        self.sensor_monitor.btn_scan_usb.hide()   # Ocultar en lugar de desconectar
         
         # Mantener las conexiones para centralizar la lógica en scan_devices
         self.emdr_controller.scan_usb_click = self.scan_devices
         self.sensor_monitor.check_slave_connections = self.scan_devices
-        
-        self.sensor_monitor.btn_exit.hide()  # Ocultar botón de salida del monitor de sensores
-        self.sensor_monitor.btn_save.hide()  # Ocultar botón de guardar datos del monitor de sensores
         
         # Cargar pacientes por defecto
         self.load_patients()

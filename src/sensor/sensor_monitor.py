@@ -111,115 +111,193 @@ class SensorMonitor(QWidget):
         self.device_status_label.setMaximumHeight(25)  # Limitar altura
         main_layout.addWidget(self.device_status_label)
         
-        # 1. Gráfica EOG (superior) - INTERCAMBIADA
-        self.eog_plot_widget = pg.PlotWidget()
-        self.eog_plot_widget.setLabel('left', 'EOG')
-        self.eog_plot_widget.setLabel('bottom', '')  # Sin etiqueta inferior para las dos primeras gráficas
-        self.eog_plot_widget.setYRange(-50000, 50000)
-        self.eog_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
-        self.eog_plot_widget.setBackground('#f8f9fa')
-        self.eog_plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.eog_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
+        # ===== CREAR LAYOUT ESPECÍFICO PARA LAS GRÁFICAS =====
+        graphs_layout = QVBoxLayout()
+        graphs_layout.setContentsMargins(2, 2, 2, 2)  # Márgenes mínimos
+        graphs_layout.setSpacing(1)  # Espaciado mínimo entre gráficas
         
-        # Configurar ticks EOG
-        x_axis_eog = self.eog_plot_widget.getAxis('bottom')
-        x_axis_eog.setStyle(showValues=False)  # Ocultar valores para ahorrar espacio
-        x_axis_eog.setTickSpacing(major=1, minor=0.5)
+        GRAPH_HEIGHT = 120  # Altura uniforme para todas las gráficas
         
-        # 2. Gráfica BPM (medio) - SE MANTIENE EN EL MEDIO
-        self.bpm_plot_widget = pg.PlotWidget()
-        self.bpm_plot_widget.setLabel('left', 'BPM')
-        self.bpm_plot_widget.setLabel('bottom', '')
-        self.bpm_plot_widget.setYRange(40, 150)  # Rango típico para BPM humano
-        self.bpm_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
-        self.bpm_plot_widget.setBackground('#f8f9fa') 
-        self.bpm_plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.bpm_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
+        # ===== 1. GRÁFICA EOG (SUPERIOR) =====
+        self.eog_plot_widget = self.create_eog_plot(display_time, GRAPH_HEIGHT)
+        graphs_layout.addWidget(self.eog_plot_widget)
         
-        # Configurar ticks BPM
-        x_axis_bpm = self.bpm_plot_widget.getAxis('bottom')
-        x_axis_bpm.setStyle(showValues=False)
-        x_axis_bpm.setTickSpacing(major=1, minor=0.5)
+        # ===== 2. GRÁFICA BPM (MEDIO) =====
+        self.bpm_plot_widget = self.create_bpm_plot(display_time, GRAPH_HEIGHT)
+        graphs_layout.addWidget(self.bpm_plot_widget)
         
-        # 3. Gráfica PPG filtrada (inferior) - INTERCAMBIADA
-        self.ppg_plot_widget = pg.PlotWidget()
-        self.ppg_plot_widget.setLabel('left', 'PPG')
-        self.ppg_plot_widget.setLabel('bottom', 'Tiempo (s)')  # Añadir etiqueta de tiempo al gráfico inferior
-        self.ppg_plot_widget.setYRange(-35000, 35000)
-        self.ppg_plot_widget.setXRange(-display_time-0.02, 0.01, padding=0)
-        self.ppg_plot_widget.setBackground('#f8f9fa')  
-        self.ppg_plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.ppg_plot_widget.setMaximumHeight(120)  # Ajustar altura máxima
+        # ===== 3. GRÁFICA PPG (INFERIOR) =====
+        self.ppg_plot_widget = self.create_ppg_plot(display_time, GRAPH_HEIGHT + 40)
+        graphs_layout.addWidget(self.ppg_plot_widget)
         
-        # Configurar ticks PPG - este sí muestra valores por ser el inferior
-        x_axis_ppg = self.ppg_plot_widget.getAxis('bottom')
-        x_axis_ppg.setTickSpacing(major=1, minor=0.5)
+        # ===== CREAR CURVAS DE DATOS =====
+        self.create_data_curves()
         
-        # Create curves for data - mantener colores consistentes
-        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('#2196F3', width=2))  # Azul para EOG
-        self.bpm_curve = self.bpm_plot_widget.plot(pen=pg.mkPen('#FF9800', width=2))  # Naranja para BPM
-        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('#E91E63', width=2))  # Rosa/rojo para PPG
+        # ===== AÑADIR LEYENDAS Y ELEMENTOS ADICIONALES =====
+        self.add_legends_and_extras(display_time)
         
-        # Añadir leyendas compactas
-        eog_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
-        eog_legend.setParentItem(self.eog_plot_widget.graphicsItem())
-        eog_legend.addItem(self.eog_curve, "Movimiento Ocular")
+        # Añadir plots a main layout
+        # factor de expansión 1 para ocupar todo el espacio disponible
+        main_layout.addLayout(graphs_layout, 1)  # Darle expansión máxima
         
-        # Añadir texto para mostrar el valor de BPM actual
-        self.bpm_text = pg.TextItem(text="BPM: --", color=(0, 0, 0), anchor=(0, 0))
-        self.bpm_text.setPos(-display_time * 0.95, 160)
-        self.bpm_plot_widget.addItem(self.bpm_text)
-        
-        bpm_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
-        bpm_legend.setParentItem(self.bpm_plot_widget.graphicsItem())
-        bpm_legend.addItem(self.bpm_curve, "Frecuencia Cardíaca")
-        
-        ppg_legend = pg.LegendItem(offset=(70, 10), labelTextSize='8pt')
-        ppg_legend.setParentItem(self.ppg_plot_widget.graphicsItem())
-        ppg_legend.addItem(self.ppg_curve, "Señal PPG")
-        
-        # Add plots to layout en el nuevo orden
-        main_layout.addWidget(self.eog_plot_widget)
-        main_layout.addWidget(self.bpm_plot_widget)
-        main_layout.addWidget(self.ppg_plot_widget)
-        
-        # Crear un layout horizontal para los botones
-        button_layout = QHBoxLayout()
-        button_layout.setContentsMargins(3, 0, 3, 3)
-        
-        # Botón de Iniciar/Detener
-        self.btn_start_stop = QPushButton("Iniciar Adquisición")
-        self.btn_start_stop.setMaximumHeight(25)
-        self.btn_start_stop.clicked.connect(self.toggle_acquisition)
-        button_layout.addWidget(self.btn_start_stop)
-        
-        # Botón de Escanear Dispositivos
-        self.btn_scan_usb = QPushButton("Escanear")
-        self.btn_scan_usb.setMaximumHeight(25)
-        self.btn_scan_usb.clicked.connect(self.check_slave_connections)
-        button_layout.addWidget(self.btn_scan_usb)
-        
-        # Botón de Guardar Datos
-        self.btn_save = QPushButton("Guardar")
-        self.btn_save.setMaximumHeight(25)
-        self.btn_save.clicked.connect(self.save_data_to_csv)
-        button_layout.addWidget(self.btn_save)
-        
-        # Botón de Salir (solo visible si se ejecuta como ventana independiente)
-        if not self.parent():
+        # layout horizontal para los botones 
+        # (solo visible si se ejecuta como ventana independiente)
+        if self.parent():
+            # Crear un layout horizontal para los botones
+            button_layout = QHBoxLayout()
+            button_layout.setContentsMargins(3, 0, 3, 3)
+            
+            # Botón de Iniciar/Detener
+            self.btn_start_stop = QPushButton("Iniciar Adquisición")
+            self.btn_start_stop.setMaximumHeight(25)
+            self.btn_start_stop.clicked.connect(self.toggle_acquisition)
+            button_layout.addWidget(self.btn_start_stop)
+            
+            # Botón de Escanear Dispositivos
+            self.btn_scan_usb = QPushButton("Escanear")
+            self.btn_scan_usb.setMaximumHeight(25)
+            self.btn_scan_usb.clicked.connect(self.check_slave_connections)
+            button_layout.addWidget(self.btn_scan_usb)
+            
+            # Botón de Guardar Datos
+            self.btn_save = QPushButton("Guardar")
+            self.btn_save.setMaximumHeight(25)
+            self.btn_save.clicked.connect(self.save_data_to_csv)
+            button_layout.addWidget(self.btn_save)
+            
+            # Botón para mostrar tamaños (para depuración)
+            self.btn_show_sizes = QPushButton("Mostrar Tamaños")
+            self.btn_show_sizes.setMaximumHeight(25)
+            self.btn_show_sizes.clicked.connect(self.print_widget_sizes)
+            button_layout.addWidget(self.btn_show_sizes)
+            
+            # Botón de Salir
             self.btn_exit = QPushButton("Salir")
             self.btn_exit.setMaximumHeight(25)
             self.btn_exit.clicked.connect(self.close)
             button_layout.addWidget(self.btn_exit)
-        
-        # Añadir el layout de botones al layout principal
-        main_layout.addLayout(button_layout)
+            
+            # Añadir el layout de botones al layout principal
+            main_layout.addLayout(button_layout)
         
         # Setup timer for updating plot
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_plot)
         self.timer.start(50)  # 50ms refresh rate (20 FPS)
     
+    def configure_y_axis_spacing(self, plot_widget, label_text, axis_width=35):
+        """Configurar el espaciado del eje Y de forma consistente"""
+        y_axis = plot_widget.getAxis('left')
+        
+        # Reducir ancho del eje
+        y_axis.setWidth(axis_width)
+        
+        # Configurar estilo del eje
+        y_axis.setStyle(
+            tickTextOffset=3,      # Distancia del texto del tick al eje
+            autoExpandTextSpace=False  # No expandir automáticamente
+        )
+        
+        # Configurar el label
+        plot_widget.setLabel('left', label_text, size='10pt')
+        
+        return y_axis
+
+    def create_eog_plot(self, display_time, height):
+        """Crear y configurar la gráfica EOG"""
+        eog_plot = pg.PlotWidget()
+        eog_plot.setLabel('bottom', '')  # Sin etiqueta inferior
+        eog_plot.setYRange(-50000, 50000)
+        eog_plot.setXRange(-display_time-0.02, 0.01, padding=0)
+        eog_plot.setBackground('#f8f9fa')
+        eog_plot.showGrid(x=True, y=True, alpha=0.3)
+        eog_plot.setFixedHeight(height)
+        
+        # Configurar eje X
+        x_axis = eog_plot.getAxis('bottom')
+        x_axis.setStyle(showValues=False)  # Ocultar valores para ahorrar espacio
+        x_axis.setTickSpacing(major=1, minor=0.5)
+        
+        # Configurar eje Y con espaciado personalizado
+        self.configure_y_axis_spacing(eog_plot, 'EOG', axis_width=60)
+        
+        # Reducir márgenes del plot
+        eog_plot.getPlotItem().getViewBox().setDefaultPadding(50)
+        
+        return eog_plot
+
+    def create_bpm_plot(self, display_time, height):
+        """Crear y configurar la gráfica BPM"""
+        bpm_plot = pg.PlotWidget()
+        bpm_plot.setLabel('bottom', '')  # Sin etiqueta inferior
+        bpm_plot.setYRange(40, 150)  # Rango típico para BPM humano
+        bpm_plot.setXRange(-display_time-0.02, 0.01, padding=0)
+        bpm_plot.setBackground('#f8f9fa')
+        bpm_plot.showGrid(x=True, y=True, alpha=0.3)
+        bpm_plot.setFixedHeight(height)
+        
+        # Configurar eje X
+        x_axis = bpm_plot.getAxis('bottom')
+        x_axis.setStyle(showValues=False)  # Ocultar valores para ahorrar espacio
+        x_axis.setTickSpacing(major=1, minor=0.5)
+        
+        # Configurar eje Y con espaciado personalizado
+        self.configure_y_axis_spacing(bpm_plot, 'BPM', axis_width=60)
+        
+        # Reducir márgenes del plot
+        bpm_plot.getPlotItem().getViewBox().setDefaultPadding(50)
+        
+        return bpm_plot
+
+    def create_ppg_plot(self, display_time, height):
+        """Crear y configurar la gráfica PPG"""
+        ppg_plot = pg.PlotWidget()
+        ppg_plot.setLabel('bottom', 'Tiempo (s)', size='10pt')  # Etiqueta de tiempo solo en la inferior
+        ppg_plot.setYRange(-35000, 35000)
+        ppg_plot.setXRange(-display_time-0.02, 0.01, padding=0)
+        ppg_plot.setBackground('#f8f9fa')
+        ppg_plot.showGrid(x=True, y=True, alpha=0.3)
+        ppg_plot.setFixedHeight(height)
+        
+        # Configurar ejes - este sí muestra valores por ser el inferior
+        x_axis = ppg_plot.getAxis('bottom')
+        x_axis.setTickSpacing(major=1, minor=0.5)
+        
+        # Configurar eje Y con espaciado personalizado
+        self.configure_y_axis_spacing(ppg_plot, 'PPG', axis_width=60)
+        
+        # Reducir márgenes del plot
+        ppg_plot.getPlotItem().getViewBox().setDefaultPadding(50)
+        
+        return ppg_plot
+
+    def create_data_curves(self):
+        """Crear las curvas de datos con colores consistentes"""
+        # Curvas con colores específicos y líneas más finas para mejor rendimiento
+        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('#2196F3', width=1.5))  # Azul para EOG
+        self.bpm_curve = self.bpm_plot_widget.plot(pen=pg.mkPen('#FF9800', width=1.5))  # Naranja para BPM
+        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('#E91E63', width=1.5))  # Rosa/rojo para PPG
+
+    def add_legends_and_extras(self, display_time):
+        """Añadir leyendas y elementos adicionales a las gráficas"""
+        # Leyendas compactas con tamaño de texto reducido
+        eog_legend = pg.LegendItem(offset=(60, 8), labelTextSize='8pt')
+        eog_legend.setParentItem(self.eog_plot_widget.graphicsItem())
+        eog_legend.addItem(self.eog_curve, "Movimiento Ocular")
+        
+        # Texto para mostrar el valor de BPM actual
+        self.bpm_text = pg.TextItem(text="BPM: --", color=(0, 0, 0), anchor=(0, 0))
+        self.bpm_text.setPos(-display_time * 0.95, 140)
+        self.bpm_plot_widget.addItem(self.bpm_text)
+        
+        bpm_legend = pg.LegendItem(offset=(60, 8), labelTextSize='8pt')
+        bpm_legend.setParentItem(self.bpm_plot_widget.graphicsItem())
+        bpm_legend.addItem(self.bpm_curve, "Frecuencia Cardíaca")
+        
+        ppg_legend = pg.LegendItem(offset=(60, 8), labelTextSize='8pt')
+        ppg_legend.setParentItem(self.ppg_plot_widget.graphicsItem())
+        ppg_legend.addItem(self.ppg_curve, "Señal PPG")
+
     def toggle_acquisition(self):
         """Toggle between start and stop acquisition"""
         if self.running:
@@ -613,6 +691,37 @@ class SensorMonitor(QWidget):
             self.timer.stop()
         if len(self.idx) > 0:
             self.save_data_to_csv()
+    
+    def print_widget_sizes(self):
+        """Imprimir los tamaños actuales de los widgets de gráficas con información detallada"""
+        print("\n--- Información de tamaños de widgets ---")
+        
+        # EOG Widget
+        eog_size = self.eog_plot_widget.size()
+        eog_hint = self.eog_plot_widget.sizeHint()
+        print(f"EOG Plot Widget:")
+        print(f"  Tamaño actual: {eog_size.width()} x {eog_size.height()}")
+        print(f"  Altura: {eog_hint.height()}")
+        
+        # BPM Widget  
+        bpm_size = self.bpm_plot_widget.size()
+        bpm_hint = self.bpm_plot_widget.sizeHint()
+        print(f"BPM Plot Widget:")
+        print(f"  Tamaño actual: {bpm_size.width()} x {bpm_size.height()}")
+        print(f"  Altura: {bpm_hint.height()}")
+        
+        # PPG Widget
+        ppg_size = self.ppg_plot_widget.size()
+        ppg_hint = self.ppg_plot_widget.sizeHint()
+        print(f"PPG Plot Widget:")
+        print(f"  Tamaño actual: {ppg_size.width()} x {ppg_size.height()}")
+        print(f"  Altura: {ppg_hint.height()}")
+        
+        # Información adicional
+        total_height = eog_size.height() + bpm_size.height() + ppg_size.height()
+        print(f"\nAltura total de gráficas: {total_height}")
+        print(f"Altura promedio por gráfica: {total_height / 3:.1f}")
+        print("----------------------------------------\n")
 
 
 # Solo cuando se ejecuta como aplicación independiente
