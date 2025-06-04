@@ -200,10 +200,6 @@ class Devices():
             cls._current_left_sound.set_volume(cls._current_volume)
             cls._current_right_sound.set_volume(cls._current_volume)
             
-            print(f"Sonidos WAV cargados exitosamente:")
-            print(f"  Izquierdo: {left_path.name}")
-            print(f"  Derecho: {right_path.name}")
-            
             return True
             
         except Exception as e:
@@ -240,7 +236,6 @@ class Devices():
             # Formato WAV: (nombre, descripción, archivo_izq, archivo_der)
             name, description, left_file, right_file = tone_data
             
-            print(f"Configurando tono WAV: {name}")
             success = cls.load_wav_sounds(left_file, right_file)
             
             if not success:
