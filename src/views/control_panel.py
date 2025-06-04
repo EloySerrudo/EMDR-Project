@@ -36,7 +36,7 @@ class EMDRControlPanel(QMainWindow):
         
         self.setWindowTitle(f"EMDR Project - Dashboard Terapéutico")
         # Ajustar el tamaño inicial para pantallas más pequeñas
-        self.resize(1000, 700)
+        # self.resize(1364, 690) # Este ajuste da como resultado una ventana real de 1366 x 722
         
         # Widget central
         central_widget = QWidget()
@@ -258,26 +258,12 @@ class EMDRControlPanel(QMainWindow):
         self.emdr_controller.device_status_label.hide()
         self.sensor_monitor.device_status_label.hide()
         
-        # Ocultar los botones redundantes de escaneo en los componentes
-        self.emdr_controller.btn_scan_usb.hide()
-        
         # Mantener las conexiones para centralizar la lógica en scan_devices
         self.emdr_controller.scan_usb_click = self.scan_devices
         self.sensor_monitor.check_slave_connections = self.scan_devices
         
         # Mantener registro de dispositivos conectados
         self.connected_devices = []
-        
-        # Simplificar la barra de estado ocultando la que muestran ambos componentes
-        self.emdr_controller.device_status_label.hide()
-        self.sensor_monitor.device_status_label.hide()
-        
-        # Ocultar los botones redundantes de escaneo en los componentes
-        self.emdr_controller.btn_scan_usb.hide()  # Ocultar en lugar de desconectar
-        
-        # Mantener las conexiones para centralizar la lógica en scan_devices
-        self.emdr_controller.scan_usb_click = self.scan_devices
-        self.sensor_monitor.check_slave_connections = self.scan_devices
         
         # Cargar pacientes por defecto
         self.load_patients()
@@ -840,3 +826,15 @@ class EMDRControlPanel(QMainWindow):
                 "Error de registro",
                 f"No se pudo registrar el paciente: {str(e)}"
             )
+
+# Para pruebas independientes
+if __name__ == "__main__":
+    app = QApplication([])
+    
+    # Crear dashboard de prueba (necesita un username válido en la BD)
+    control_panel = EMDRControlPanel("Lic. Margarita Valdivia")  # Usar el usuario de ejemplo
+    control_panel.setGeometry(100, 100, 1364, 690) # Este ajuste da como resultado una ventana real de 1366 x 722
+    
+    control_panel.show()
+    
+    sys.exit(app.exec())

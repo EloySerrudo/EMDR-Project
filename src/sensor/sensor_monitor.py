@@ -101,15 +101,15 @@ class SensorMonitor(QWidget):
     def setup_ui(self, display_time):
         """Setup the user interface with PyQtGraph plots"""
         # Layout principal (ahora se aplica directamente al QWidget)
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(3)  # Reducir spacing para aprovechar espacio vertical
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(3)  # Reducir spacing para aprovechar espacio vertical
         
         # Device status section
         self.device_status_label = QLabel("Estado de dispositivos: Desconocido")
-        self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 3px;")
-        self.device_status_label.setMaximumHeight(25)  # Limitar altura
-        main_layout.addWidget(self.device_status_label)
+        self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+        self.device_status_label.setFixedHeight(35)  # Altura fija de 35 píxeles
+        self.main_layout.addWidget(self.device_status_label)
         
         # ===== CREAR LAYOUT ESPECÍFICO PARA LAS GRÁFICAS =====
         graphs_layout = QVBoxLayout()
@@ -137,8 +137,7 @@ class SensorMonitor(QWidget):
         self.add_legends_and_extras(display_time)
         
         # Añadir plots a main layout
-        # factor de expansión 1 para ocupar todo el espacio disponible
-        main_layout.addLayout(graphs_layout, 1)  # Darle expansión máxima
+        self.main_layout.addLayout(graphs_layout)
         
         # layout horizontal para los botones 
         # (solo visible si se ejecuta como ventana independiente)
@@ -178,8 +177,11 @@ class SensorMonitor(QWidget):
             button_layout.addWidget(self.btn_exit)
             
             # Añadir el layout de botones al layout principal
-            main_layout.addLayout(button_layout)
+            self.main_layout.addLayout(button_layout)
         
+        # ===== AGREGAR SPACER FLEXIBLE AL FINAL =====
+        self.main_layout.addStretch()  # Para que sea este espacio el que crezca
+    
         # Setup timer for updating plot
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_plot)
@@ -738,8 +740,8 @@ if __name__ == "__main__":
     monitor_widget = SensorMonitor(parent=main_window)
     main_window.setCentralWidget(monitor_widget)
     
-    # Maximizar ventana para mejor visualización
-    main_window.showMaximized()
+    # Mostrar ventana y ejecutar aplicación
+    main_window.show()
     
     # Cuando se cierra la ventana principal, asegurar la limpieza
     app.aboutToQuit.connect(monitor_widget.cleanup)

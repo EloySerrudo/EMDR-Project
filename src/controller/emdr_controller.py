@@ -134,6 +134,9 @@ class EMDRControllerWidget(QWidget):
         top_button_row.addWidget(self.btn_stop)
         top_button_row.addWidget(self.btn_pause)
         
+        # Añadir la primer fila (botones) al layout de botones
+        button_layout.addLayout(top_button_row)
+        
         # Añadir checkbox para capturar señales
         self.chk_capture_signals = QCheckBox("¿Capturar señales?")
         self.chk_capture_signals.setStyleSheet("""
@@ -148,15 +151,18 @@ class EMDRControllerWidget(QWidget):
         capture_checkbox_row.addWidget(self.chk_capture_signals)
         capture_checkbox_row.addItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
         
-        # Crear el botón Escanear en su propia fila
-        self.btn_scan_usb = CustomButton(4, 0, 'Escanear', self.scan_usb_click)
-        scan_button_row = QHBoxLayout()
-        scan_button_row.addWidget(self.btn_scan_usb)
-        
-        # Añadir todas las filas al layout de botones
-        button_layout.addLayout(top_button_row)
+        # Añadir la segunda fila (checkbox) al layout de botones
         button_layout.addLayout(capture_checkbox_row)
-        button_layout.addLayout(scan_button_row)
+        
+        # (solo visible si se ejecuta como ventana independiente)
+        if self.parent():
+            # Crear el botón Escanear en su propia fila
+            self.btn_scan_usb = CustomButton(4, 0, 'Escanear', self.scan_usb_click)
+            scan_button_row = QHBoxLayout()
+            scan_button_row.addWidget(self.btn_scan_usb)
+            
+            # Añadir la tercera fila (botón Escanear) al layout de botones
+            button_layout.addLayout(scan_button_row)
         
         # Añadir el contenedor de botones al layout principal
         self.main_layout.addWidget(button_container)
@@ -971,7 +977,7 @@ if __name__ == "__main__":
     # Crear ventana principal para modo independiente
     main_window = QMainWindow()
     main_window.setWindowTitle("EMDR Controller")
-    main_window.setGeometry(100, 100, 480, 320)
+    main_window.setGeometry(100, 100, 480, 700)
     
     # Crear el widget del controlador
     controller = EMDRControllerWidget(parent=main_window)
