@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime
 
 # PyQtGraph y PySide6 imports
-from PySide6.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
 from PySide6.QtCore import QTimer, Qt, Signal, QObject
 import pyqtgraph as pg
 
@@ -99,36 +99,142 @@ class SensorMonitor(QWidget):
         self.setup_ui(display_time)
     
     def setup_ui(self, display_time):
-        """Setup the user interface with PyQtGraph plots"""
-        # Layout principal (ahora se aplica directamente al QWidget)
-        self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(3)  # Reducir spacing para aprovechar espacio vertical
+        """Configura la interfaz de usuario del monitor"""
+        # Layout principal
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(5)
         
-        # Device status section
-        self.device_status_label = QLabel("Estado de dispositivos: Desconocido")
-        self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
-        self.device_status_label.setFixedHeight(35)  # Altura fija de 35 píxeles
-        self.main_layout.addWidget(self.device_status_label)
+        # ===== HEADER CON CONTROLES =====
+        if self.parent():
+            header_frame = QFrame()
+            header_frame.setFrameShape(QFrame.StyledPanel)
+            header_frame.setStyleSheet("""
+                QFrame {
+                    background: qconicalgradient(cx: 0.5, cy: 0.5, angle: 0,
+                                            stop: 0 rgba(120, 255, 180, 0.3),
+                                            stop: 0.5 rgba(0, 169, 157, 0.4),
+                                            stop: 1 rgba(120, 255, 180, 0.3));
+                    border-radius: 8px;
+                    border: 1px solid rgba(0, 140, 130, 0.6);
+                    padding: 8px;
+                    margin: 2px;
+                }
+            """)
+            header_layout = QHBoxLayout(header_frame)
+            header_layout.setContentsMargins(10, 6, 10, 6)
+            
+            # Título del monitor
+            title_label = QLabel("MONITOR DE BIOSEÑALES")
+            title_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 14px;
+                    font-weight: bold;
+                    background: transparent;
+                    padding: 4px;
+                }
+            """)
+            header_layout.addWidget(title_label)
+            
+            header_layout.addStretch()
+            
+            # Botón de control de adquisición con estilo moderno
+            self.btn_start_stop = QPushButton("Iniciar Adquisición")
+            self.btn_start_stop.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #66BB6A,
+                                            stop: 1 #4CAF50);
+                    color: white;
+                    border: 2px solid #4CAF50;
+                    border-radius: 8px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    min-width: 140px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #81C784,
+                                            stop: 1 #66BB6A);
+                    border: 2px solid #66BB6A;
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #4CAF50,
+                                            stop: 1 #388E3C);
+                    border: 2px solid #388E3C;
+                }
+                QPushButton:disabled {
+                    background-color: #555555;
+                    border: 2px solid #555555;
+                    color: #888888;
+                }
+            """)
+            self.btn_start_stop.clicked.connect(self.toggle_acquisition)
+            header_layout.addWidget(self.btn_start_stop)
+            
+            # Botón para guardar datos
+            save_btn = QPushButton("Guardar CSV")
+            save_btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #42A5F5,
+                                            stop: 1 #2196F3);
+                    color: white;
+                    border: 2px solid #2196F3;
+                    border-radius: 8px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    min-width: 120px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #64B5F6,
+                                            stop: 1 #42A5F5);
+                    border: 2px solid #42A5F5;
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #2196F3,
+                                            stop: 1 #1976D2);
+                    border: 2px solid #1976D2;
+                }
+            """)
+            save_btn.clicked.connect(self.save_data_to_csv)
+            header_layout.addWidget(save_btn)
+            
+            main_layout.addWidget(header_frame)
         
+        # ===== ÁREA DE GRÁFICAS =====
+        # Frame contenedor para las gráficas con estilo moderno
+        plots_frame = QFrame()
+        plots_frame.setFrameShape(QFrame.StyledPanel)
+        plots_frame.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: 2px solid #444444;
+                border-radius: 10px;
+                margin: 2px;
+            }
+        """)
         # ===== CREAR LAYOUT ESPECÍFICO PARA LAS GRÁFICAS =====
-        graphs_layout = QVBoxLayout()
-        graphs_layout.setContentsMargins(2, 2, 2, 2)  # Márgenes mínimos
-        graphs_layout.setSpacing(1)  # Espaciado mínimo entre gráficas
+        plots_layout = QVBoxLayout(plots_frame)
+        plots_layout.setContentsMargins(10, 10, 10, 10)
+        plots_layout.setSpacing(8)
         
         GRAPH_HEIGHT = 120  # Altura uniforme para todas las gráficas
         
-        # ===== 1. GRÁFICA EOG (SUPERIOR) =====
-        self.eog_plot_widget = self.create_eog_plot(display_time, GRAPH_HEIGHT)
-        graphs_layout.addWidget(self.eog_plot_widget)
+        # Crear gráficas individuales
+        self.eog_plot = self.create_eog_plot(display_time, height=GRAPH_HEIGHT)
+        self.bpm_plot = self.create_bpm_plot(display_time, height=GRAPH_HEIGHT)
+        self.ppg_plot = self.create_ppg_plot(display_time, height=GRAPH_HEIGHT + 40)
         
-        # ===== 2. GRÁFICA BPM (MEDIO) =====
-        self.bpm_plot_widget = self.create_bpm_plot(display_time, GRAPH_HEIGHT)
-        graphs_layout.addWidget(self.bpm_plot_widget)
-        
-        # ===== 3. GRÁFICA PPG (INFERIOR) =====
-        self.ppg_plot_widget = self.create_ppg_plot(display_time, GRAPH_HEIGHT + 40)
-        graphs_layout.addWidget(self.ppg_plot_widget)
+        plots_layout.addWidget(self.eog_plot)
+        plots_layout.addWidget(self.bpm_plot)
+        plots_layout.addWidget(self.ppg_plot)
         
         # ===== CREAR CURVAS DE DATOS =====
         self.create_data_curves()
@@ -137,55 +243,66 @@ class SensorMonitor(QWidget):
         self.add_legends_and_extras(display_time)
         
         # Añadir plots a main layout
-        self.main_layout.addLayout(graphs_layout)
+        main_layout.addWidget(plots_frame)
         
-        # layout horizontal para los botones 
-        # (solo visible si se ejecuta como ventana independiente)
+        # ===== BARRA DE ESTADO =====
         if self.parent():
-            # Crear un layout horizontal para los botones
-            button_layout = QHBoxLayout()
-            button_layout.setContentsMargins(3, 0, 3, 3)
+            status_frame = QFrame()
+            status_frame.setFrameShape(QFrame.StyledPanel)
+            status_frame.setStyleSheet("""
+                QFrame {
+                    background-color: #424242;
+                    border: 2px solid #555555;
+                    border-radius: 8px;
+                    padding: 6px;
+                    margin: 2px;
+                }
+            """)
+            status_layout = QHBoxLayout(status_frame)
+            status_layout.setContentsMargins(10, 4, 10, 4)
             
-            # Botón de Iniciar/Detener
-            self.btn_start_stop = QPushButton("Iniciar Adquisición")
-            self.btn_start_stop.setMaximumHeight(25)
-            self.btn_start_stop.clicked.connect(self.toggle_acquisition)
-            button_layout.addWidget(self.btn_start_stop)
+            # Labels de estado con estilo moderno
+            self.device_status_label = QLabel("Estado: Esperando conexión...")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background: transparent;
+                }
+            """)
+            status_layout.addWidget(self.device_status_label)
             
-            # Botón de Escanear Dispositivos
-            self.btn_scan_usb = QPushButton("Escanear")
-            self.btn_scan_usb.setMaximumHeight(25)
-            self.btn_scan_usb.clicked.connect(self.check_slave_connections)
-            button_layout.addWidget(self.btn_scan_usb)
+            status_layout.addStretch()
             
-            # Botón de Guardar Datos
-            self.btn_save = QPushButton("Guardar")
-            self.btn_save.setMaximumHeight(25)
-            self.btn_save.clicked.connect(self.save_data_to_csv)
-            button_layout.addWidget(self.btn_save)
+            self.samples_label = QLabel("Muestras: 0")
+            self.samples_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background: transparent;
+                }
+            """)
+            status_layout.addWidget(self.samples_label)
             
-            # Botón para mostrar tamaños (para depuración)
-            self.btn_show_sizes = QPushButton("Mostrar Tamaños")
-            self.btn_show_sizes.setMaximumHeight(25)
-            self.btn_show_sizes.clicked.connect(self.print_widget_sizes)
-            button_layout.addWidget(self.btn_show_sizes)
+            self.rate_label = QLabel("Tasa: 0 Hz")
+            self.rate_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background: transparent;
+                }
+            """)
+            status_layout.addWidget(self.rate_label)
             
-            # Botón de Salir
-            self.btn_exit = QPushButton("Salir")
-            self.btn_exit.setMaximumHeight(25)
-            self.btn_exit.clicked.connect(self.close)
-            button_layout.addWidget(self.btn_exit)
-            
-            # Añadir el layout de botones al layout principal
-            self.main_layout.addLayout(button_layout)
+            main_layout.addWidget(status_frame)
         
-        # ===== AGREGAR SPACER FLEXIBLE AL FINAL =====
-        self.main_layout.addStretch()  # Para que sea este espacio el que crezca
-    
-        # Setup timer for updating plot
+        # Configurar timer para actualización de gráficas
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_plot)
-        self.timer.start(50)  # 50ms refresh rate (20 FPS)
+        self.timer.start(50)  # 20 FPS
     
     def configure_y_axis_spacing(self, plot_widget, label_text, axis_width=35):
         """Configurar el espaciado del eje Y de forma consistente"""
@@ -194,121 +311,225 @@ class SensorMonitor(QWidget):
         # Reducir ancho del eje
         y_axis.setWidth(axis_width)
         
-        # Configurar estilo del eje
+        # Configurar estilo del eje con colores del tema
         y_axis.setStyle(
-            tickTextOffset=3,      # Distancia del texto del tick al eje
-            autoExpandTextSpace=False  # No expandir automáticamente
+            tickTextOffset=3,
+            autoExpandTextSpace=False,
+            tickTextHeight=12
         )
         
-        # Configurar el label
-        plot_widget.setLabel('left', label_text, size='10pt')
+        # Configurar colores del eje
+        y_axis.setPen(pg.mkPen('#424242', width=1))
+        y_axis.setTextPen(pg.mkPen('#424242'))
+        
+        # Configurar el label con estilo moderno
+        plot_widget.setLabel('left', label_text, size='10pt', color='#424242')
         
         return y_axis
 
     def create_eog_plot(self, display_time, height):
-        """Crear y configurar la gráfica EOG"""
+        """Crear y configurar la gráfica EOG con estilo moderno"""
         eog_plot = pg.PlotWidget()
-        eog_plot.setLabel('bottom', '')  # Sin etiqueta inferior
+        eog_plot.setLabel('bottom', '')
         eog_plot.setYRange(-50000, 50000)
         eog_plot.setXRange(-display_time-0.02, 0.01, padding=0)
-        eog_plot.setBackground('#f8f9fa')
-        eog_plot.showGrid(x=True, y=True, alpha=0.3)
+        
+        # Aplicar tema moderno
+        eog_plot.setBackground('#FFFFFF')
+        eog_plot.showGrid(x=True, y=True, alpha=0.2)
         eog_plot.setFixedHeight(height)
         
-        # Configurar eje X
+        # Configurar eje X con estilo moderno
         x_axis = eog_plot.getAxis('bottom')
-        x_axis.setStyle(showValues=False)  # Ocultar valores para ahorrar espacio
+        x_axis.setStyle(showValues=False)
         x_axis.setTickSpacing(major=1, minor=0.5)
+        x_axis.setPen(pg.mkPen('#CCCCCC', width=1))
+        x_axis.setTextPen(pg.mkPen('#424242'))
         
         # Configurar eje Y con espaciado personalizado
-        self.configure_y_axis_spacing(eog_plot, 'EOG', axis_width=60)
+        self.configure_y_axis_spacing(eog_plot, 'EOG (µV)', axis_width=60)
         
-        # Reducir márgenes del plot
-        eog_plot.getPlotItem().getViewBox().setDefaultPadding(50)
+        # Estilo del área de ploteo
+        plot_item = eog_plot.getPlotItem()
+        plot_item.getViewBox().setDefaultPadding(0.02)
+        
+        # Configurar líneas de grilla con colores suaves
+        plot_item.getAxis('bottom').setGrid(200)
+        plot_item.getAxis('left').setGrid(200)
         
         return eog_plot
 
     def create_bpm_plot(self, display_time, height):
-        """Crear y configurar la gráfica BPM"""
+        """Crear y configurar la gráfica BPM con estilo moderno"""
         bpm_plot = pg.PlotWidget()
-        bpm_plot.setLabel('bottom', '')  # Sin etiqueta inferior
-        bpm_plot.setYRange(40, 150)  # Rango típico para BPM humano
+        bpm_plot.setLabel('bottom', '')
+        bpm_plot.setYRange(40, 150)
         bpm_plot.setXRange(-display_time-0.02, 0.01, padding=0)
-        bpm_plot.setBackground('#f8f9fa')
-        bpm_plot.showGrid(x=True, y=True, alpha=0.3)
+        
+        # Aplicar tema moderno
+        bpm_plot.setBackground('#FFFFFF')
+        bpm_plot.showGrid(x=True, y=True, alpha=0.2)
         bpm_plot.setFixedHeight(height)
         
-        # Configurar eje X
+        # Configurar eje X con estilo moderno
         x_axis = bpm_plot.getAxis('bottom')
-        x_axis.setStyle(showValues=False)  # Ocultar valores para ahorrar espacio
+        x_axis.setStyle(showValues=False)
         x_axis.setTickSpacing(major=1, minor=0.5)
+        x_axis.setPen(pg.mkPen('#CCCCCC', width=1))
+        x_axis.setTextPen(pg.mkPen('#424242'))
         
         # Configurar eje Y con espaciado personalizado
         self.configure_y_axis_spacing(bpm_plot, 'BPM', axis_width=60)
         
-        # Reducir márgenes del plot
-        bpm_plot.getPlotItem().getViewBox().setDefaultPadding(50)
+        # Estilo del área de ploteo
+        plot_item = bpm_plot.getPlotItem()
+        plot_item.getViewBox().setDefaultPadding(0.02)
+        
+        # Configurar líneas de grilla con colores suaves
+        plot_item.getAxis('bottom').setGrid(200)
+        plot_item.getAxis('left').setGrid(200)
+        
+        # Añadir líneas de referencia para rangos normales de BPM
+        reference_line_60 = pg.InfiniteLine(pos=60, angle=0, pen=pg.mkPen('#4CAF50', width=1, style=pg.QtCore.Qt.DashLine))
+        reference_line_100 = pg.InfiniteLine(pos=100, angle=0, pen=pg.mkPen('#FF9800', width=1, style=pg.QtCore.Qt.DashLine))
+        bpm_plot.addItem(reference_line_60)
+        bpm_plot.addItem(reference_line_100)
         
         return bpm_plot
 
     def create_ppg_plot(self, display_time, height):
-        """Crear y configurar la gráfica PPG"""
+        """Crear y configurar la gráfica PPG con estilo moderno"""
         ppg_plot = pg.PlotWidget()
-        ppg_plot.setLabel('bottom', 'Tiempo (s)', size='10pt')  # Etiqueta de tiempo solo en la inferior
+        ppg_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
         ppg_plot.setYRange(-35000, 35000)
         ppg_plot.setXRange(-display_time-0.02, 0.01, padding=0)
-        ppg_plot.setBackground('#f8f9fa')
-        ppg_plot.showGrid(x=True, y=True, alpha=0.3)
+        
+        # Aplicar tema moderno
+        ppg_plot.setBackground('#FFFFFF')
+        ppg_plot.showGrid(x=True, y=True, alpha=0.2)
         ppg_plot.setFixedHeight(height)
         
-        # Configurar ejes - este sí muestra valores por ser el inferior
+        # Configurar ejes con estilo moderno
         x_axis = ppg_plot.getAxis('bottom')
         x_axis.setTickSpacing(major=1, minor=0.5)
+        x_axis.setPen(pg.mkPen('#CCCCCC', width=1))
+        x_axis.setTextPen(pg.mkPen('#424242'))
         
         # Configurar eje Y con espaciado personalizado
-        self.configure_y_axis_spacing(ppg_plot, 'PPG', axis_width=60)
+        self.configure_y_axis_spacing(ppg_plot, 'PPG (ADU)', axis_width=60)
         
-        # Reducir márgenes del plot
-        ppg_plot.getPlotItem().getViewBox().setDefaultPadding(50)
+        # Estilo del área de ploteo
+        plot_item = ppg_plot.getPlotItem()
+        plot_item.getViewBox().setDefaultPadding(0.02)
+        
+        # Configurar líneas de grilla con colores suaves
+        plot_item.getAxis('bottom').setGrid(200)
+        plot_item.getAxis('left').setGrid(200)
         
         return ppg_plot
 
     def create_data_curves(self):
-        """Crear las curvas de datos con colores consistentes"""
-        # Curvas con colores específicos y líneas más finas para mejor rendimiento
-        self.eog_curve = self.eog_plot_widget.plot(pen=pg.mkPen('#2196F3', width=1.5))  # Azul para EOG
-        self.bpm_curve = self.bpm_plot_widget.plot(pen=pg.mkPen('#FF9800', width=1.5))  # Naranja para BPM
-        self.ppg_curve = self.ppg_plot_widget.plot(pen=pg.mkPen('#E91E63', width=1.5))  # Rosa/rojo para PPG
-
+        """Crear las curvas de datos con colores consistentes del tema"""
+        # Curvas con colores del tema login y líneas optimizadas
+        self.eog_curve = self.eog_plot.plot(pen=pg.mkPen('#2196F3', width=2))  # Azul principal
+        self.bpm_curve = self.bpm_plot.plot(pen=pg.mkPen('#FF9800', width=2))  # Naranja para BPM
+        self.ppg_curve = self.ppg_plot.plot(pen=pg.mkPen('#00A99D', width=2))  # Verde tema principal
+    
     def add_legends_and_extras(self, display_time):
-        """Añadir leyendas y elementos adicionales a las gráficas"""
-        # Leyendas compactas con tamaño de texto reducido
-        eog_legend = pg.LegendItem(offset=(60, 8), labelTextSize='8pt')
-        eog_legend.setParentItem(self.eog_plot_widget.graphicsItem())
+        """Añadir leyendas y elementos adicionales con estilo moderno"""
+        # Leyenda para EOG con estilo moderno
+        eog_legend = pg.LegendItem(offset=(10, 10), labelTextSize='9pt')
+        eog_legend.setParentItem(self.eog_plot.graphicsItem())
         eog_legend.addItem(self.eog_curve, "Movimiento Ocular")
+        eog_legend.setBrush(pg.mkBrush(255, 255, 255, 200))  # Fondo semi-transparente
+        eog_legend.setPen(pg.mkPen('#CCCCCC', width=1))
         
-        # Texto para mostrar el valor de BPM actual
-        self.bpm_text = pg.TextItem(text="BPM: --", color=(0, 0, 0), anchor=(0, 0))
+        # Texto para mostrar el valor de BPM actual con estilo moderno
+        self.bpm_text = pg.TextItem(
+            text="BPM: --", 
+            color=(66, 66, 66),  # Color #424242
+            anchor=(0, 0),
+            border=pg.mkPen('#CCCCCC', width=1),
+            fill=pg.mkBrush(255, 255, 255, 200)
+        )
         self.bpm_text.setPos(-display_time * 0.95, 140)
-        self.bpm_plot_widget.addItem(self.bpm_text)
+        self.bpm_plot.addItem(self.bpm_text)
         
-        bpm_legend = pg.LegendItem(offset=(60, 8), labelTextSize='8pt')
-        bpm_legend.setParentItem(self.bpm_plot_widget.graphicsItem())
+        # Leyenda para BPM con estilo moderno
+        bpm_legend = pg.LegendItem(offset=(10, 10), labelTextSize='9pt')
+        bpm_legend.setParentItem(self.bpm_plot.graphicsItem())
         bpm_legend.addItem(self.bpm_curve, "Frecuencia Cardíaca")
+        bpm_legend.setBrush(pg.mkBrush(255, 255, 255, 200))
+        bpm_legend.setPen(pg.mkPen('#CCCCCC', width=1))
         
-        ppg_legend = pg.LegendItem(offset=(60, 8), labelTextSize='8pt')
-        ppg_legend.setParentItem(self.ppg_plot_widget.graphicsItem())
+        # Leyenda para PPG con estilo moderno
+        ppg_legend = pg.LegendItem(offset=(10, 10), labelTextSize='9pt')
+        ppg_legend.setParentItem(self.ppg_plot.graphicsItem())
         ppg_legend.addItem(self.ppg_curve, "Señal PPG")
+        ppg_legend.setBrush(pg.mkBrush(255, 255, 255, 200))
+        ppg_legend.setPen(pg.mkPen('#CCCCCC', width=1))
 
     def toggle_acquisition(self):
         """Toggle between start and stop acquisition"""
         if self.running:
             self.stop_acquisition()
             self.btn_start_stop.setText("Iniciar Adquisición")
+            self.btn_start_stop.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #66BB6A,
+                                               stop: 1 #4CAF50);
+                    color: white;
+                    border: 2px solid #4CAF50;
+                    border-radius: 8px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    min-width: 140px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #81C784,
+                                               stop: 1 #66BB6A);
+                    border: 2px solid #66BB6A;
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #4CAF50,
+                                               stop: 1 #388E3C);
+                    border: 2px solid #388E3C;
+                }
+            """)
         else:
             self.start_acquisition()
             self.btn_start_stop.setText("Detener Adquisición")
-        
+            self.btn_start_stop.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #EF5350,
+                                               stop: 1 #F44336);
+                    color: white;
+                    border: 2px solid #F44336;
+                    border-radius: 8px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    min-width: 140px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #E57373,
+                                               stop: 1 #EF5350);
+                    border: 2px solid #EF5350;
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #F44336,
+                                               stop: 1 #D32F2F);
+                    border: 2px solid #D32F2F;
+                }
+            """)
+
     def start_acquisition(self):
         """Start data acquisition"""
         # Verificar que el controlador maestro esté conectado
@@ -400,13 +621,31 @@ class SensorMonitor(QWidget):
         if not found_devices:
             print("No se encontraron dispositivos")
             self.device_status_label.setText("Estado de dispositivos: No se encontraron dispositivos")
-            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background-color: rgba(244, 67, 54, 0.8);
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+            """)
             return
             
         if "Master Controller" not in found_devices:
             print("No se encontró el controlador maestro")
             self.device_status_label.setText("Estado de dispositivos: No se encontró el controlador maestro")
-            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background-color: rgba(244, 67, 54, 0.8);
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+            """)
             return
             
         print("Verificando dispositivos conectados...")
@@ -447,12 +686,30 @@ class SensorMonitor(QWidget):
         
         self.device_status_label.setText(status_text.rstrip(" | "))
         
-        # Change background color based on connection status
+        # Change background color based on connection status with modern styling
         if required_connected:
-            self.device_status_label.setStyleSheet("background-color: rgba(200, 255, 200, 180); padding: 5px;")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background-color: rgba(76, 175, 80, 0.8);
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+            """)
         else:
-            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
-    
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background-color: rgba(244, 67, 54, 0.8);
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+            """)
+
     def _print_connection_status(self):
         """Print connection status to terminal"""
         print("\n--- Estado de conexión de esclavos ---")
@@ -626,20 +883,61 @@ class SensorMonitor(QWidget):
             self.bpm_curve.setData(normalized_x, bpm_data)
             self.eog_curve.setData(normalized_x, filtered_eog_data)
             
-            # Actualizar el texto de BPM
+            # Actualizar el texto de BPM con estilo mejorado
             hr_str = f"BPM: {int(self.current_heart_rate)}" if self.current_heart_rate > 0 else "BPM: --"
-            self.bpm_text.setText(hr_str)
-            
-            # Fijar siempre el rango X entre -5 y 0
-            self.ppg_plot_widget.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
-            self.bpm_plot_widget.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
-            self.eog_plot_widget.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
-    
+            if hasattr(self, 'bpm_text'):
+                self.bpm_text.setText(hr_str)
+                # Cambiar color según el rango de BPM
+                if 60 <= self.current_heart_rate <= 100:
+                    self.bpm_text.setColor((76, 175, 80))  # Verde para normal
+                elif self.current_heart_rate > 100:
+                    self.bpm_text.setColor((255, 152, 0))  # Naranja para elevado
+                else:
+                    self.bpm_text.setColor((66, 66, 66))   # Gris para otros casos
+        
+        # Fijar siempre el rango X entre -5 y 0
+        self.ppg_plot.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
+        self.bpm_plot.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
+        self.eog_plot.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
+
     def save_data_to_csv(self):
-        """Save collected data to CSV file"""
+        """Save collected data to CSV file with modern dialog"""
         try:
             if len(self.idx) == 0:
                 print("No hay datos para guardar")
+                # Mostrar mensaje con estilo moderno
+                from PySide6.QtWidgets import QMessageBox
+                msg = QMessageBox(self)
+                msg.setWindowTitle("Sin Datos")
+                msg.setText("No hay datos para guardar.")
+                msg.setInformativeText("Inicie la adquisición de datos primero.")
+                msg.setIcon(QMessageBox.Warning)
+                msg.setStyleSheet("""
+                    QMessageBox {
+                        background-color: #F8F9FA;
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                    }
+                    QMessageBox QLabel {
+                        color: #424242;
+                        font-size: 13px;
+                    }
+                    QMessageBox QPushButton {
+                        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                                   stop: 0 #42A5F5,
+                                                   stop: 1 #2196F3);
+                        color: white;
+                        border: 2px solid #2196F3;
+                        border-radius: 6px;
+                        padding: 6px 12px;
+                        font-weight: bold;
+                    }
+                    QMessageBox QPushButton:hover {
+                        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                                   stop: 0 #64B5F6,
+                                                   stop: 1 #42A5F5);
+                    }
+                """)
+                msg.exec()
                 return
                 
             # Create DataFrame with data including BPM, PPG and EOG
@@ -667,9 +965,76 @@ class SensorMonitor(QWidget):
             print(f"\nDatos guardados en: {filename}")
             print(f"Total de muestras guardadas: {len(self.idx)}")
             
+            # Mostrar mensaje de éxito con estilo moderno
+            from PySide6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Datos Guardados")
+            msg.setText("Los datos se han guardado exitosamente.")
+            msg.setInformativeText(f"Archivo: {os.path.basename(filename)}\nMuestras: {len(self.idx)}")
+            msg.setIcon(QMessageBox.Information)
+            msg.setStyleSheet("""
+                QMessageBox {
+                    background-color: #F8F9FA;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                }
+                QMessageBox QLabel {
+                    color: #424242;
+                    font-size: 13px;
+                }
+                QMessageBox QPushButton {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #66BB6A,
+                                               stop: 1 #4CAF50);
+                    color: white;
+                    border: 2px solid #4CAF50;
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-weight: bold;
+                }
+                QMessageBox QPushButton:hover {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #81C784,
+                                               stop: 1 #66BB6A);
+                }
+            """)
+            msg.exec()
+            
         except Exception as e:
             print(f"Error al guardar datos: {e}")
-    
+            # Mostrar mensaje de error con estilo moderno
+            from PySide6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Error al Guardar")
+            msg.setText("Ocurrió un error al guardar los datos.")
+            msg.setInformativeText(f"Error: {str(e)}")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setStyleSheet("""
+                QMessageBox {
+                    background-color: #F8F9FA;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                }
+                QMessageBox QLabel {
+                    color: #424242;
+                    font-size: 13px;
+                }
+                QMessageBox QPushButton {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #EF5350,
+                                               stop: 1 #F44336);
+                    color: white;
+                    border: 2px solid #F44336;
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-weight: bold;
+                }
+                QMessageBox QPushButton:hover {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                               stop: 0 #E57373,
+                                               stop: 1 #EF5350);
+                }
+            """)
+            msg.exec()
+
     def closeEvent(self, event):
         """Clean up when window is closed"""
         self.stop_acquisition()
@@ -731,10 +1096,26 @@ if __name__ == "__main__":
     """Función principal para ejecutar el monitor como aplicación independiente"""
     app = QApplication([])
     
+    # Configurar estilo global de la aplicación
+    app.setStyleSheet("""
+        QMainWindow {
+            background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #323232,
+                                          stop: 0.3 #2c2c2c,
+                                          stop: 0.6 #252525,
+                                          stop: 0.8 #1a1a1a,
+                                          stop: 1 #000000);
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        QWidget {
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+    """)
+    
     # Crear una ventana principal que contendrá el widget
     main_window = QMainWindow()
-    main_window.setWindowTitle("Monitor de PPG y EOG en Tiempo Real")
-    main_window.setGeometry(100, 100, 800, 600)
+    main_window.setWindowTitle("Monitor de Bioseñales EMDR - Tiempo Real")
+    main_window.setGeometry(100, 100, 1000, 700)
     
     # Crear la instancia del monitor como widget
     monitor_widget = SensorMonitor(parent=main_window)

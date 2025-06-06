@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QPainter, QColor, QBrush, QPen
+import qtawesome as qta
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -17,8 +18,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 # Importaciones de componentes de vistas
 from src.views.components.containers import Container, SwitchContainer
 from src.views.components.selectors import Selector
+from src.views.components.counter import Counter
 from src.views.components.buttons import CustomButton, Switch
 from src.views.components.pyqtSwitch import PyQtSwitch
+from src.views.components.chronometer import Chronometer
 
 # Importaciones de modelos
 from src.models.devices import Devices, KNOWN_SLAVES
@@ -35,20 +38,13 @@ class EMDRPatternVisualizer(QWidget):
         super().__init__(parent)
         self.led_count = Devices.led_num
         self.current_led = self.led_count // 2 + 1
-        self.setMinimumHeight(50)
-        self.setMaximumHeight(50)
+        self.setMinimumHeight(30)
+        self.setMaximumHeight(30)
         self.dots = []
         
         # Crear los dots (representación de LEDs)
         for i in range(self.led_count):
             self.dots.append(False)  # Todos apagados inicialmente
-        
-        # Establecer el estilo
-        self.setStyleSheet("""
-            background-color: #282828;
-            border-radius: 10px;
-            margin: 5px;
-        """)
     
     def update_led_position(self, position):
         """Actualiza la posición del LED activo"""
@@ -67,14 +63,11 @@ class EMDRPatternVisualizer(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Dibujar el fondo
-        painter.fillRect(self.rect(), QColor("#282828"))
-        
-        # Dibujar los LEDs
+        # Dibujar el fondo con gradiente
         width = self.width()
         height = self.height()
         
-        dot_radius = min(height * 0.3, width / (self.led_count * 2))
+        dot_radius = min(height * 0.25, width / (self.led_count * 2.5))
         center_y = height / 2
         
         # Calcular espaciado entre LEDs
@@ -83,15 +76,24 @@ class EMDRPatternVisualizer(QWidget):
         for i in range(self.led_count):
             center_x = dot_spacing * (i + 1) + dot_radius * (2 * i + 1)
             
-            # Dibujar el círculo
+            # Dibujar el círculo con efecto de brillo
             if self.dots[i]:
-                # LED activo: color brillante
-                painter.setBrush(QBrush(QColor("#00FF00")))
+                # LED activo: color brillante con efecto de brillo
+                painter.setBrush(QBrush(QColor("#00C2B3")))
+                painter.setPen(QPen(QColor("#00FF00"), 2))
+                
+                # Efecto de brillo exterior
+                painter.drawEllipse(center_x - dot_radius - 2, center_y - dot_radius - 2, 
+                                  (dot_radius + 2) * 2, (dot_radius + 2) * 2)
+                
+                # LED principal
+                painter.setBrush(QBrush(QColor("#00E6D6")))
+                painter.setPen(QPen(QColor("#FFFFFF"), 1))
             else:
                 # LED inactivo: color apagado
-                painter.setBrush(QBrush(QColor("#303030")))
+                painter.setBrush(QBrush(QColor("#424242")))
+                painter.setPen(QPen(QColor("#666666"), 1))
             
-            painter.setPen(QPen(QColor("#505050"), 1))
             painter.drawEllipse(center_x - dot_radius, center_y - dot_radius, 
                               dot_radius * 2, dot_radius * 2)
 
@@ -107,166 +109,544 @@ class EMDRControllerWidget(QWidget):
         
         # Layout principal vertical
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(5)
+        self.main_layout.setContentsMargins(15, 15, 15, 15)
+        self.main_layout.setSpacing(0)
         
-        # 1. Etiqueta de estado de dispositivos en la parte superior
-        self.device_status_label = QLabel("Estado de dispositivos: Desconocido")
-        self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
-        self.main_layout.addWidget(self.device_status_label)
+        # 1. Etiqueta de estado de dispositivos modernizada
+        if self.parent():
+            self.device_status_label = QLabel("Estado de dispositivos: Desconocido")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                            stop: 0 rgba(255, 150, 100, 0.15),
+                                            stop: 0.5 rgba(255, 200, 150, 0.2),
+                                            stop: 1 rgba(255, 150, 100, 0.15));
+                    color: #FFFFFF;
+                    font-weight: bold;
+                    font-size: 13px;
+                    padding: 12px 20px;
+                    border-radius: 10px;
+                    border: 2px solid rgba(255, 180, 120, 0.3);
+                }
+            """)
+            self.main_layout.addWidget(self.device_status_label)
         
-        # 2. Layout para botones principales (reemplazando QGridLayout)
-        button_container = QWidget()
+        # 2. Contenedor de botones principales con estilo moderno
+        button_container = QFrame()
+        button_container.setFrameShape(QFrame.StyledPanel)
+        button_container.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border-radius: 12px;
+                border: 2px solid #444444;
+                padding: 8px;
+            }
+        """)
+        
         button_layout = QVBoxLayout(button_container)
-        button_layout.setContentsMargins(5, 5, 5, 5)
-        button_layout.setSpacing(2)
+        button_layout.setContentsMargins(10, 2, 10, 2)
+        button_layout.setSpacing(8)
         
-        # Crear botones principales
+        # Crear botones principales con estilo moderno
         self.btn_start = CustomButton(0, 0, 'Play', self.start_click)
         self.btn_start24 = CustomButton(1, 0, 'Play 24', self.start24_click)
         self.btn_stop = CustomButton(2, 0, 'Stop', self.stop_click)
         self.btn_pause = CustomButton(3, 0, 'Pause', self.pause_click, togglable=True)
         
-        # Crear layout horizontal para la primera fila de botones
+        # Aplicar estilos modernos a los botones principales
+        main_button_style = """
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #00A99D,
+                                          stop: 0.5 #00C2B3,
+                                          stop: 1 #00A99D);
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid #00A99D;
+                padding: 10px 20px;
+                min-height: 40px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #00C2B3,
+                                          stop: 0.5 #00D4C6,
+                                          stop: 1 #00C2B3);
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #008C82,
+                                          stop: 0.5 #009A8F,
+                                          stop: 1 #008C82);
+                border: 2px solid #008C82;
+            }
+            QPushButton:disabled {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #555555,
+                                          stop: 0.5 #666666,
+                                          stop: 1 #555555);
+                border: 2px solid #555555;
+                color: #888888;
+            }
+        """
+        
+        # Estilo especial para botón Stop (rojo)
+        stop_button_style = """
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #D32F2F,
+                                          stop: 0.5 #F44336,
+                                          stop: 1 #D32F2F);
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid #D32F2F;
+                padding: 10px 20px;
+                min-height: 40px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #F44336,
+                                          stop: 0.5 #FF5722,
+                                          stop: 1 #F44336);
+                border: 2px solid #F44336;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #B71C1C,
+                                          stop: 0.5 #C62828,
+                                          stop: 1 #B71C1C);
+                border: 2px solid #B71C1C;
+            }
+            QPushButton:disabled {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #555555,
+                                          stop: 0.5 #666666,
+                                          stop: 1 #555555);
+                border: 2px solid #555555;
+                color: #888888;
+            }
+        """
+        
+        # Aplicar estilos a los botones
+        self.btn_start.setStyleSheet(main_button_style)
+        self.btn_start24.setStyleSheet(main_button_style)
+        self.btn_stop.setStyleSheet(stop_button_style)
+        self.btn_pause.setStyleSheet(main_button_style)
+        
+        # Layout horizontal para botones principales
         top_button_row = QHBoxLayout()
+        top_button_row.setSpacing(10)
         top_button_row.addWidget(self.btn_start)
         top_button_row.addWidget(self.btn_start24)
         top_button_row.addWidget(self.btn_stop)
         top_button_row.addWidget(self.btn_pause)
         
-        # Añadir la primer fila (botones) al layout de botones
         button_layout.addLayout(top_button_row)
         
-        # Añadir checkbox para capturar señales
+        # Checkbox para capturar señales con estilo moderno
         self.chk_capture_signals = QCheckBox("¿Capturar señales?")
         self.chk_capture_signals.setStyleSheet("""
             QCheckBox {
-                margin-top: 5px;
+                background: transparent;
+                color: #FFFFFF;
                 font-weight: bold;
-                color: #1565C0;
+                font-size: 13px;
+                padding: 8px;
+                border-radius: 6px;
+            }
+            QCheckBox:hover {
+                background: rgba(255, 255, 255, 0.1);
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+                border-radius: 3px;
+                border: 2px solid #00A99D;
+                background-color: #424242;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #00A99D;
+                border: 2px solid #00C2B3;
+            }
+            QCheckBox::indicator:checked:hover {
+                background-color: #00C2B3;
             }
         """)
+        
         capture_checkbox_row = QHBoxLayout()
         capture_checkbox_row.addItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
         capture_checkbox_row.addWidget(self.chk_capture_signals)
         capture_checkbox_row.addItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
         
-        # Añadir la segunda fila (checkbox) al layout de botones
         button_layout.addLayout(capture_checkbox_row)
         
-        # (solo visible si se ejecuta como ventana independiente)
+        # Botón de escaneo (solo visible si se ejecuta como ventana independiente)
         if self.parent():
-            # Crear el botón Escanear en su propia fila
             self.btn_scan_usb = CustomButton(4, 0, 'Escanear', self.scan_usb_click)
+            self.btn_scan_usb.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                              stop: 0 #424242,
+                                              stop: 0.5 #555555,
+                                              stop: 1 #424242);
+                    color: white;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 14px;
+                    border: 2px solid #424242;
+                    padding: 10px 20px;
+                    min-height: 40px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                              stop: 0 #555555,
+                                              stop: 0.5 #666666,
+                                              stop: 1 #555555);
+                    border: 2px solid #555555;
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                              stop: 0 #333333,
+                                              stop: 0.5 #444444,
+                                              stop: 1 #333333);
+                    border: 2px solid #333333;
+                }
+                QPushButton:disabled {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                              stop: 0 #555555,
+                                              stop: 0.5 #666666,
+                                              stop: 1 #555555);
+                    border: 2px solid #555555;
+                    color: #888888;
+                }
+            """)
+            
             scan_button_row = QHBoxLayout()
             scan_button_row.addWidget(self.btn_scan_usb)
-            
-            # Añadir la tercera fila (botón Escanear) al layout de botones
             button_layout.addLayout(scan_button_row)
         
-        # Añadir el contenedor de botones al layout principal
         self.main_layout.addWidget(button_container)
         
-        # 3. Crear widget de velocidad y contador (siempre visible)
-        speed_counter_container = QWidget()
+        # 3. Contenedor de velocidad y contador con estilo moderno
+        speed_counter_container = QFrame()
+        speed_counter_container.setFrameShape(QFrame.StyledPanel)
+        speed_counter_container.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                          stop: 0 rgba(0, 169, 157, 0.2),
+                                          stop: 0.5 rgba(0, 200, 170, 0.25),
+                                          stop: 1 rgba(0, 169, 157, 0.2));
+                border-radius: 12px;
+                border: 2px solid rgba(0, 200, 170, 0.4);
+                color: #FFFFFF;
+            }
+        """)
+        
         speed_counter_layout = QHBoxLayout(speed_counter_container)
+        speed_counter_layout.setContentsMargins(10, 0, 10, 0)
+        speed_counter_layout.setSpacing(20)
         
-        # Crear layout para controles de velocidad
-        speed_control_box = QHBoxLayout()
+        # Crear controles de velocidad
+        speed_control_box = QVBoxLayout()
+        speed_control_box.setSpacing(4)
         
-        # Botones de velocidad
+        # Título para velocidad
+        speed_title = QLabel("VELOCIDAD")
+        speed_title.setAlignment(Qt.AlignCenter)
+        speed_title.setFixedSize(200, 30)
+        speed_title.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                font-size: 12px;
+                border: none;
+                background: transparent;
+                padding: 5px;
+            }
+        """)
+        speed_control_box.addWidget(speed_title)
+        
+        # Layout horizontal para controles de velocidad
+        speed_controls_row = QHBoxLayout()
+        
+        # Botones de velocidad con estilo moderno
+        speed_button_style = """
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #00A99D,
+                                          stop: 1 #008C82);
+                color: white;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid #00A99D;
+                min-width: 30px;
+                min-height: 30px;
+                max-width: 30px;
+                max-height: 30px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #00C2B3,
+                                          stop: 1 #00A99D);
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #008C82,
+                                          stop: 1 #006B63);
+                border: 2px solid #008C82;
+            }
+        """
+        
         self.btn_speed_minus = CustomButton(0, 1, '-', size=(30, 30))
-        self.sel_speed = Selector(1, 1, 'Velocidad', Config.speeds, '{0:d}/min', None, None, 
-                                 self.update_speed, ticks=Config.speeds, parent=self)
+        self.btn_speed_minus.setStyleSheet(speed_button_style)
         self.btn_speed_plus = CustomButton(2, 1, '+', size=(30, 30))
+        self.btn_speed_plus.setStyleSheet(speed_button_style)
+        
+        self.sel_speed = Selector('Velocidad', Config.speeds, '{0:d}/min', 
+                                  self.btn_speed_minus, self.btn_speed_plus, 
+                                  self.update_speed, ticks=Config.speeds, parent=self)
+        self.sel_speed.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+            }
+        """)
         
         # Conectar botones de velocidad
         self.btn_speed_plus.clicked.connect(self.sel_speed.next_value)
         self.btn_speed_minus.clicked.connect(self.sel_speed.prev_value)
         
-        # Añadir controles de velocidad al layout
-        speed_control_box.addStretch()
-        speed_control_box.addWidget(self.btn_speed_minus)
-        speed_control_box.addWidget(self.sel_speed)
-        speed_control_box.addWidget(self.btn_speed_plus)
-        speed_control_box.addStretch()
+        speed_controls_row.addStretch()
+        speed_controls_row.addWidget(self.sel_speed)
+        speed_controls_row.addStretch()
         
+        speed_control_box.addLayout(speed_controls_row)
         speed_counter_layout.addLayout(speed_control_box)
         
-        # Crear el selector de contador
-        self.sel_counter = Selector(1, 0, 'Contador', None, '{0:d}', None, None, show_slider=False, parent=self)
+        # Crear contador con estilo moderno
+        counter_box = QVBoxLayout()
+        counter_box.setSpacing(1)
+        
+        # Título para contador
+        counter_title = QLabel("CONTADOR")
+        counter_title.setAlignment(Qt.AlignCenter)
+        counter_title.setFixedSize(200, 30)
+        counter_title.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                font-size: 12px;
+                border: none;
+                background: transparent;
+                padding: 5px;
+            }
+        """)
+        counter_box.addWidget(counter_title)
+        
+        # Selector de contador
+        self.sel_counter = Counter(initial_value=0, format_str='{0:d}', parent=self)
         self.sel_counter.set_value(0)
         
-        # Layout para el contador
-        counter_box = QHBoxLayout()
-        counter_box.addStretch()
-        counter_box.addWidget(self.sel_counter)
-        counter_box.addStretch()
-        counter_box.addStretch()
+        counter_controls_row = QHBoxLayout()
+        counter_controls_row.addStretch()
+        counter_controls_row.addWidget(self.sel_counter)
+        counter_controls_row.addStretch()
         
+        counter_box.addLayout(counter_controls_row)
         speed_counter_layout.addLayout(counter_box)
         
-        self.main_layout.addWidget(speed_counter_container)
+        # === CRONÓMETRO (lado derecho) ===
+        chronometer_box = QVBoxLayout()
+        chronometer_box.setSpacing(1)
 
+        # Título para cronómetro
+        chronometer_title = QLabel("TIEMPO")
+        chronometer_title.setAlignment(Qt.AlignCenter)
+        chronometer_title.setFixedSize(120, 30)
+        chronometer_title.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                font-size: 12px;
+                border: none;
+                background: transparent;
+                padding: 5px;
+            }
+        """)
+        chronometer_box.addWidget(chronometer_title)
+
+        # Widget cronómetro
+        self.chronometer = Chronometer(parent=self)
+
+        chronometer_controls_row = QHBoxLayout()
+        chronometer_controls_row.addStretch()
+        chronometer_controls_row.addWidget(self.chronometer)
+        chronometer_controls_row.addStretch()
+
+        chronometer_box.addLayout(chronometer_controls_row)
+
+        # Añadir al layout principal
+        speed_counter_layout.addLayout(chronometer_box)
+        
+        self.main_layout.addWidget(speed_counter_container)
+        
         # Añadir visualizador de patrón EMDR
         self.pattern_visualizer = EMDRPatternVisualizer()
-
-        self.main_layout.addWidget(self.pattern_visualizer)
+        pattern_visualizer_container = QWidget()
+        pattern_visualizer_container.setStyleSheet("""
+            QWidget {
+                background: #101010;
+                border-radius: 15px;
+                border: 1px solid #444444;
+            }
+        """)
+        pattern_visualizer_layout = QHBoxLayout(pattern_visualizer_container)
+        pattern_visualizer_layout.setContentsMargins(4, 0, 4, 0)
+        pattern_visualizer_layout.addWidget(self.pattern_visualizer)
+        self.main_layout.addWidget(pattern_visualizer_container)
         
-        # 4. Crear el widget de pestañas
+        # 4. Crear el widget de pestañas con estilo moderno
         self.tab_widget = QTabWidget()
         self.tab_widget.setStyleSheet("""
             QTabWidget::pane { 
-                background-color: white; 
+                background: transparent;
+                border: none;
             }
             QTabBar::tab {
-                background-color: #e0e0e0;
-                padding: 8px;
-                /* Eliminar min-width para permitir que el ancho sea flexible */
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #424242,
+                                          stop: 1 #2c2c2c);
+                color: #FFFFFF;
+                padding: 12px 20px;
+                margin-right: 2px;
+                border: 2px solid #444444;
+                border-bottom: none;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                font-weight: bold;
+                font-size: 12px;
             }
             QTabBar::tab:selected {
-                background-color: white;
-                font-weight: bold;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #00A99D,
+                                          stop: 0.5 #00C2B3,
+                                          stop: 1 #00A99D);
+                color: white;
+                border: 2px solid #00A99D;
+                border-bottom: none;
+            }
+            QTabBar::tab:hover:!selected {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #555555,
+                                          stop: 1 #3c3c3c);
+                border: 2px solid #555555;
+                border-bottom: none;
             }
             QTabBar::tab:!enabled {
-                color: #a0a0a0;
-                background-color: #f0f0f0;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #1a1a1a,
+                                          stop: 1 #0a0a0a);
+                color: #666666;
+                border: 2px solid #222222;
+                border-bottom: none;
             }
         """)
         self.tab_widget.setTabPosition(QTabWidget.TabPosition.North)
-        self.tab_widget.setUsesScrollButtons(False)  # No mostrar botones de scroll
+        self.tab_widget.setUsesScrollButtons(False)
         
         # Configurar para expandir las pestañas por todo el ancho disponible
-        self.tab_widget.tabBar().setExpanding(True)  # Esta es la línea clave
+        self.tab_widget.tabBar().setExpanding(True)
         
         self.main_layout.addWidget(self.tab_widget)
         
         # 5. Crear contenido de pestañas
         
-        # 5.1 Pestaña de Estimulación Auditiva (Auriculares)
+        # 5.1 Pestaña de Estimulación Auditiva (Auriculares) - Modernizada
         headphone_scroll = QScrollArea()
         headphone_scroll.setWidgetResizable(True)
         headphone_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         headphone_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         headphone_scroll.setFrameShape(QFrame.NoFrame)
+        headphone_scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: #424242;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #00A99D;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #00C2B3;
+            }
+        """)
 
         headphone_container = QWidget()
+        headphone_container.setStyleSheet("""
+            QWidget {
+                background: transparent;
+                border: none;
+            }
+        """)
         headphone_layout = QVBoxLayout(headphone_container)
-        headphone_layout.setContentsMargins(5, 5, 5, 5)
+        headphone_layout.setContentsMargins(5, 0, 5, 0)
+        headphone_layout.setSpacing(1)
 
-        # Título para controles de audio
+        # Título para controles de audio modernizado
         audio_title = QLabel("CONTROLES DE AUDIO")
-        audio_title.setStyleSheet("font-weight: bold; color: #1565C0; background-color: #E3F2FD; padding: 5px;")
+        audio_title.setStyleSheet("""
+            QLabel {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                          stop: 0 rgba(0, 169, 157, 0.3),
+                                          stop: 0.5 rgba(0, 200, 170, 0.4),
+                                          stop: 1 rgba(0, 169, 157, 0.3));
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 12px 20px;
+                border-radius: 10px;
+                border: 2px solid rgba(0, 200, 170, 0.5);
+            }
+        """) # Aquí había un margin-bottom: 10px;
         audio_title.setAlignment(Qt.AlignCenter)
         headphone_layout.addWidget(audio_title)
 
-        # Layout para los controles de audio
-        audio_controls = QWidget()
+        # Contenedor para controles de audio
+        audio_controls = QFrame()
+        audio_controls.setFrameShape(QFrame.StyledPanel)
+        audio_controls.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border-radius: 10px;
+                border: 2px solid #444444;
+            }
+        """)
         audio_controls_layout = QVBoxLayout(audio_controls)
+        audio_controls_layout.setSpacing(1)
+        audio_controls_layout.setContentsMargins(9, 5, 9, 5)
 
-        # Switch container para auriculares
-        control_row = QHBoxLayout()
+        # Switch container para auriculares con estilo moderno
+        first_headphone_row = QHBoxLayout()
         self.headphone_switch_container = SwitchContainer("On/Off:", 0, 0)
+        self.headphone_switch_container.setStyleSheet("""
+            QWidget {
+                background: transparent;
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 13px;
+                padding: 5px;
+            }
+        """)
+        
         self.switch_headphone = PyQtSwitch()
         self.switch_headphone.setAnimation(True)
         self.switch_headphone.setCircleDiameter(30)
@@ -274,89 +654,306 @@ class EMDRControllerWidget(QWidget):
         self.headphone_switch_container.add_switch(self.switch_headphone)
         self.switch_headphone.get_value = lambda: self.switch_headphone.isChecked()
         self.switch_headphone.set_value = lambda value: self.switch_headphone.setChecked(value)
-        # self.switch_headphone.set_value(True)
 
-        # Botón de prueba
+        # Botón de prueba modernizado
         self.btn_headphone_test = CustomButton(2, 0, 'Prueba', self.headphone_test_click)
+        self.btn_headphone_test.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #FF9800,
+                                          stop: 1 #F57C00);
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #FF9800;
+                padding: 8px 16px;
+                min-height: 35px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #FFB74D,
+                                          stop: 1 #FF9800);
+                border: 2px solid #FFB74D;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #E65100,
+                                          stop: 1 #BF360C);
+                border: 2px solid #E65100;
+            }
+        """)
 
-        control_row.addWidget(self.headphone_switch_container)
-        control_row.addStretch()
-        control_row.addWidget(self.btn_headphone_test)
-        audio_controls_layout.addLayout(control_row)
-        headphone_layout.addWidget(audio_controls)
+        first_headphone_row.addWidget(self.headphone_switch_container)
+        first_headphone_row.addStretch()
+        first_headphone_row.addWidget(self.btn_headphone_test)
+        
+        audio_controls_layout.addLayout(first_headphone_row)
+        
+        # Layout para controles de volumen y tono/duración modernizados
+        volume_tone_layout = QHBoxLayout()
+        volume_tone_layout.setSpacing(20)
 
-        # Layout para controles de volumen y tono/duración
-        volume_tone_controls = QWidget()
-        volume_tone_layout = QHBoxLayout(volume_tone_controls)
-
-        # Controles de volumen
+        # Controles de volumen modernizados
         volume_controls = QWidget()
-        volume_layout = QHBoxLayout(volume_controls)
-        volume_layout.setContentsMargins(5, 5, 5, 5)
+        volume_controls.setStyleSheet("""
+            QWidget {
+                background: transparent;
+            }
+        """)
+        volume_layout = QVBoxLayout(volume_controls)
+        volume_layout.setContentsMargins(0, 0, 0, 0)
+        volume_layout.setSpacing(1)
 
+        # Título para volumen
+        volume_title = QLabel("VOLUMEN")
+        volume_title.setAlignment(Qt.AlignCenter)
+        volume_title.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+                padding: 5px;
+            }
+        """)
+        volume_layout.addWidget(volume_title)
+        
+        # Botones de volumen con estilo moderno
         self.btn_headphone_volume_minus = CustomButton(0, 1, '-', size=(30, 30))
-        self.sel_headphone_volume = Selector(1, 1, 'Volumen', Config.volumes, '{0:d}%', None, None, 
-                                           self.update_sound, ticks=Config.volumes, parent=self)
+        self.btn_headphone_volume_minus.setStyleSheet(speed_button_style)
         self.btn_headphone_volume_plus = CustomButton(2, 1, '+', size=(30, 30))
+        self.btn_headphone_volume_plus.setStyleSheet(speed_button_style)
+        
+        self.sel_headphone_volume = Selector('Volumen', Config.volumes, '{0:d}%', 
+                                             self.btn_headphone_volume_minus, self.btn_headphone_volume_plus, 
+                                           self.update_sound, ticks=Config.volumes, parent=self)
+        self.sel_headphone_volume.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+                color: #FFFFFF;
+            }
+        """)
 
         # Conectar botones de volumen
         self.btn_headphone_volume_plus.clicked.connect(self.sel_headphone_volume.next_value)
         self.btn_headphone_volume_minus.clicked.connect(self.sel_headphone_volume.prev_value)
 
-        volume_layout.addStretch()
-        volume_layout.addWidget(self.btn_headphone_volume_minus)
-        volume_layout.addWidget(self.sel_headphone_volume)
-        volume_layout.addWidget(self.btn_headphone_volume_plus)
-        volume_layout.addStretch()
+        # Controles de volumen con botones
+        volume_controls_row = QHBoxLayout()
+        volume_controls_row.addStretch()
+        volume_controls_row.addWidget(self.sel_headphone_volume)
+        volume_controls_row.addStretch()
+        
+        volume_layout.addLayout(volume_controls_row)
         volume_tone_layout.addWidget(volume_controls)
 
-        # Controles de tono
+        # Controles de tono modernizados
         tone_controls = QWidget()
-        tone_layout = QHBoxLayout(tone_controls)
-        tone_layout.setContentsMargins(5, 5, 5, 5)
+        tone_controls.setStyleSheet("""
+            QWidget {
+                background: transparent;
+            }
+        """)
+        tone_layout = QVBoxLayout(tone_controls)
+        tone_layout.setContentsMargins(0, 0, 0, 0)
+        tone_layout.setSpacing(1)
+
+        # Título para tono
+        tone_title = QLabel("TONO")
+        tone_title.setAlignment(Qt.AlignCenter)
+        tone_title.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+                padding: 5px;
+            }
+        """)
+        tone_layout.addWidget(tone_title)
 
         self.btn_headphone_tone_minus = CustomButton(0, 2, '◀', size=(30, 30))
-        self.sel_headphone_tone = Selector(1, 2, 'Tono/Duración', Config.tones, '{0}', None, None, 
-                                        self.update_sound, cyclic=True, ticks=range(len(Config.tones)), parent=self)
+        self.btn_headphone_tone_minus.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #9C27B0,
+                                          stop: 1 #7B1FA2);
+                color: white;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid #9C27B0;
+                min-width: 30px;
+                min-height: 30px;
+                max-width: 30px;
+                max-height: 30px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #BA68C8,
+                                          stop: 1 #9C27B0);
+                border: 2px solid #BA68C8;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #6A1B9A,
+                                          stop: 1 #4A148C);
+                border: 2px solid #6A1B9A;
+            }
+        """)
         self.btn_headphone_tone_plus = CustomButton(2, 2, '▶', size=(30, 30))
+        self.btn_headphone_tone_plus.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #9C27B0,
+                                          stop: 1 #7B1FA2);
+                color: white;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid #9C27B0;
+                min-width: 30px;
+                min-height: 30px;
+                max-width: 30px;
+                max-height: 30px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #BA68C8,
+                                          stop: 1 #9C27B0);
+                border: 2px solid #BA68C8;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #6A1B9A,
+                                          stop: 1 #4A148C);
+                border: 2px solid #6A1B9A;
+            }
+        """)
+
+        self.sel_headphone_tone = Selector('Tono/Duración', Config.tones, '{0}', 
+                                           self.btn_headphone_tone_minus, self.btn_headphone_tone_plus, 
+                                        self.update_sound, cyclic=True, ticks=range(len(Config.tones)), parent=self)
+        self.sel_headphone_tone.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+                color: #FFFFFF;
+            }
+        """)
 
         # Conectar botones de tono
         self.btn_headphone_tone_plus.clicked.connect(self.sel_headphone_tone.next_value)
         self.btn_headphone_tone_minus.clicked.connect(self.sel_headphone_tone.prev_value)
 
-        tone_layout.addStretch()
-        tone_layout.addWidget(self.btn_headphone_tone_minus)
-        tone_layout.addWidget(self.sel_headphone_tone)
-        tone_layout.addWidget(self.btn_headphone_tone_plus)
-        tone_layout.addStretch()
+        # Controles de tono con botones modernizados
+        tone_controls_row = QHBoxLayout()
+        tone_controls_row.addStretch()
+        tone_controls_row.addWidget(self.sel_headphone_tone)
+        tone_controls_row.addStretch()
+        
+        tone_layout.addLayout(tone_controls_row)
         volume_tone_layout.addWidget(tone_controls)
 
         # Añadir controles de volumen y tono al layout principal
-        headphone_layout.addWidget(volume_tone_controls)
+        audio_controls_layout.addLayout(volume_tone_layout)
 
         # Añadir espacio al final
+        headphone_layout.addWidget(audio_controls)
         headphone_layout.addStretch()
         headphone_scroll.setWidget(headphone_container)
 
-        # 5.2 Pestaña de Estimulación Visual (Barra de Luz)
+        # 5.2 Pestaña de Estimulación Visual (Barra de Luz) - Modernizada
         lightbar_scroll = QScrollArea()
         lightbar_scroll.setWidgetResizable(True)
         lightbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         lightbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         lightbar_scroll.setFrameShape(QFrame.NoFrame)
+        lightbar_scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: #424242;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #00A99D;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #00C2B3;
+            }
+        """)
 
         lightbar_container = QWidget()
+        lightbar_container.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #2c2c2c,
+                                          stop: 1 #1a1a1a);
+                color: #FFFFFF;
+            }
+        """)
         lightbar_layout = QVBoxLayout(lightbar_container)
-        lightbar_layout.setContentsMargins(5, 5, 5, 5)
+        lightbar_layout.setContentsMargins(5, 0, 5, 0)
+        lightbar_layout.setSpacing(1)
 
-        # Título para controles de luz
+        # Título para controles de luz modernizado
         light_title = QLabel("CONTROLES DE LUZ")
-        light_title.setStyleSheet("font-weight: bold; color: #1565C0; background-color: #E3F2FD; padding: 5px;")
+        light_title.setStyleSheet("""
+            QLabel {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                          stop: 0 rgba(33, 150, 243, 0.3),
+                                          stop: 0.5 rgba(63, 169, 245, 0.4),
+                                          stop: 1 rgba(33, 150, 243, 0.3));
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 12px 20px;
+                border-radius: 10px;
+                border: 2px solid rgba(63, 169, 245, 0.5);
+            }
+        """)
         light_title.setAlignment(Qt.AlignCenter)
         lightbar_layout.addWidget(light_title)
 
-        # Switch para la barra de luz
+        # Contenedor para controles de luz
+        light_controls = QFrame()
+        light_controls.setFrameShape(QFrame.StyledPanel)
+        light_controls.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 rgba(60, 60, 60, 0.8),
+                                          stop: 1 rgba(40, 40, 40, 0.9));
+                border-radius: 10px;
+                border: 2px solid #444444;
+            }
+        """)
+        light_controls_layout = QVBoxLayout(light_controls)
+        light_controls_layout.setSpacing(1)
+        light_controls_layout.setContentsMargins(9, 5, 9, 5)
+
+        # Switch container para luz con estilo moderno
+        first_lightbar_row = QHBoxLayout()
         self.light_switch_container = SwitchContainer("On/Off:", 0, 0)
+        self.light_switch_container.setStyleSheet("""
+            QWidget {
+                background: transparent;
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 13px;
+                padding: 5px;
+            }
+        """)
+        
         self.switch_light = PyQtSwitch()
         self.switch_light.setAnimation(True) 
         self.switch_light.setCircleDiameter(30)
@@ -365,125 +962,513 @@ class EMDRControllerWidget(QWidget):
         self.switch_light.get_value = lambda: self.switch_light.isChecked()
         self.switch_light.set_value = lambda value: self.switch_light.setChecked(value)
 
-        # Botón de prueba de luz
+        # Botón de prueba de luz modernizado
         self.btn_light_test = CustomButton(1, 0, 'Prueba', self.light_test_click, togglable=True)
+        self.btn_light_test.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #2196F3,
+                                          stop: 1 #1976D2);
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #2196F3;
+                padding: 8px 16px;
+                min-height: 35px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #42A5F5,
+                                          stop: 1 #2196F3);
+                border: 2px solid #42A5F5;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #1565C0,
+                                          stop: 1 #0D47A1);
+                border: 2px solid #1565C0;
+            }
+            QPushButton:checked {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #4CAF50,
+                                          stop: 1 #388E3C);
+                border: 2px solid #4CAF50;
+            }
+        """)
         
-        # Botón para cambiar entre tiras LED
+        # Botón para cambiar entre tiras LED modernizado
         self.btn_light_switch_strip = CustomButton(2, 0, 'Cambiar', self.switch_strip_click)
-        
-        # Primera fila: Switch, botón prueba y botón cambiar
-        lightbar_row1 = QHBoxLayout()
-        lightbar_row1.addWidget(self.light_switch_container)
-        lightbar_row1.addStretch()
-        lightbar_row1.addWidget(self.btn_light_test)
-        lightbar_row1.addStretch()
-        lightbar_row1.addWidget(self.btn_light_switch_strip)
+        self.btn_light_switch_strip.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #673AB7,
+                                          stop: 1 #512DA8);
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #673AB7;
+                padding: 8px 16px;
+                min-height: 35px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #9575CD,
+                                          stop: 1 #673AB7);
+                border: 2px solid #9575CD;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #4527A0,
+                                          stop: 1 #311B92);
+                border: 2px solid #4527A0;
+            }
+        """)
 
-        # Segunda fila: Controles combinados de color y brillo
-        lightbar_row2 = QHBoxLayout()
+        first_lightbar_row.addWidget(self.light_switch_container)
+        first_lightbar_row.addStretch()
+        first_lightbar_row.addWidget(self.btn_light_test)
+        first_lightbar_row.addStretch()
+        first_lightbar_row.addWidget(self.btn_light_switch_strip)
         
-        # Controles de color
+        light_controls_layout.addLayout(first_lightbar_row)
+
+        # Layout para controles de color e intensidad modernizados
+        second_lightbar_row = QHBoxLayout()
+        second_lightbar_row.setSpacing(20)
+
+        # Controles de color modernizados
+        color_controls = QWidget()
+        color_controls.setStyleSheet("""
+            QWidget {
+                background: transparent;
+            }
+        """)
+        color_layout = QVBoxLayout(color_controls)
+        color_layout.setContentsMargins(0, 0, 0, 0)
+        color_layout.setSpacing(1)
+
+        # Título para color
+        color_title = QLabel("COLOR")
+        color_title.setAlignment(Qt.AlignCenter)
+        color_title.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+                padding: 5px;
+            }
+        """)
+        color_layout.addWidget(color_title)
+
+        # Controles de color con botones
+        color_controls_row = QHBoxLayout()
+        
         self.btn_light_color_minus = CustomButton(0, 1, '◀', size=(30, 30))
-        self.sel_light_color = Selector(1, 1, 'Color', Config.colors, '{0}', None, None,
-                                      self.update_light, cyclic=True, ticks=range(len(Config.colors)), parent=self)
+        self.btn_light_color_minus.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #E91E63,
+                                          stop: 1 #C2185B);
+                color: white;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid #E91E63;
+                min-width: 30px;
+                min-height: 30px;
+                max-width: 30px;
+                max-height: 30px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #F06292,
+                                          stop: 1 #E91E63);
+                border: 2px solid #F06292;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #AD1457,
+                                          stop: 1 #880E4F);
+                border: 2px solid #AD1457;
+            }
+        """)
         self.btn_light_color_plus = CustomButton(2, 1, '▶', size=(30, 30))
+        self.btn_light_color_plus.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #E91E63,
+                                          stop: 1 #C2185B);
+                color: white;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid #E91E63;
+                min-width: 30px;
+                min-height: 30px;
+                max-width: 30px;
+                max-height: 30px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #F06292,
+                                          stop: 1 #E91E63);
+                border: 2px solid #F06292;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #AD1457,
+                                          stop: 1 #880E4F);
+                border: 2px solid #AD1457;
+            }
+        """)
+        
+        self.sel_light_color = Selector('Color', Config.colors, '{0}', 
+                                        self.btn_light_color_minus, self.btn_light_color_plus,
+                                      self.update_light, cyclic=True, ticks=range(len(Config.colors)), parent=self)
+        self.sel_light_color.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+            }
+        """)
 
         # Conectar botones de color
         self.btn_light_color_plus.clicked.connect(self.sel_light_color.next_value)
         self.btn_light_color_minus.clicked.connect(self.sel_light_color.prev_value)
+
+        color_controls_row.addStretch()
+        color_controls_row.addWidget(self.sel_light_color)
+        color_controls_row.addStretch()
         
-        # Controles de intensidad
+        color_layout.addLayout(color_controls_row)
+        second_lightbar_row.addWidget(color_controls)
+
+        # Controles de intensidad modernizados
+        intensity_controls = QWidget()
+        intensity_controls.setStyleSheet("""
+            QWidget {
+                background: transparent;
+            }
+        """)
+        intensity_layout = QVBoxLayout(intensity_controls)
+        intensity_layout.setContentsMargins(0, 0, 0, 0)
+        intensity_layout.setSpacing(1)
+
+        # Título para intensidad
+        intensity_title = QLabel("BRILLO")
+        intensity_title.setAlignment(Qt.AlignCenter)
+        intensity_title.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+                padding: 5px;
+            }
+        """)
+        intensity_layout.addWidget(intensity_title)
+
+        # Controles de intensidad con botones
+        intensity_controls_row = QHBoxLayout()
+        
         self.btn_light_intens_minus = CustomButton(0, 2, '-', size=(30, 30))
-        self.sel_light_intens = Selector(1, 2, 'Brillo', Config.intensities, '{0:d}%',
-                                       None, None, self.update_light, ticks=Config.intensities, parent=self)
+        self.btn_light_intens_minus.setStyleSheet(speed_button_style)
         self.btn_light_intens_plus = CustomButton(2, 2, '+', size=(30, 30))
+        self.btn_light_intens_plus.setStyleSheet(speed_button_style)
+        
+        self.sel_light_intens = Selector('Brillo', Config.intensities, '{0:d}%',
+                                       self.btn_light_intens_minus, self.btn_light_intens_plus, 
+                                       self.update_light, ticks=Config.intensities, parent=self)
+        self.sel_light_intens.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+            }
+        """)
 
         # Conectar botones de intensidad
         self.btn_light_intens_plus.clicked.connect(self.sel_light_intens.next_value)
         self.btn_light_intens_minus.clicked.connect(self.sel_light_intens.prev_value)
-        
-        # Añadir todos los controles a la fila 2 (color y brillo juntos)
-        lightbar_row2.addStretch()
-        lightbar_row2.addWidget(self.btn_light_color_minus)
-        lightbar_row2.addWidget(self.sel_light_color)
-        lightbar_row2.addWidget(self.btn_light_color_plus)
-        lightbar_row2.addSpacing(20)  # Espacio entre controles de color y brillo
-        lightbar_row2.addWidget(self.btn_light_intens_minus)
-        lightbar_row2.addWidget(self.sel_light_intens)
-        lightbar_row2.addWidget(self.btn_light_intens_plus)
-        lightbar_row2.addStretch()
-        
-        # Añadir las filas al layout de la barra de luz
-        lightbar_layout.addLayout(lightbar_row1)
-        lightbar_layout.addLayout(lightbar_row2)
-        lightbar_layout.addStretch()
-        
-        lightbar_scroll.setWidget(lightbar_container)
 
-        # 5.3 Pestaña de Estimulación Táctil (Buzzer)
+        intensity_controls_row.addStretch()
+        intensity_controls_row.addWidget(self.sel_light_intens)
+        intensity_controls_row.addStretch()
+        
+        intensity_layout.addLayout(intensity_controls_row)
+        second_lightbar_row.addWidget(intensity_controls)
+
+        # Añadir controles de color e intensidad al layout principal
+        light_controls_layout.addLayout(second_lightbar_row)
+        
+        # Añadir espacio al final
+        lightbar_layout.addWidget(light_controls)
+        lightbar_layout.addStretch()
+        lightbar_scroll.setWidget(lightbar_container)
+        
+        # 5.3 Pestaña de Estimulación Táctil (Buzzer) - Modernizada
         buzzer_scroll = QScrollArea()
         buzzer_scroll.setWidgetResizable(True)
         buzzer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         buzzer_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         buzzer_scroll.setFrameShape(QFrame.NoFrame)
+        buzzer_scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: #424242;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #00A99D;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #00C2B3;
+            }
+        """)
 
         buzzer_container = QWidget()
+        buzzer_container.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #2c2c2c,
+                                          stop: 1 #1a1a1a);
+                color: #FFFFFF;
+            }
+        """)
         buzzer_layout = QVBoxLayout(buzzer_container)
-        buzzer_layout.setContentsMargins(5, 5, 5, 5)
+        buzzer_layout.setContentsMargins(5, 0, 5, 0)
+        buzzer_layout.setSpacing(1)
 
-        # Título para controles de vibración
+        # Título para controles de vibración modernizado
         buzzer_title = QLabel("CONTROLES DE VIBRACIÓN")
-        buzzer_title.setStyleSheet("font-weight: bold; color: #1565C0; background-color: #E3F2FD; padding: 5px;")
+        buzzer_title.setStyleSheet("""
+            QLabel {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                          stop: 0 rgba(156, 39, 176, 0.3),
+                                          stop: 0.5 rgba(186, 104, 200, 0.4),
+                                          stop: 1 rgba(156, 39, 176, 0.3));
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 12px 20px;
+                border-radius: 10px;
+                border: 2px solid rgba(186, 104, 200, 0.5);
+            }
+        """)
         buzzer_title.setAlignment(Qt.AlignCenter)
         buzzer_layout.addWidget(buzzer_title)
 
-        # Switch para el buzzer
+        # Contenedor para controles de vibración
+        buzzer_controls = QFrame()
+        buzzer_controls.setFrameShape(QFrame.StyledPanel)
+        buzzer_controls.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 rgba(60, 60, 60, 0.8),
+                                          stop: 1 rgba(40, 40, 40, 0.9));
+                border-radius: 10px;
+                border: 2px solid #444444;
+            }
+        """)
+        buzzer_controls_layout = QVBoxLayout(buzzer_controls)
+        buzzer_controls_layout.setSpacing(1)
+        buzzer_controls_layout.setContentsMargins(9, 5, 9, 5)
+
+        # Switch container para buzzer con estilo moderno
+        first_buzzer_row = QHBoxLayout()
         self.buzzer_switch_container = SwitchContainer("On/Off:", 0, 0)
+        self.buzzer_switch_container.setStyleSheet("""
+            QWidget {
+                background: transparent;
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 13px;
+                padding: 5px;
+            }
+        """)
+        
         self.switch_buzzer = PyQtSwitch()
         self.switch_buzzer.setAnimation(True)
+        self.switch_buzzer.setCircleDiameter(30)
         self.switch_buzzer.toggled.connect(self.update_buzzer)
         self.buzzer_switch_container.add_switch(self.switch_buzzer)
         self.switch_buzzer.get_value = lambda: self.switch_buzzer.isChecked()
         self.switch_buzzer.set_value = lambda value: self.switch_buzzer.setChecked(value)
-        
-        # Botón de prueba de buzzer
+
+        # Botón de prueba de buzzer modernizado
         self.btn_buzzer_test = CustomButton(2, 0, 'Prueba', self.buzzer_test_click)
+        self.btn_buzzer_test.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #9C27B0,
+                                          stop: 1 #7B1FA2);
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #9C27B0;
+                padding: 8px 16px;
+                min-height: 35px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #BA68C8,
+                                          stop: 1 #9C27B0);
+                border: 2px solid #BA68C8;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #6A1B9A,
+                                          stop: 1 #4A148C);
+                border: 2px solid #6A1B9A;
+            }
+        """)
+
+        first_buzzer_row.addWidget(self.buzzer_switch_container)
+        first_buzzer_row.addStretch()
+        first_buzzer_row.addWidget(self.btn_buzzer_test)
         
-        # Primera fila: Switch y botón prueba
-        buzzer_row1 = QHBoxLayout()
-        buzzer_row1.addWidget(self.buzzer_switch_container)
-        buzzer_row1.addStretch()
-        buzzer_row1.addWidget(self.btn_buzzer_test)
+        buzzer_controls_layout.addLayout(first_buzzer_row)
         
-        # Controles de duración
+        # Layout para controles de duración modernizados
+        second_buzzer_row = QHBoxLayout()
+        second_buzzer_row.setSpacing(20)
+
+        # Controles de duración modernizados
+        duration_controls = QWidget()
+        duration_controls.setStyleSheet("""
+            QWidget {
+                background: transparent;
+            }
+        """)
+        duration_layout = QVBoxLayout(duration_controls)
+        duration_layout.setContentsMargins(0, 0, 0, 0)
+        duration_layout.setSpacing(1)
+
+        # Título para duración
+        duration_title = QLabel("DURACIÓN")
+        duration_title.setAlignment(Qt.AlignCenter)
+        duration_title.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+                padding: 5px;
+            }
+        """)
+        duration_layout.addWidget(duration_title)
+
+        # Controles de duración con botones modernizados
+        duration_controls_row = QHBoxLayout()
+        
         self.btn_buzzer_duration_minus = CustomButton(0, 1, '-', size=(30, 30))
-        self.sel_buzzer_duration = Selector(1, 1, 'Duración', Config.durations, '{0:d} ms', 
-                                          None, None, self.update_buzzer, ticks=Config.durations, parent=self)
+        self.btn_buzzer_duration_minus.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #9C27B0,
+                                          stop: 1 #7B1FA2);
+                color: white;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid #9C27B0;
+                min-width: 30px;
+                min-height: 30px;
+                max-width: 30px;
+                max-height: 30px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #BA68C8,
+                                          stop: 1 #9C27B0);
+                border: 2px solid #BA68C8;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #6A1B9A,
+                                          stop: 1 #4A148C);
+                border: 2px solid #6A1B9A;
+            }
+        """)
         self.btn_buzzer_duration_plus = CustomButton(2, 1, '+', size=(30, 30))
+        self.btn_buzzer_duration_plus.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #9C27B0,
+                                          stop: 1 #7B1FA2);
+                color: white;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid #9C27B0;
+                min-width: 30px;
+                min-height: 30px;
+                max-width: 30px;
+                max-height: 30px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #BA68C8,
+                                          stop: 1 #9C27B0);
+                border: 2px solid #BA68C8;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #6A1B9A,
+                                          stop: 1 #4A148C);
+                border: 2px solid #6A1B9A;
+            }
+        """)
         
+        self.sel_buzzer_duration = Selector('Duración', Config.durations, '{0:d} ms', 
+                                          self.btn_buzzer_duration_minus, self.btn_buzzer_duration_plus, 
+                                          self.update_buzzer, ticks=Config.durations, parent=self)
+        self.sel_buzzer_duration.setStyleSheet("""
+            QLabel {
+                border: none;
+                background: transparent;
+            }
+        """)
+
         # Conectar botones de duración
         self.btn_buzzer_duration_plus.clicked.connect(self.sel_buzzer_duration.next_value)
         self.btn_buzzer_duration_minus.clicked.connect(self.sel_buzzer_duration.prev_value)
+
+        duration_controls_row.addStretch()
+        duration_controls_row.addWidget(self.sel_buzzer_duration)
+        duration_controls_row.addStretch()
         
-        # Segunda fila: Controles de duración
-        buzzer_row2 = QHBoxLayout()
-        buzzer_row2.addStretch()
-        buzzer_row2.addWidget(self.btn_buzzer_duration_minus)
-        buzzer_row2.addWidget(self.sel_buzzer_duration)
-        buzzer_row2.addWidget(self.btn_buzzer_duration_plus)
-        buzzer_row2.addStretch()
+        duration_layout.addLayout(duration_controls_row)
+        second_buzzer_row.addWidget(duration_controls)
+
+        # Añadir controles de duración al layout principal
+        buzzer_controls_layout.addLayout(second_buzzer_row)
         
-        # Añadir todas las filas al layout del buzzer
-        buzzer_layout.addLayout(buzzer_row1)
-        buzzer_layout.addLayout(buzzer_row2)
-        buzzer_layout.addStretch()  # Añadir espacio al final
-        
+        # Añadir espacio al final
+        buzzer_layout.addWidget(buzzer_controls)
+        buzzer_layout.addStretch()
         buzzer_scroll.setWidget(buzzer_container)
 
-        # Añadir las pestañas al TabWidget
-        self.tab_widget.addTab(headphone_scroll, "Estimulación Auditiva")
-        self.tab_widget.addTab(lightbar_scroll, "Estimulación Visual")
-        self.tab_widget.addTab(buzzer_scroll, "Estimulación Táctil")
+        # Añadir las pestañas al TabWidget con iconos sofisticados
+        headphone_icon = qta.icon('fa5s.headphones', color='white')
+        light_icon = qta.icon('fa6s.eye', color='white')
+        buzzer_icon = qta.icon('fa6s.hand', color='white')
+
+        self.tab_widget.addTab(headphone_scroll, headphone_icon, "Estimulación Auditiva")
+        self.tab_widget.addTab(lightbar_scroll, light_icon, "Estimulación Visual")
+        self.tab_widget.addTab(buzzer_scroll, buzzer_icon, "Estimulación Táctil")
         
         # Deshabilitar pestañas inicialmente hasta verificar conexiones
         # Excepto la auditiva que siempre está disponible
@@ -493,9 +1478,6 @@ class EMDRControllerWidget(QWidget):
         
         # Para mantener la compatibilidad con el código existente
         self.areas = {'headphone': 0, 'lightbar': 1, 'buzzer': 2}
-        
-        # Configurar fondo
-        self.setStyleSheet("background-color: rgba(230, 230, 230, 100);")
         
         # Eliminar la inicialización automática del timer de USB
         self.probe_timer = QTimer(self)
@@ -674,6 +1656,11 @@ class EMDRControllerWidget(QWidget):
         self.mode = 'action'
         if not self.pausing:
             self.sel_counter.set_value(0)
+            self.chronometer.reset()  # Reiniciar cronómetro
+    
+        # Iniciar cronómetro
+        self.chronometer.start()
+        
         self.stopping = False
         self.pausing = False
         
@@ -722,6 +1709,9 @@ class EMDRControllerWidget(QWidget):
         if self.mode == 'action':
             self.stopping = True
             
+            # Detener cronómetro
+            self.chronometer.stop()
+            
             # Detener captura de señales si el checkbox está marcado
             if hasattr(self, 'chk_capture_signals') and self.chk_capture_signals.isChecked():
                 main_window = self.window()
@@ -731,12 +1721,17 @@ class EMDRControllerWidget(QWidget):
         else:
             self.config_mode()
             self.reset_action()
+            # Reiniciar cronómetro cuando se para en modo config
+            self.chronometer.reset()
 
     def pause_click(self):
         """Maneja clic en el botón Pause"""
         if self.btn_pause.isChecked():
             # pause
             self.pausing = True
+            
+            # Pausar cronómetro
+            self.chronometer.pause()
             
             # Detener captura de señales si el checkbox está marcado
             if hasattr(self, 'chk_capture_signals') and self.chk_capture_signals.isChecked():
@@ -752,6 +1747,9 @@ class EMDRControllerWidget(QWidget):
                 self.pausing = False
                 self.action_extra_delay = 0
                 self.decay = False
+                
+                # Reanudar cronómetro
+                self.chronometer.resume()
                 
                 # Reanudar captura de señales si el checkbox está marcado y estábamos en pausa
                 if hasattr(self, 'chk_capture_signals') and self.chk_capture_signals.isChecked():
@@ -775,7 +1773,10 @@ class EMDRControllerWidget(QWidget):
         
         if self.switch_light.get_value():
             Devices.set_led(self.led_pos)
+        
+        # Obtener el valor actual del contador
         cntr = self.sel_counter.get_value()
+        
         if self.led_pos == 1:
             # left end
             if self.switch_buzzer.get_value():
@@ -798,6 +1799,10 @@ class EMDRControllerWidget(QWidget):
             # in the middle
             if self.decay:
                 self.config_mode()
+                
+                # Detener cronómetro al finalizar la sesión
+                self.chronometer.stop()
+                
                 self.reset_action()
                 
                 # Detener captura de señales si el checkbox está marcado
@@ -805,13 +1810,15 @@ class EMDRControllerWidget(QWidget):
                     main_window = self.window()
                     if hasattr(main_window, 'sensor_monitor') and main_window.sensor_monitor:
                         if main_window.sensor_monitor.running:
-                            main_window.sensor_monitor.stop_acquisition()  # Esto llama a stop_sensor()
-                
+                            main_window.sensor_monitor.stop_acquisition()
+            
                 return
             else:
                 cntr += 1
             self.sel_counter.set_value(cntr)
         self.led_pos += self.direction
+    
+        # Decaimiento: calcular nuevo retraso basado en la posición
         if self.decay:
             middle = int(Devices.led_num / 2) + 1
             n = Devices.led_num - middle
@@ -870,15 +1877,43 @@ class EMDRControllerWidget(QWidget):
         return found_devices
 
     def update_device_status_label(self, found_devices):
-        """Actualiza la etiqueta de estado de dispositivos"""
+        """Actualiza la etiqueta de estado de dispositivos con estilo moderno"""
         if not found_devices:
             self.device_status_label.setText("Estado de dispositivos: No se encontraron dispositivos")
-            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                              stop: 0 rgba(244, 67, 54, 0.2),
+                                              stop: 0.5 rgba(255, 87, 34, 0.25),
+                                              stop: 1 rgba(244, 67, 54, 0.2));
+                    color: #FFFFFF;
+                    font-weight: bold;
+                    font-size: 13px;
+                    padding: 12px 20px;
+                    border-radius: 10px;
+                    border: 2px solid rgba(244, 67, 54, 0.4);
+                    margin: 5px;
+                }
+            """)
             return
             
         if "Master Controller" not in found_devices:
             self.device_status_label.setText("Estado de dispositivos: No se encontró el controlador maestro")
-            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                              stop: 0 rgba(244, 67, 54, 0.2),
+                                              stop: 0.5 rgba(255, 87, 34, 0.25),
+                                              stop: 1 rgba(244, 67, 54, 0.2));
+                    color: #FFFFFF;
+                    font-weight: bold;
+                    font-size: 13px;
+                    padding: 12px 20px;
+                    border-radius: 10px;
+                    border: 2px solid rgba(244, 67, 54, 0.4);
+                    margin: 5px;
+                }
+            """)
             return
         
         # Crear texto de estado para cada tipo de dispositivo conocido
@@ -891,17 +1926,16 @@ class EMDRControllerWidget(QWidget):
                 required = False
                 
             is_connected = name in found_devices
-            status = "CONECTADO" if is_connected else "DESCONECTADO"
-            req = " (Requerido)" if required else ""
-            status_text += f"{name}{req}: {status} | "
+            status = "✅" if is_connected else "❌"
+            status_text += f"{name}: {status} | "
         
         # Añadir también el controlador maestro
-        status_text += "Master Controller: CONECTADO"
+        status_text += "Master Controller: ✅"
         
         # Actualizar el texto de la etiqueta
         self.device_status_label.setText(status_text)
         
-        # Verificar si todos los dispositivos requeridos (excepto el Sensor) están conectados
+        # Verificar si todos los dispositivos requeridos están conectados
         required_connected = all(
             name in found_devices
             for slave_id, (name, required) in KNOWN_SLAVES.items()
@@ -910,9 +1944,37 @@ class EMDRControllerWidget(QWidget):
         
         # Cambiar el color de fondo según el estado de conexión
         if required_connected:
-            self.device_status_label.setStyleSheet("background-color: rgba(200, 255, 200, 180); padding: 5px;")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                              stop: 0 rgba(76, 175, 80, 0.2),
+                                              stop: 0.5 rgba(129, 199, 132, 0.25),
+                                              stop: 1 rgba(76, 175, 80, 0.2));
+                    color: #FFFFFF;
+                    font-weight: bold;
+                    font-size: 13px;
+                    padding: 12px 20px;
+                    border-radius: 10px;
+                    border: 2px solid rgba(76, 175, 80, 0.4);
+                    margin: 5px;
+                }
+            """)
         else:
-            self.device_status_label.setStyleSheet("background-color: rgba(255, 200, 200, 180); padding: 5px;")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                              stop: 0 rgba(255, 193, 7, 0.2),
+                                              stop: 0.5 rgba(255, 213, 79, 0.25),
+                                              stop: 1 rgba(255, 193, 7, 0.2));
+                    color: #FFFFFF;
+                    font-weight: bold;
+                    font-size: 13px;
+                    padding: 12px 20px;
+                    border-radius: 10px;
+                    border: 2px solid rgba(255, 193, 7, 0.4);
+                    margin: 5px;
+                }
+            """)
 
     def scan_usb(self):
         """Verifica los dispositivos USB conectados automáticamente (reemplaza a check_usb)"""
@@ -974,22 +2036,38 @@ if __name__ == "__main__":
     # Crear la aplicación Qt
     app = QApplication([])
     
-    # Crear ventana principal para modo independiente
+    # Configurar estilo global de la aplicación
+    app.setStyleSheet("""
+        QMainWindow {
+            background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #323232,
+                                          stop: 0.3 #2c2c2c,
+                                          stop: 0.6 #252525,
+                                          stop: 0.8 #1a1a1a,
+                                          stop: 1 #000000);
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        QWidget {
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+    """)
+    
+    # Crear una ventana principal que contendrá el widget
     main_window = QMainWindow()
-    main_window.setWindowTitle("EMDR Controller")
+    main_window.setWindowTitle("Controlador EMDR")
     main_window.setGeometry(100, 100, 480, 700)
     
-    # Crear el widget del controlador
-    controller = EMDRControllerWidget(parent=main_window)
-    main_window.setCentralWidget(controller)
+    # Crear el widget del controlador para modo independiente
+    controller_widget = EMDRControllerWidget(parent=main_window)
+    main_window.setCentralWidget(controller_widget)
     
     # Inicializar controlador
-    controller.load_config()
+    controller_widget.load_config()
     
     # Mostrar ventana y ejecutar aplicación
     main_window.show()
     
     # Antes de salir, guardar configuración
-    app.aboutToQuit.connect(controller.closeEvent)
+    app.aboutToQuit.connect(controller_widget.closeEvent)
     
     sys.exit(app.exec())

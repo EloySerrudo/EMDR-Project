@@ -4,16 +4,13 @@ from PySide6.QtCore import Qt, Signal
 class Selector(QWidget):
     """Selector numérico implementado con QSlider horizontal"""
     
-    def __init__(self, x, y, title, values, format_str, btn_plus, btn_minus, updater=None, cyclic=False, show_slider=True, ticks=None, parent=None):
+    def __init__(self, title, values, format_str, btn_minus, btn_plus, updater=None, cyclic=False, show_slider=True, ticks=None, parent=None):
         super().__init__(parent)
-        
-        # Guardar posición para compatibilidad
-        self.pos_x = x
-        self.pos_y = y
         
         # Crear layout vertical para organizar componentes
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         
         # Título
         self.title_label = QLabel(title)
@@ -24,8 +21,14 @@ class Selector(QWidget):
         self.value_label.setAlignment(Qt.AlignCenter)
         self.value_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         
-        # Layout horizontal para el deslizador
+        # Guardar referencias a los botones para compatibilidad
+        self.btn_plus = btn_plus
+        self.btn_minus = btn_minus
+        
+        # Layout horizontal para el deslizador y los botones
         slider_layout = QHBoxLayout()
+        slider_layout.setContentsMargins(0, 0, 0, 0)
+        slider_layout.setSpacing(10)
         
         # Crear slider
         self.slider = QSlider(Qt.Horizontal)
@@ -71,17 +74,16 @@ class Selector(QWidget):
             }
         """)
         
+        slider_layout.addWidget(self.btn_minus)
+        slider_layout.addWidget(self.slider)
+        slider_layout.addWidget(self.btn_plus)
+        
         # Añadir componentes a los layouts según se muestre o no el slider
-        main_layout.addWidget(self.title_label)
-        
-        if show_slider:
-            slider_layout.addWidget(self.slider)
-            main_layout.addLayout(slider_layout)
-        
+        main_layout.addLayout(slider_layout)
         main_layout.addWidget(self.value_label)
         
         # Configurar tamaño fijo
-        self.setFixedSize(120, 80)
+        self.setFixedSize(188, 61)
         
         # Almacenar datos
         self.format = format_str
@@ -129,10 +131,6 @@ class Selector(QWidget):
                         # Mostrar todas las posiciones
                         self.slider.setTickInterval(1)
             
-        # Guardar referencias a los botones para compatibilidad
-        self.btn_plus = btn_plus
-        self.btn_minus = btn_minus
-        
         # Mostrar valor inicial sin llamar al updater
         self.show_value(initial=True)
     

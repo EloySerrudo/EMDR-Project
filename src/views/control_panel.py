@@ -54,105 +54,319 @@ class EMDRControlPanel(QMainWindow):
         # ===== 2. BARRA DE ESTADO DE DISPOSITIVOS =====
         self.device_status_frame = QFrame()
         self.device_status_frame.setFrameShape(QFrame.StyledPanel)
-        self.device_status_frame.setStyleSheet("background-color: #E3F2FD; border-radius: 4px;")
-        
-        device_status_layout = QHBoxLayout(self.device_status_frame)
-        device_status_layout.setContentsMargins(10, 5, 10, 5)
-        
-        self.device_status_label = QLabel("Estado de dispositivos: Verificando...")
-        self.device_status_label.setStyleSheet("color: #1565C0; font-weight: bold;")
-        device_status_layout.addWidget(self.device_status_label)
-        
-        self.scan_button = QPushButton("Escanear Dispositivos")
-        self.scan_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "resources", "scan_icon.png")))
-        self.scan_button.clicked.connect(self.scan_devices)
-        self.scan_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1565C0;
-                color: white;
-                border-radius: 4px;
-                padding: 5px 10px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed {
-                background-color: #0D47A1;
+        self.device_status_frame.setStyleSheet("""
+            QFrame {
+                background-color: #323232;
+                border: 2px solid #444444;
+                border-radius: 8px;
+                padding: 8px;
             }
         """)
+
+        device_status_layout = QHBoxLayout(self.device_status_frame)
+        device_status_layout.setContentsMargins(15, 8, 15, 8)
+
+        self.device_status_label = QLabel("Estado de dispositivos: Verificando...")
+        self.device_status_label.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 13px;
+                background: transparent;
+                padding: 2px;
+            }
+        """)
+        device_status_layout.addWidget(self.device_status_label)
+
+        self.scan_button = QPushButton("Escanear Dispositivos")
+        self.scan_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00A99D;
+                color: white;
+                border: 2px solid #00A99D;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+                min-width: 140px;
+            }
+            QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+            QPushButton:disabled {
+                background-color: #555555;
+                border: 2px solid #555555;
+                color: #888888;
+            }
+        """)
+        self.scan_button.clicked.connect(self.scan_devices)
         device_status_layout.addWidget(self.scan_button)
-        
+
         main_layout.addWidget(self.device_status_frame)
         
         # ===== 3. ÁREA PRINCIPAL DIVIDIDA =====
         # Splitter para dividir la ventana
         self.splitter = QSplitter(Qt.Horizontal)
-        main_layout.addWidget(self.splitter, 1)  # Darle mayor expansión vertical
+        self.splitter.setStyleSheet("""
+            QSplitter::handle {
+                border: none;
+            }
+        """)
+        main_layout.addWidget(self.splitter, 1) # Darle mayor expansión vertical
         
         # ===== 4. PANEL IZQUIERDO: CONTROLADOR EMDR =====
         self.left_panel = QFrame()
         self.left_panel.setFrameShape(QFrame.StyledPanel)
-        self.left_panel.setStyleSheet("background-color: white; border-radius: 4px;")
+        self.left_panel.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: 2px solid #555555;
+                border-radius: 10px;
+            }
+        """)
         left_layout = QVBoxLayout(self.left_panel)
-        
-        # Título del panel
+        left_layout.setContentsMargins(8, 8, 8, 8)
+        left_layout.setSpacing(0)
+
+        # Título del panel con estilo mejorado
         left_header = QLabel("CONTROL DE ESTIMULACIÓN")
-        left_header.setStyleSheet("font-size: 14px; font-weight: bold; color: #1565C0; padding: 3px;")
+        left_header.setStyleSheet("""
+            QLabel {
+                background: qconicalgradient(cx: 0.5, cy: 0.5, angle: 0,
+                                       stop: 0 rgba(120, 255, 180, 0.3),
+                                       stop: 0.5 rgba(0, 169, 157, 0.4),
+                                       stop: 1 rgba(120, 255, 180, 0.3));
+                color: #FFFFFF;
+                font-size: 14px; 
+                font-weight: bold; 
+                padding: 8px;
+                border-radius: 8px;
+                border: 1px solid rgba(0, 140, 130, 0.6);
+            }
+        """)
         left_header.setAlignment(Qt.AlignCenter)
         left_layout.addWidget(left_header)
-        
+
         # Añadir el controlador EMDR
         self.emdr_controller = EMDRControllerWidget()
+        self.emdr_controller.main_layout.setContentsMargins(0, 8, 0, 0)  # Eliminar márgenes del layout interno
         left_layout.addWidget(self.emdr_controller)
         
         # ===== 5. PANEL DERECHO: MONITOR DE SENSORES =====
         self.right_panel = QFrame()
         self.right_panel.setFrameShape(QFrame.StyledPanel)
-        self.right_panel.setStyleSheet("background-color: white; border-radius: 4px;")
+        self.right_panel.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: 2px solid #555555;
+                border-radius: 10px;
+            }
+        """)
         right_layout = QVBoxLayout(self.right_panel)
-        
-        # Título del panel
+        right_layout.setContentsMargins(8, 8, 8, 8)
+
+        # Título del panel con estilo mejorado
         right_header = QLabel("MONITOR DE SEÑALES")
-        right_header.setStyleSheet("font-size: 14px; font-weight: bold; color: #1565C0; padding: 3px;")
+        right_header.setStyleSheet("""
+            QLabel {
+                background: qconicalgradient(cx: 0.5, cy: 0.5, angle: 0,
+                                       stop: 0 rgba(120, 255, 180, 0.3),
+                                       stop: 0.5 rgba(0, 169, 157, 0.4),
+                                       stop: 1 rgba(120, 255, 180, 0.3));
+                color: #FFFFFF;
+                font-size: 14px; 
+                font-weight: bold; 
+                padding: 8px;
+                border-radius: 8px;
+                border: 1px solid rgba(0, 140, 130, 0.6);
+            }
+        """)
         right_header.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(right_header)
-        
-        # Panel para selección de visualización
-        view_selector_layout = QHBoxLayout()
-        view_selector_layout.addWidget(QLabel("Visualización:"))
-        
+
+        # Panel para selección de visualización con estilo mejorado
+        view_selector_frame = QFrame()
+        view_selector_frame.setStyleSheet("""
+            QFrame {
+                background-color: #424242;
+                border-radius: 8px;
+                padding: 5px;
+                margin: 2px;
+                border: 1px solid #555555;
+            }
+        """)
+        view_selector_layout = QHBoxLayout(view_selector_frame)
+        view_selector_layout.setContentsMargins(10, 5, 10, 5)
+
+        # Label para visualización
+        viz_label = QLabel("Visualización:")
+        viz_label.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-weight: 600;
+                font-size: 12px;
+                background: transparent;
+                border: none;
+            }
+        """)
+        view_selector_layout.addWidget(viz_label)
+
         self.view_selector = QComboBox()
         self.view_selector.addItems(["Señales en tiempo real", "Historial de sesión", "Estadísticas"])
         self.view_selector.setStyleSheet("""
             QComboBox {
-                background-color: #f0f0f0;
-                border-radius: 4px;
-                padding: 3px;
+                background-color: #424242;
+                color: white;
+                border: 2px solid #555555;
+                border-radius: 6px;
+                padding: 4px 12px;
+                min-width: 140px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            QComboBox:focus {
+                border: 2px solid #00A99D;
+                background-color: #383838;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 25px;
+                border-left: 1px solid #555555;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                background-color: #333333;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border: none;
+                width: 12px;
+                height: 12px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #424242;
+                color: white;
+                selection-background-color: #00A99D;
+                border: 1px solid #555555;
+                outline: none;
+            }
+            QComboBox QAbstractItemView::item {
+                height: 25px;
+                padding: 4px;
+                border: none;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #00A99D;
             }
         """)
         view_selector_layout.addWidget(self.view_selector)
         view_selector_layout.addStretch()
-        right_layout.addLayout(view_selector_layout)
-        
+        right_layout.addWidget(view_selector_frame)
+
         # Stack widget para diferentes vistas
         self.view_stack = QStackedWidget()
-        
+        self.view_stack.setStyleSheet("""
+            QStackedWidget {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+
         # Vista 1: Monitor de sensores en tiempo real
         self.sensor_monitor = SensorMonitor()
         self.view_stack.addWidget(self.sensor_monitor)
-        
-        # Vista 2: Historial de sesión (placeholder)
+
+        # Vista 2: Historial de sesión (placeholder mejorado)
         self.history_view = QWidget()
+        self.history_view.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+                                       stop: 0 #F8F9FA,
+                                       stop: 1 #E9ECEF);
+                border-radius: 8px;
+            }
+        """)
         history_layout = QVBoxLayout(self.history_view)
-        history_layout.addWidget(QLabel("Historial de sesión"))
+        history_layout.setContentsMargins(20, 20, 20, 20)
+
+        history_title = QLabel("HISTORIAL DE SESIÓN")
+        history_title.setStyleSheet("""
+            QLabel {
+                background-color: #424242;
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 8px;
+                border: 1px solid #555555;
+            }
+        """)
+        history_title.setAlignment(Qt.AlignCenter)
+        history_layout.addWidget(history_title)
+
+        history_placeholder = QLabel("Funcionalidad en desarrollo...")
+        history_placeholder.setStyleSheet("""
+            QLabel {
+                color: #666666;
+                font-size: 14px;
+                font-style: italic;
+                background: transparent;
+            }
+        """)
+        history_placeholder.setAlignment(Qt.AlignCenter)
+        history_layout.addWidget(history_placeholder)
+        history_layout.addStretch()
+
         self.view_stack.addWidget(self.history_view)
-        
-        # Vista 3: Estadísticas (placeholder)
+
+        # Vista 3: Estadísticas (placeholder mejorado)
         self.stats_view = QWidget()
+        self.stats_view.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+                                       stop: 0 #F8F9FA,
+                                       stop: 1 #E9ECEF);
+                border-radius: 8px;
+            }
+        """)
         stats_layout = QVBoxLayout(self.stats_view)
-        stats_layout.addWidget(QLabel("Estadísticas"))
+        stats_layout.setContentsMargins(20, 20, 20, 20)
+
+        stats_title = QLabel("ESTADÍSTICAS")
+        stats_title.setStyleSheet("""
+            QLabel {
+                background-color: #424242;
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 8px;
+                border: 1px solid #555555;
+            }
+        """)
+        stats_title.setAlignment(Qt.AlignCenter)
+        stats_layout.addWidget(stats_title)
+
+        stats_placeholder = QLabel("Funcionalidad en desarrollo...")
+        stats_placeholder.setStyleSheet("""
+            QLabel {
+                color: #666666;
+                font-size: 14px;
+                font-style: italic;
+                background: transparent;
+            }
+        """)
+        stats_placeholder.setAlignment(Qt.AlignCenter)
+        stats_layout.addWidget(stats_placeholder)
+        stats_layout.addStretch()
+
         self.view_stack.addWidget(self.stats_view)
-        
+
         right_layout.addWidget(self.view_stack)
         
         # Conectar el selector de vistas al stack widget
@@ -167,80 +381,152 @@ class EMDRControlPanel(QMainWindow):
         # ===== 7. BARRA INFERIOR DE ESTADO Y ACCIONES =====
         footer_frame = QFrame()
         footer_frame.setFrameShape(QFrame.StyledPanel)
-        footer_frame.setStyleSheet("background-color: #E8EAF6; border-radius: 4px;")
+        footer_frame.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: 2px solid #444444;
+                border-radius: 8px;
+                padding: 5px;
+            }
+        """)
         footer_layout = QHBoxLayout(footer_frame)
-        footer_layout.setContentsMargins(8, 3, 8, 3)  # Reducir márgenes
-        
-        # Información de sesión
+        footer_layout.setContentsMargins(12, 8, 12, 8)
+
+        # Información de sesión con estilo mejorado
         self.session_info = QLabel("Sesión: No iniciada")
+        self.session_info.setStyleSheet("""
+            QLabel {
+                color: #CCCCCC;
+                font-size: 13px;
+                font-weight: 600;
+                background: transparent;
+                padding: 2px 8px;
+            }
+        """)
         footer_layout.addWidget(self.session_info)
-        
+
         footer_layout.addStretch()
-        
-        # Botones de acción
+
+        # Botones de acción con estilo moderno inspirado en login
         new_session_btn = QPushButton("Nueva Sesión")
         new_session_btn.clicked.connect(self.start_new_session)
         new_session_btn.setStyleSheet("""
             QPushButton {
-                background-color: #4CAF50;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #66BB6A,
+                                       stop: 1 #4CAF50);
                 color: white;
-                border-radius: 4px;
-                padding: 3px 10px;
-                font-size: 11px;
-                min-width: 110px;
+                border: 2px solid #4CAF50;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 12px;
+                font-weight: bold;
+                min-width: 120px;
             }
             QPushButton:hover {
-                background-color: #66BB6A;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #81C784,
+                                       stop: 1 #66BB6A);
+                border: 2px solid #66BB6A;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #4CAF50,
+                                       stop: 1 #388E3C);
+                border: 2px solid #388E3C;
             }
         """)
         footer_layout.addWidget(new_session_btn)
-        
+
         save_btn = QPushButton("Guardar Datos")
         save_btn.clicked.connect(self.save_session_data)
         save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #2196F3;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #42A5F5,
+                                       stop: 1 #2196F3);
                 color: white;
-                border-radius: 4px;
-                padding: 3px 10px;
-                font-size: 11px;
-                min-width: 110px;
+                border: 2px solid #2196F3;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 12px;
+                font-weight: bold;
+                min-width: 120px;
             }
             QPushButton:hover {
-                background-color: #42A5F5;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #64B5F6,
+                                       stop: 1 #42A5F5);
+                border: 2px solid #42A5F5;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #2196F3,
+                                       stop: 1 #1976D2);
+                border: 2px solid #1976D2;
             }
         """)
         footer_layout.addWidget(save_btn)
-        
+
         exit_btn = QPushButton("Salir")
         exit_btn.clicked.connect(self.close)
         exit_btn.setStyleSheet("""
             QPushButton {
-                background-color: #F44336;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #EF5350,
+                                       stop: 1 #F44336);
                 color: white;
-                border-radius: 4px;
-                padding: 3px 10px;
-                font-size: 11px;
-                min-width: 110px;
+                border: 2px solid #F44336;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 12px;
+                font-weight: bold;
+                min-width: 120px;
             }
             QPushButton:hover {
-                background-color: #EF5350;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #E57373,
+                                       stop: 1 #EF5350);
+                border: 2px solid #EF5350;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #F44336,
+                                       stop: 1 #D32F2F);
+                border: 2px solid #D32F2F;
             }
         """)
         footer_layout.addWidget(exit_btn)
-        
+
         main_layout.addWidget(footer_frame)
         
         # ===== 8. CONFIGURACIÓN GENERAL DE LA APLICACIÓN =====
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #ECEFF1;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #323232,
+                                          stop: 0.3 #2c2c2c,
+                                          stop: 0.6 #252525,
+                                          stop: 0.8 #1a1a1a,
+                                          stop: 1 #000000);
             }
             QLabel {
                 font-family: 'Segoe UI', Arial, sans-serif;
             }
             QPushButton {
                 font-weight: bold;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            QComboBox {
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            QMessageBox {
+                background-color: #F8F9FA;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            QDialog {
+                background-color: #F8F9FA;
+                font-family: 'Segoe UI', Arial, sans-serif;
             }
         """)
         
@@ -253,10 +539,6 @@ class EMDRControlPanel(QMainWindow):
         
         # Configurar para que el controlador EMDR tenga acceso directo al monitor de sensores
         self.emdr_controller.sensor_monitor = self.sensor_monitor
-        
-        # Simplificar la barra de estado ocultando la que muestran ambos componentes
-        self.emdr_controller.device_status_label.hide()
-        self.sensor_monitor.device_status_label.hide()
         
         # Mantener las conexiones para centralizar la lógica en scan_devices
         self.emdr_controller.scan_usb_click = self.scan_devices
@@ -272,60 +554,141 @@ class EMDRControlPanel(QMainWindow):
         """Crea la barra superior con información contextual"""
         header_frame = QFrame()
         header_frame.setFrameShape(QFrame.StyledPanel)
-        header_frame.setStyleSheet("background-color: #1565C0; border-radius: 4px;")
-        # Reducir altura mínima
-        header_frame.setMinimumHeight(40)
+        # Aplicar el gradiente cónico similar al login
+        header_frame.setStyleSheet("""
+            QFrame {
+                background: qconicalgradient(cx: 0.5, cy: 0.5, angle: 0,
+                                       stop: 0 rgba(120, 255, 180, 0.9),
+                                       stop: 0.2 rgba(0, 230, 140, 0.8),
+                                       stop: 0.4 rgba(0, 169, 157, 0.85),
+                                       stop: 0.6 rgba(0, 140, 130, 0.8),
+                                       stop: 0.8 rgba(0, 200, 160, 0.85),
+                                       stop: 1 rgba(120, 255, 180, 0.9));
+                border-radius: 12px;
+                border-top: 2px solid rgba(200, 255, 220, 0.8);
+                border-left: 1px solid rgba(255, 255, 255, 0.6);
+                border-right: 1px solid rgba(0, 0, 0, 0.3);
+                border-bottom: 2px solid rgba(0, 0, 0, 0.4);
+                padding: 5px 20px;
+            }
+        """)
+        header_frame.setMinimumHeight(45)
         
         # Reducir márgenes
         header_layout = QHBoxLayout(header_frame)
-        header_layout.setContentsMargins(10, 3, 10, 3)
+        header_layout.setContentsMargins(15, 5, 15, 5)
         
-        # Logo o título con fuente más pequeña
+        # Logo o título con estilo mejorado (sin text-shadow)
         logo_label = QLabel("EMDR THERAPY")
-        logo_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
+        logo_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                background: transparent;
+            }
+        """)
         header_layout.addWidget(logo_label)
         
         header_layout.addStretch()
         
-        # Información del terapeuta con fuente más pequeña
+        # Información del terapeuta con estilo mejorado (sin text-shadow)
         therapist_label = QLabel(f"Terapeuta: {username}")
-        therapist_label.setStyleSheet("color: white; font-size: 12px;")
+        therapist_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 13px;
+                font-weight: 600;
+                background: transparent;
+            }
+        """)
         header_layout.addWidget(therapist_label)
         
-        # Menor espaciado
-        header_layout.addSpacing(15)
+        # Espaciado
+        header_layout.addSpacing(20)
         
-        # Selector de paciente
+        # Selector de paciente con estilo moderno (sin text-shadow)
         patient_label = QLabel("Paciente:")
-        patient_label.setStyleSheet("color: white;")
+        patient_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-weight: 600;
+                background: transparent;
+            }
+        """)
         header_layout.addWidget(patient_label)
         
         self.patient_selector = QComboBox()
         self.patient_selector.setStyleSheet("""
             QComboBox {
-                background-color: white;
-                border-radius: 3px;
-                padding: 2px 8px;
-                min-width: 140px;
+                background-color: #424242;
+                color: white;
+                border: 2px solid #555555;
+                border-radius: 6px;
+                padding: 4px 12px;
+                min-width: 160px;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            QComboBox:focus {
+                border: 2px solid #00A99D;
+                background-color: #383838;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 30px;
+                border-left: 1px solid #555555;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                background-color: #333333;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border: none;
+                width: 16px;
+                height: 16px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #424242;
+                color: white;
+                selection-background-color: #00A99D;
+                border: 1px solid #555555;
+                outline: none;
+            }
+            QComboBox QAbstractItemView::item {
+                height: 30px;
+                padding: 5px;
+                border: none;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #00A99D;
             }
         """)
         self.patient_selector.currentIndexChanged.connect(self.change_patient)
         header_layout.addWidget(self.patient_selector)
         
-        # Botón más compacto
+        # Botón con estilo moderno
         add_patient_btn = QPushButton("Crear paciente")
         add_patient_btn.setToolTip("Añadir nuevo paciente")
         add_patient_btn.setStyleSheet("""
             QPushButton {
-                background-color: #757575;
+                background-color: #424242;
                 color: white;
-                border-radius: 3px;
-                padding: 2px 8px;
-                margin-left: 3px;
-                font-size: 11px;
+                border: 2px solid #424242;
+                border-radius: 6px;
+                padding: 4px 12px;
+                margin-left: 8px;
+                font-size: 12px;
+                font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #9E9E9E;
+                background-color: #555555;
+                border: 2px solid #555555;
+            }
+            QPushButton:pressed {
+                background-color: #333333;
+                border: 2px solid #333333;
             }
         """)
         add_patient_btn.clicked.connect(self.add_new_patient)
@@ -663,22 +1026,69 @@ class EMDRControlPanel(QMainWindow):
         # Crear el diálogo
         dialog = QDialog(self)
         dialog.setWindowTitle("Añadir Nuevo Paciente")
-        dialog.setMinimumWidth(400)
+        dialog.setMinimumWidth(450)
         dialog.setModal(True)
+        dialog.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #F8F9FA,
+                                       stop: 1 #E9ECEF);
+                border-radius: 10px;
+            }
+            QLabel {
+                color: #424242;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            QLineEdit, QTextEdit {
+                background-color: #FFFFFF;
+                border: 2px solid #CCCCCC;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 12px;
+                color: #424242;
+            }
+            QLineEdit:focus, QTextEdit:focus {
+                border: 2px solid #00A99D;
+                background-color: #FAFAFA;
+            }
+        """)
         
         # Layout principal
         layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
         
-        # Título
+        # Título con estilo del login
         title_label = QLabel("DATOS DEL PACIENTE")
-        title_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #1565C0;")
+        title_label.setStyleSheet("""
+            QLabel {
+                background: qconicalgradient(cx: 0.5, cy: 0.5, angle: 0,
+                                       stop: 0 rgba(120, 255, 180, 0.9),
+                                       stop: 0.4 rgba(0, 169, 157, 0.85),
+                                       stop: 1 rgba(120, 255, 180, 0.9));
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 12px;
+                border-radius: 8px;
+                border: 1px solid rgba(0, 140, 130, 0.6);
+            }
+        """)
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
         
-        # Formulario
-        form_layout = QFormLayout()
-        form_layout.setSpacing(10)
+        # Frame para el formulario
+        form_frame = QFrame()
+        form_frame.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border: 2px solid #CCCCCC;
+                border-radius: 10px;
+                padding: 15px;
+            }
+        """)
+        form_layout = QFormLayout(form_frame)
+        form_layout.setSpacing(12)
         form_layout.setLabelAlignment(Qt.AlignRight)
         
         # Campos del formulario
@@ -701,32 +1111,72 @@ class EMDRControlPanel(QMainWindow):
         
         notas_edit = QTextEdit()
         notas_edit.setPlaceholderText("Notas adicionales (opcional)")
-        notas_edit.setMaximumHeight(100)
+        notas_edit.setMaximumHeight(80)
         
-        # Añadir campos al formulario
-        form_layout.addRow("Nombre:", nombre_edit)
-        form_layout.addRow("Apellido paterno:", apellido_paterno_edit)
-        form_layout.addRow("Apellido materno:", apellido_materno_edit)
-        form_layout.addRow("Edad:", edad_edit)
-        form_layout.addRow("Celular:", celular_edit)
-        form_layout.addRow("Notas:", notas_edit)
+        # Añadir campos al formulario con labels estilizados
+        label_style = """
+            QLabel {
+                color: #424242;
+                font-weight: 600;
+                font-size: 13px;
+            }
+        """
         
-        layout.addLayout(form_layout)
+        nombre_label = QLabel("Nombre:")
+        nombre_label.setStyleSheet(label_style)
+        form_layout.addRow(nombre_label, nombre_edit)
         
-        # Botones de acción
+        apellido_p_label = QLabel("Apellido paterno:")
+        apellido_p_label.setStyleSheet(label_style)
+        form_layout.addRow(apellido_p_label, apellido_paterno_edit)
+        
+        apellido_m_label = QLabel("Apellido materno:")
+        apellido_m_label.setStyleSheet(label_style)
+        form_layout.addRow(apellido_m_label, apellido_materno_edit)
+        
+        edad_label = QLabel("Edad:")
+        edad_label.setStyleSheet(label_style)
+        form_layout.addRow(edad_label, edad_edit)
+        
+        celular_label = QLabel("Celular:")
+        celular_label.setStyleSheet(label_style)
+        form_layout.addRow(celular_label, celular_edit)
+        
+        notas_label = QLabel("Notas:")
+        notas_label.setStyleSheet(label_style)
+        form_layout.addRow(notas_label, notas_edit)
+        
+        layout.addWidget(form_frame)
+        
+        # Botones de acción con estilo moderno
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
         cancel_btn = QPushButton("Cancelar")
         cancel_btn.setStyleSheet("""
             QPushButton {
-                background-color: #F44336;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #EF5350,
+                                       stop: 1 #F44336);
                 color: white;
-                border-radius: 4px;
-                padding: 5px 15px;
+                border: 2px solid #F44336;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 12px;
+                font-weight: bold;
+                min-width: 100px;
             }
             QPushButton:hover {
-                background-color: #EF5350;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #E57373,
+                                       stop: 1 #EF5350);
+                border: 2px solid #EF5350;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #F44336,
+                                       stop: 1 #D32F2F);
+                border: 2px solid #D32F2F;
             }
         """)
         cancel_btn.clicked.connect(dialog.reject)
@@ -734,13 +1184,28 @@ class EMDRControlPanel(QMainWindow):
         save_btn = QPushButton("Guardar")
         save_btn.setStyleSheet("""
             QPushButton {
-                background-color: #4CAF50;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #66BB6A,
+                                       stop: 1 #4CAF50);
                 color: white;
-                border-radius: 4px;
-                padding: 5px 15px;
+                border: 2px solid #4CAF50;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 12px;
+                font-weight: bold;
+                min-width: 100px;
             }
             QPushButton:hover {
-                background-color: #66BB6A;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #81C784,
+                                       stop: 1 #66BB6A);
+                border: 2px solid #66BB6A;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #4CAF50,
+                                       stop: 1 #388E3C);
+                border: 2px solid #388E3C;
             }
         """)
         save_btn.clicked.connect(lambda: self.save_new_patient(
