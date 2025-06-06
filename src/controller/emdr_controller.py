@@ -107,6 +107,16 @@ class EMDRControllerWidget(QWidget):
         self.pausing = False
         self.stopping = False
         
+        self.setStyleSheet("""
+            QFrame {
+                border: 2px solid #444444;
+                border-top-left-radius: 0px;
+                border-top-right-radius: 0px;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
+        
         # Layout principal vertical
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(15, 15, 15, 15)
@@ -357,7 +367,6 @@ class EMDRControllerWidget(QWidget):
         # Título para velocidad
         speed_title = QLabel("VELOCIDAD")
         speed_title.setAlignment(Qt.AlignCenter)
-        speed_title.setFixedSize(200, 30)
         speed_title.setStyleSheet("""
             QLabel {
                 font-weight: bold;
@@ -435,7 +444,6 @@ class EMDRControllerWidget(QWidget):
         # Título para contador
         counter_title = QLabel("CONTADOR")
         counter_title.setAlignment(Qt.AlignCenter)
-        counter_title.setFixedSize(200, 30)
         counter_title.setStyleSheet("""
             QLabel {
                 font-weight: bold;
@@ -466,7 +474,6 @@ class EMDRControllerWidget(QWidget):
         # Título para cronómetro
         chronometer_title = QLabel("TIEMPO")
         chronometer_title.setAlignment(Qt.AlignCenter)
-        chronometer_title.setFixedSize(120, 30)
         chronometer_title.setStyleSheet("""
             QLabel {
                 font-weight: bold;
@@ -595,11 +602,12 @@ class EMDRControllerWidget(QWidget):
             QWidget {
                 background: transparent;
                 border: none;
+                color: #FFFFFF;
             }
         """)
         headphone_layout = QVBoxLayout(headphone_container)
-        headphone_layout.setContentsMargins(5, 0, 5, 0)
-        headphone_layout.setSpacing(1)
+        headphone_layout.setContentsMargins(0, 0, 0, 0)
+        headphone_layout.setSpacing(0)
 
         # Título para controles de audio modernizado
         audio_title = QLabel("CONTROLES DE AUDIO")
@@ -613,7 +621,7 @@ class EMDRControllerWidget(QWidget):
                 font-weight: bold;
                 font-size: 14px;
                 padding: 12px 20px;
-                border-radius: 10px;
+                border-radius: 0px;
                 border: 2px solid rgba(0, 200, 170, 0.5);
             }
         """) # Aquí había un margin-bottom: 10px;
@@ -626,8 +634,7 @@ class EMDRControllerWidget(QWidget):
         audio_controls.setStyleSheet("""
             QFrame {
                 background: transparent;
-                border-radius: 10px;
-                border: 2px solid #444444;
+                border: none;
             }
         """)
         audio_controls_layout = QVBoxLayout(audio_controls)
@@ -733,7 +740,6 @@ class EMDRControllerWidget(QWidget):
             QLabel {
                 border: none;
                 background: transparent;
-                color: #FFFFFF;
             }
         """)
 
@@ -842,7 +848,6 @@ class EMDRControllerWidget(QWidget):
             QLabel {
                 border: none;
                 background: transparent;
-                color: #FFFFFF;
             }
         """)
 
@@ -896,15 +901,14 @@ class EMDRControllerWidget(QWidget):
         lightbar_container = QWidget()
         lightbar_container.setStyleSheet("""
             QWidget {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #2c2c2c,
-                                          stop: 1 #1a1a1a);
+                background: transparent;
+                border: none;
                 color: #FFFFFF;
             }
         """)
         lightbar_layout = QVBoxLayout(lightbar_container)
-        lightbar_layout.setContentsMargins(5, 0, 5, 0)
-        lightbar_layout.setSpacing(1)
+        lightbar_layout.setContentsMargins(0, 0, 0, 0)
+        lightbar_layout.setSpacing(0)
 
         # Título para controles de luz modernizado
         light_title = QLabel("CONTROLES DE LUZ")
@@ -918,7 +922,7 @@ class EMDRControllerWidget(QWidget):
                 font-weight: bold;
                 font-size: 14px;
                 padding: 12px 20px;
-                border-radius: 10px;
+                border-radius: 0px;
                 border: 2px solid rgba(63, 169, 245, 0.5);
             }
         """)
@@ -930,11 +934,8 @@ class EMDRControllerWidget(QWidget):
         light_controls.setFrameShape(QFrame.StyledPanel)
         light_controls.setStyleSheet("""
             QFrame {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 rgba(60, 60, 60, 0.8),
-                                          stop: 1 rgba(40, 40, 40, 0.9));
-                border-radius: 10px;
-                border: 2px solid #444444;
+                background: transparent;
+                border: none;
             }
         """)
         light_controls_layout = QVBoxLayout(light_controls)
@@ -1239,15 +1240,14 @@ class EMDRControllerWidget(QWidget):
         buzzer_container = QWidget()
         buzzer_container.setStyleSheet("""
             QWidget {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #2c2c2c,
-                                          stop: 1 #1a1a1a);
+                background: transparent;
+                border: none;
                 color: #FFFFFF;
             }
         """)
         buzzer_layout = QVBoxLayout(buzzer_container)
-        buzzer_layout.setContentsMargins(5, 0, 5, 0)
-        buzzer_layout.setSpacing(1)
+        buzzer_layout.setContentsMargins(0, 0, 0, 0)
+        buzzer_layout.setSpacing(0)
 
         # Título para controles de vibración modernizado
         buzzer_title = QLabel("CONTROLES DE VIBRACIÓN")
@@ -1261,7 +1261,7 @@ class EMDRControllerWidget(QWidget):
                 font-weight: bold;
                 font-size: 14px;
                 padding: 12px 20px;
-                border-radius: 10px;
+                border-radius: 0px;
                 border: 2px solid rgba(186, 104, 200, 0.5);
             }
         """)
@@ -1273,11 +1273,8 @@ class EMDRControllerWidget(QWidget):
         buzzer_controls.setFrameShape(QFrame.StyledPanel)
         buzzer_controls.setStyleSheet("""
             QFrame {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 rgba(60, 60, 60, 0.8),
-                                          stop: 1 rgba(40, 40, 40, 0.9));
-                border-radius: 10px;
-                border: 2px solid #444444;
+                background: transparent;
+                border: none;
             }
         """)
         buzzer_controls_layout = QVBoxLayout(buzzer_controls)

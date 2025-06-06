@@ -59,12 +59,11 @@ class EMDRControlPanel(QMainWindow):
                 background-color: #323232;
                 border: 2px solid #444444;
                 border-radius: 8px;
-                padding: 8px;
             }
         """)
 
         device_status_layout = QHBoxLayout(self.device_status_frame)
-        device_status_layout.setContentsMargins(15, 8, 15, 8)
+        device_status_layout.setContentsMargins(15, 2, 15, 2)
 
         self.device_status_label = QLabel("Estado de dispositivos: Verificando...")
         self.device_status_label.setStyleSheet("""
@@ -126,7 +125,10 @@ class EMDRControlPanel(QMainWindow):
             QFrame {
                 background: transparent;
                 border: 2px solid #555555;
-                border-radius: 10px;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
             }
         """)
         left_layout = QVBoxLayout(self.left_panel)
@@ -572,7 +574,7 @@ class EMDRControlPanel(QMainWindow):
                 padding: 5px 20px;
             }
         """)
-        header_frame.setMinimumHeight(45)
+        header_frame.setMinimumHeight(60)
         
         # Reducir márgenes
         header_layout = QHBoxLayout(header_frame)
@@ -1002,12 +1004,8 @@ class EMDRControlPanel(QMainWindow):
         
         # Actualizar estado del botón de adquisición
         if not master_connected or not "Sensor" in found_devices:
-            self.sensor_monitor.btn_start_stop.setEnabled(False)
             if self.sensor_monitor.running:
                 self.sensor_monitor.stop_acquisition()
-                self.sensor_monitor.btn_start_stop.setText("Iniciar Adquisición")
-        else:
-            self.sensor_monitor.btn_start_stop.setEnabled(True)
     
     def closeEvent(self, event):
         """Manejador del evento de cierre de aplicación"""
