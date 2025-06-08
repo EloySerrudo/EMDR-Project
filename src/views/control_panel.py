@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QPushButton, QStackedWidget, QDialog, QFormLayout, QLineEdit, QTextEdit
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QObject
-from PySide6.QtGui import QFont, QIcon, QIntValidator  # QIntValidator añadido aquí
+from PySide6.QtGui import QFont, QIcon, QIntValidator, QPixmap  # Añadir QPixmap
 import pyqtgraph as pg
 
 # Ajustar el path para importaciones absolutas
@@ -56,46 +56,102 @@ class EMDRControlPanel(QMainWindow):
         self.device_status_frame.setFrameShape(QFrame.StyledPanel)
         self.device_status_frame.setStyleSheet("""
             QFrame {
-                background-color: #323232;
-                border: 2px solid #444444;
+                background-color: #424242;
+                border: 2px solid #555555;
                 border-radius: 8px;
             }
         """)
 
         device_status_layout = QHBoxLayout(self.device_status_frame)
-        device_status_layout.setContentsMargins(15, 2, 15, 2)
+        device_status_layout.setContentsMargins(15, 8, 15, 8)
+        device_status_layout.setSpacing(20)
 
-        self.device_status_label = QLabel("Estado de dispositivos: Verificando...")
-        self.device_status_label.setStyleSheet("""
+        # Texto descriptivo
+        status_text_label = QLabel("Estado de dispositivos:")
+        status_text_label.setStyleSheet("""
             QLabel {
                 color: #FFFFFF;
                 font-weight: bold;
-                font-size: 13px;
+                font-size: 14px;
                 background: transparent;
-                padding: 2px;
+                border-radius: 0px;
+                border: none;
+                padding: -8px;
+                margin-right: -10px;
             }
         """)
-        device_status_layout.addWidget(self.device_status_label)
+        device_status_layout.addWidget(status_text_label)
 
+        # Crear un contenedor para las cajas que estén juntas
+        devices_container = QFrame()
+        devices_container.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border-radius: 0px;
+                border: 0px;
+                padding: 0px;
+                margin: 0px;
+            }
+        """)
+        devices_layout = QHBoxLayout(devices_container)
+        devices_layout.setContentsMargins(0, 0, 0, 0)
+        devices_layout.setSpacing(0)  # Sin espacios entre cajas
+
+        # Crear las 4 cajas de estado con efecto LED
+        self.device_boxes = {}
+        
+        # USB (Master Controller)
+        usb_box = self.create_device_status_box("USB", False)
+        self.device_boxes["Master Controller"] = usb_box
+        devices_layout.addWidget(usb_box)
+        
+        # Luces (Lightbar)
+        lights_box = self.create_device_status_box("Luces", False)
+        self.device_boxes["Lightbar"] = lights_box
+        devices_layout.addWidget(lights_box)
+        
+        # Vibración (Buzzer)
+        vibration_box = self.create_device_status_box("Vibración", False)
+        self.device_boxes["Buzzer"] = vibration_box
+        devices_layout.addWidget(vibration_box)
+        
+        # Sensores (Sensor)
+        sensors_box = self.create_device_status_box("Sensores", False)
+        self.device_boxes["Sensor"] = sensors_box
+        devices_layout.addWidget(sensors_box)
+
+        # Añadir el contenedor al layout principal
+        device_status_layout.addWidget(devices_container)
+
+        # Espaciador flexible
+        device_status_layout.addStretch()
+
+        # Botón de escaneo
         self.scan_button = QPushButton("Escanear Dispositivos")
         self.scan_button.setStyleSheet("""
             QPushButton {
-                background-color: #00A99D;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #42A5F5,
+                                       stop: 1 #2196F3);
                 color: white;
-                border: 2px solid #00A99D;
+                border: 2px solid #2196F3;
                 border-radius: 8px;
-                padding: 8px 16px;
+                padding: 10px 16px;
                 font-weight: bold;
                 font-size: 12px;
                 min-width: 140px;
             }
             QPushButton:hover {
-                background-color: #00C2B3;
-                border: 2px solid #00C2B3;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #64B5F6,
+                                       stop: 1 #42A5F5);
+                border: 2px solid #42A5F5;
             }
             QPushButton:pressed {
-                background-color: #008C82;
-                border: 2px solid #008C82;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #2196F3,
+                                       stop: 1 #1976D2);
+                border: 2px solid #1976D2;
             }
             QPushButton:disabled {
                 background-color: #555555;
@@ -552,6 +608,111 @@ class EMDRControlPanel(QMainWindow):
         # Cargar pacientes por defecto
         self.load_patients()
     
+    def create_device_status_box(self, device_name, is_connected):
+        """Crear una caja de estado para un dispositivo con efecto LED"""
+        # Frame contenedor
+        box_frame = QFrame()
+        box_frame.setFrameShape(QFrame.StyledPanel)
+        box_frame.setFixedSize(100, 40)  # Tamaño fijo para consistencia
+        
+        # Layout horizontal para LED + texto
+        box_layout = QHBoxLayout(box_frame)
+        box_layout.setContentsMargins(8, 6, 8, 6)
+        box_layout.setSpacing(8)
+        
+        # LED circular (usando QLabel con estilo)
+        led_label = QLabel()
+        led_label.setFixedSize(12, 12)
+        led_label.setStyleSheet(self.get_led_style(is_connected))
+        
+        # Texto del dispositivo
+        text_label = QLabel(device_name)
+        text_label.setAlignment(Qt.AlignHCenter)
+        text_label.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-size: 12px;
+                font-weight: 600;
+                background: transparent;
+                border-radius: 0px;
+                border: none;
+                padding: 0px;
+            }
+        """)
+        
+        # Añadir al layout
+        box_layout.addWidget(led_label)
+        box_layout.addWidget(text_label)
+        
+        # Estilo del frame
+        box_frame.setStyleSheet(self.get_box_style(is_connected))
+        
+        # Guardar referencias para poder actualizar
+        box_frame.led_label = led_label
+        box_frame.text_label = text_label
+        box_frame.device_name = device_name
+        
+        return box_frame
+
+    def get_led_style(self, is_connected):
+        """Obtener estilo CSS para el LED"""
+        if is_connected:
+            return """
+                QLabel {
+                    background: qradialgradient(cx: 0.5, cy: 0.5, radius: 0.8,
+                                               fx: 0.3, fy: 0.3,
+                                               stop: 0 #66FF66,
+                                               stop: 0.7 #00CC00,
+                                               stop: 1 #008800);
+                    border: 1px solid #00AA00;
+                    border-radius: 6px;
+                }
+            """
+        else:
+            return """
+                QLabel {
+                    background: qradialgradient(cx: 0.5, cy: 0.5, radius: 0.8,
+                                               fx: 0.3, fy: 0.3,
+                                               stop: 0 #FF6666,
+                                               stop: 0.7 #CC0000,
+                                               stop: 1 #880000);
+                    border: 1px solid #AA0000;
+                    border-radius: 6px;
+                }
+            """
+
+    def get_box_style(self, is_connected):
+        """Obtener estilo CSS para la caja del dispositivo"""
+        if is_connected:
+            return """
+                QFrame {
+                    background-color: rgba(76, 175, 80, 0.1);
+                    border: 1px solid rgba(76, 175, 80, 0.3);
+                    border-radius: 0px;
+                    padding: 4px;
+                }
+            """
+        else:
+            return """
+                QFrame {
+                    background-color: rgba(244, 67, 54, 0.1);
+                    border: 1px solid rgba(244, 67, 54, 0.3);
+                    border-radius: 0px;
+                    padding: 4px;
+                }
+            """
+
+    def update_device_box_status(self, device_key, is_connected):
+        """Actualizar el estado visual de una caja de dispositivo"""
+        if device_key in self.device_boxes:
+            box = self.device_boxes[device_key]
+            
+            # Actualizar LED
+            box.led_label.setStyleSheet(self.get_led_style(is_connected))
+            
+            # Actualizar frame
+            box.setStyleSheet(self.get_box_style(is_connected))
+
     def create_header_bar(self, username):
         """Crea la barra superior con información contextual"""
         header_frame = QFrame()
@@ -576,25 +737,65 @@ class EMDRControlPanel(QMainWindow):
         """)
         header_frame.setMinimumHeight(60)
         
-        # Reducir márgenes
+        # Layout del header
         header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(15, 5, 15, 5)
         
-        # Logo o título con estilo mejorado (sin text-shadow)
-        logo_label = QLabel("EMDR THERAPY")
-        logo_label.setStyleSheet("""
+        # ===== LOGO EMDR =====
+        logo_label = QLabel()
+        try:
+            # Intentar cargar el logo
+            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'assets', 'emdr_logo.png')
+            if os.path.exists(logo_path):
+                from PySide6.QtGui import QPixmap
+                pixmap = QPixmap(logo_path)
+                # Escalar el logo manteniendo proporción
+                scaled_pixmap = pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                logo_label.setPixmap(scaled_pixmap)
+            else:
+                # Si no existe el logo, mostrar texto alternativo
+                logo_label.setText("EMDR")
+                logo_label.setStyleSheet("""
+                    QLabel {
+                        color: white;
+                        font-size: 16px;
+                        font-weight: bold;
+                        background: transparent;
+                        padding: 4px;
+                    }
+                """)
+        except Exception as e:
+            print(f"Error cargando logo: {e}")
+            # Fallback a texto
+            logo_label.setText("EMDR")
+            logo_label.setStyleSheet("""
+                QLabel {
+                    color: white;
+                    font-size: 16px;
+                    font-weight: bold;
+                    background: transparent;
+                    padding: 4px;
+                }
+            """)
+        
+        header_layout.addWidget(logo_label)
+        
+        # Título principal
+        title_label = QLabel("THERAPY DASHBOARD")
+        title_label.setStyleSheet("""
             QLabel {
                 color: white;
                 font-size: 18px;
                 font-weight: bold;
                 background: transparent;
+                margin-left: 10px;
             }
         """)
-        header_layout.addWidget(logo_label)
+        header_layout.addWidget(title_label)
         
         header_layout.addStretch()
         
-        # Información del terapeuta con estilo mejorado (sin text-shadow)
+        # Información del terapeuta
         therapist_label = QLabel(f"Terapeuta: {username}")
         therapist_label.setStyleSheet("""
             QLabel {
@@ -609,7 +810,7 @@ class EMDRControlPanel(QMainWindow):
         # Espaciado
         header_layout.addSpacing(20)
         
-        # Selector de paciente con estilo moderno (sin text-shadow)
+        # Selector de paciente
         patient_label = QLabel("Paciente:")
         patient_label.setStyleSheet("""
             QLabel {
@@ -670,7 +871,7 @@ class EMDRControlPanel(QMainWindow):
         self.patient_selector.currentIndexChanged.connect(self.change_patient)
         header_layout.addWidget(self.patient_selector)
         
-        # Botón con estilo moderno
+        # Botón para añadir paciente
         add_patient_btn = QPushButton("Crear paciente")
         add_patient_btn.setToolTip("Añadir nuevo paciente")
         add_patient_btn.setStyleSheet("""
@@ -834,21 +1035,29 @@ class EMDRControlPanel(QMainWindow):
             print(f"Error al guardar datos de sesión: {e}")
             QMessageBox.critical(self, "Error", f"No se pudieron guardar los datos: {str(e)}")
 
-    def check_devices(self):
-        """Verificar dispositivos conectados sin interferir con la UI"""
-        # No ejecutar durante acciones EMDR activas
-        if self.emdr_controller.mode == 'action':
-            return
+    def update_device_status_from_list(self, found_devices):
+        """Actualizar estado de dispositivos a partir de la lista"""
+        # Actualizar cada caja de dispositivo
+        self.update_device_box_status("Master Controller", "Master Controller" in found_devices)
+        self.update_device_box_status("Lightbar", "Lightbar" in found_devices)
+        self.update_device_box_status("Buzzer", "Buzzer" in found_devices)
+        self.update_device_box_status("Sensor", "Sensor" in found_devices)
+
+    def update_device_status(self, status_dict, required_connected):
+        """Actualizar estado del dispositivo desde señales emitidas por componentes"""
+        # Solo actualizar las cajas LED, sin mostrar texto adicional
+        for slave_id, connected in status_dict.items():
+            # Mapear slave_id a device_key
+            device_key_map = {
+                1: "Master Controller",  # Asumiendo que slave_id 1 es Master Controller
+                2: "Lightbar",          # Asumiendo que slave_id 2 es Lightbar
+                3: "Buzzer",            # Asumiendo que slave_id 3 es Buzzer
+                4: "Sensor"             # Asumiendo que slave_id 4 es Sensor
+            }
             
-        # Realizar escaneo de dispositivos
-        found_devices = Devices.probe()
-        
-        # Actualizar la lista de dispositivos conectados
-        self.connected_devices = found_devices
-        self.update_device_status_from_list(found_devices)
-        
-        # Actualizar estados de habilitación en ambos componentes
-        self.update_component_states(found_devices)
+            device_key = device_key_map.get(slave_id)
+            if device_key:
+                self.update_device_box_status(device_key, connected)
 
     def scan_devices(self):
         """Escanear dispositivos manualmente"""
@@ -867,7 +1076,7 @@ class EMDRControlPanel(QMainWindow):
         # Actualizar la lista de dispositivos
         self.connected_devices = found_devices
         
-        # Actualizar estado de dispositivos
+        # Actualizar estado de dispositivos (solo las cajas LED)
         self.update_device_status_from_list(found_devices)
         
         # Actualizar ambos componentes
@@ -896,87 +1105,28 @@ class EMDRControlPanel(QMainWindow):
             QMessageBox.warning(self, "Conexión perdida", 
                             "Se ha perdido la conexión con el controlador maestro.")
     
-    def update_device_status(self, status_dict, required_connected):
-        """Actualizar estado del dispositivo desde señales emitidas por componentes"""
-        status_items = []
-        
-        for slave_id, connected in status_dict.items():
-            name, required = KNOWN_SLAVES.get(slave_id, ("Desconocido", False))
-            status = "✓" if connected else "✗"
-            color = "green" if connected else "red"
-            req_text = " *" if required else ""
-            
-            status_items.append(
-                f"<span style='font-weight: bold;'>{name}{req_text}:</span> "
-                f"<span style='color: {color};'>{status}</span>"
-            )
-        
-        # Unir todos los elementos con separadores
-        status_text = " | ".join(status_items)
-        
-        # Actualizar texto y estilo
-        self.device_status_label.setText(f"Estado de dispositivos: {status_text}")
-        
-        # Cambiar fondo según estado de conexión
-        if required_connected:
-            self.device_status_frame.setStyleSheet("background-color: #E8F5E9; border-radius: 4px;")
-        else:
-            self.device_status_frame.setStyleSheet("background-color: #FFEBEE; border-radius: 4px;")
-    
-    def update_device_status_from_list(self, found_devices):
-        """Actualizar estado de dispositivos a partir de la lista"""
-        if not found_devices:
-            self.device_status_label.setText("Estado de dispositivos: No se encontraron dispositivos")
-            self.device_status_frame.setStyleSheet("background-color: #FFEBEE; border-radius: 4px;")
+    def check_devices(self):
+        """Verificar dispositivos conectados sin interferir con la UI"""
+        # No ejecutar durante acciones EMDR activas
+        if self.emdr_controller.mode == 'action':
             return
             
-        if "Master Controller" not in found_devices:
-            self.device_status_label.setText("Estado de dispositivos: No se encontró el controlador maestro")
-            self.device_status_frame.setStyleSheet("background-color: #FFEBEE; border-radius: 4px;")
-            return
+        # Realizar escaneo de dispositivos
+        found_devices = Devices.probe()
         
-        status_items = []
+        # Actualizar la lista de dispositivos conectados
+        self.connected_devices = found_devices
+        self.update_device_status_from_list(found_devices)
         
-        # Comprobar cada tipo de dispositivo
-        for slave_id, (name, required) in KNOWN_SLAVES.items():
-            is_connected = name in found_devices
-            status = "✓" if is_connected else "✗"
-            color = "green" if is_connected else "red"
-            req_text = " *" if required else ""
-            
-            status_items.append(
-                f"<span style='font-weight: bold;'>{name}{req_text}:</span> "
-                f"<span style='color: {color};'>{status}</span>"
-            )
-        
-        # Añadir el controlador maestro
-        status_items.append("<span style='font-weight: bold;'>Master Controller:</span> <span style='color: green;'>✓</span>")
-        
-        # Unir todos los elementos con separadores
-        status_text = " | ".join(status_items)
-        
-        # Actualizar texto
-        self.device_status_label.setText(f"Estado de dispositivos: {status_text}")
-        
-        # Verificar dispositivos requeridos para cada componente
-        emdr_required = all(
-            name in found_devices
-            for slave_id, (name, required) in KNOWN_SLAVES.items()
-            if required and name != "Sensor"
-        )
-        
-        sensor_required = "Sensor" in found_devices
-        
-        # Actualizar estilo según estado global
-        if emdr_required and (not sensor_required or self.sensor_monitor.running):
-            self.device_status_frame.setStyleSheet("background-color: #E8F5E9; border-radius: 4px;")
-        else:
-            self.device_status_frame.setStyleSheet("background-color: #FFEBEE; border-radius: 4px;")
-    
+        # Actualizar estados de habilitación en ambos componentes
+        self.update_component_states(found_devices)
+
     def update_component_states(self, found_devices):
         """Actualizar estados de habilitación en ambos componentes"""
+        # Actualizar las cajas de estado visual
+        self.update_device_status_from_list(found_devices)
+        
         # EMDR Controller
-        # Asegurarse que cualquier actualización necesaria para pestañas se realice
         if hasattr(self.emdr_controller, 'tab_widget'):
             # Verificar lightbar
             lightbar_connected = "Lightbar" in found_devices
@@ -999,14 +1149,13 @@ class EMDRControlPanel(QMainWindow):
             self.emdr_controller.deactivate(self.emdr_controller.btn_start24)
         
         # Sensor Monitor
-        # Actualizar el estado interno del monitor de sensores
         self.sensor_monitor.required_devices_connected = "Sensor" in found_devices
         
         # Actualizar estado del botón de adquisición
         if not master_connected or not "Sensor" in found_devices:
             if self.sensor_monitor.running:
                 self.sensor_monitor.stop_acquisition()
-    
+
     def closeEvent(self, event):
         """Manejador del evento de cierre de aplicación"""
         # Detener cualquier adquisición en curso
