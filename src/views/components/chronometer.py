@@ -34,7 +34,7 @@ class Chronometer(QLabel):
                 border-radius: 8px;
                 padding: 10px 20px;
                 min-width: 60px;
-                min-height: 40px;
+                min-height: 10px;
             }
         """)
         

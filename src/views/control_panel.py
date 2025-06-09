@@ -254,7 +254,7 @@ class EMDRControlPanel(QMainWindow):
                 background-color: #424242;
                 border-radius: 8px;
                 padding: 5px;
-                margin: 2px;
+                margin: 0px;
                 border: 1px solid #555555;
             }
         """)
@@ -337,6 +337,7 @@ class EMDRControlPanel(QMainWindow):
 
         # Vista 1: Monitor de sensores en tiempo real
         self.sensor_monitor = SensorMonitor()
+        self.sensor_monitor.main_layout.setContentsMargins(0, 0, 0, 0)  # Eliminar márgenes del layout interno
         self.view_stack.addWidget(self.sensor_monitor)
 
         # Vista 2: Historial de sesión (placeholder mejorado)

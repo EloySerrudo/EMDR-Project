@@ -26,9 +26,9 @@ class Counter(QLabel):
                                           stop: 1 rgba(0, 169, 157, 0.3));
                 border: 2px solid rgba(0, 200, 170, 0.5);
                 border-radius: 8px;
-                padding: 10px 5px;
+                padding: 5px 5px;
                 min-width: 60px;
-                min-height: 40px;
+                min-height: 10px;
             }
         """)
         

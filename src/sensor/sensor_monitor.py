@@ -101,9 +101,9 @@ class SensorMonitor(QWidget):
     def setup_ui(self, display_time):
         """Configura la interfaz de usuario del monitor"""
         # Layout principal
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(5)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(8, 8, 8, 8)
+        self.main_layout.setSpacing(5)
         
         # ===== HEADER CON CONTROLES =====
         if self.parent():
@@ -206,7 +206,7 @@ class SensorMonitor(QWidget):
             save_btn.clicked.connect(self.save_data_to_csv)
             header_layout.addWidget(save_btn)
             
-            main_layout.addWidget(header_frame)
+            self.main_layout.addWidget(header_frame)
         
         # ===== ÁREA DE GRÁFICAS =====
         # Frame contenedor para las gráficas con estilo moderno
@@ -216,16 +216,16 @@ class SensorMonitor(QWidget):
             QFrame {
                 background: transparent;
                 border: 2px solid #444444;
-                border-radius: 10px;
-                margin: 2px;
+                border-radius: 0px;
+                margin: 0px;
             }
         """)
         # ===== CREAR LAYOUT ESPECÍFICO PARA LAS GRÁFICAS =====
         plots_layout = QVBoxLayout(plots_frame)
-        plots_layout.setContentsMargins(10, 10, 10, 10)
-        plots_layout.setSpacing(8)
+        plots_layout.setContentsMargins(0, 0, 0, 0)
+        plots_layout.setSpacing(0)
         
-        GRAPH_HEIGHT = 120  # Altura uniforme para todas las gráficas
+        GRAPH_HEIGHT = 105  # Altura uniforme para todas las gráficas
         
         # Crear gráficas individuales
         self.eog_plot = self.create_eog_plot(display_time, height=GRAPH_HEIGHT)
@@ -243,7 +243,7 @@ class SensorMonitor(QWidget):
         self.add_legends_and_extras(display_time)
         
         # Añadir plots a main layout
-        main_layout.addWidget(plots_frame)
+        self.main_layout.addWidget(plots_frame)
         
         # ===== BARRA DE ESTADO =====
         if self.parent():
@@ -297,7 +297,7 @@ class SensorMonitor(QWidget):
             """)
             status_layout.addWidget(self.rate_label)
             
-            main_layout.addWidget(status_frame)
+            self.main_layout.addWidget(status_frame)
         
         # Configurar timer para actualización de gráficas
         self.timer = QTimer()
@@ -330,6 +330,7 @@ class SensorMonitor(QWidget):
     def create_eog_plot(self, display_time, height):
         """Crear y configurar la gráfica EOG con estilo moderno"""
         eog_plot = pg.PlotWidget()
+        eog_plot.setFixedHeight(height)
         eog_plot.setLabel('bottom', '')
         eog_plot.setYRange(-50000, 50000)
         eog_plot.setXRange(-display_time-0.02, 0.01, padding=0)
@@ -337,7 +338,6 @@ class SensorMonitor(QWidget):
         # Aplicar tema moderno
         eog_plot.setBackground('#FFFFFF')
         eog_plot.showGrid(x=True, y=True, alpha=0.2)
-        eog_plot.setFixedHeight(height)
         
         # Configurar eje X con estilo moderno
         x_axis = eog_plot.getAxis('bottom')
@@ -362,6 +362,7 @@ class SensorMonitor(QWidget):
     def create_bpm_plot(self, display_time, height):
         """Crear y configurar la gráfica BPM con estilo moderno"""
         bpm_plot = pg.PlotWidget()
+        bpm_plot.setFixedHeight(height)
         bpm_plot.setLabel('bottom', '')
         bpm_plot.setYRange(40, 150)
         bpm_plot.setXRange(-display_time-0.02, 0.01, padding=0)
@@ -369,7 +370,6 @@ class SensorMonitor(QWidget):
         # Aplicar tema moderno
         bpm_plot.setBackground('#FFFFFF')
         bpm_plot.showGrid(x=True, y=True, alpha=0.2)
-        bpm_plot.setFixedHeight(height)
         
         # Configurar eje X con estilo moderno
         x_axis = bpm_plot.getAxis('bottom')
@@ -400,6 +400,7 @@ class SensorMonitor(QWidget):
     def create_ppg_plot(self, display_time, height):
         """Crear y configurar la gráfica PPG con estilo moderno"""
         ppg_plot = pg.PlotWidget()
+        ppg_plot.setFixedHeight(height)
         ppg_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
         ppg_plot.setYRange(-35000, 35000)
         ppg_plot.setXRange(-display_time-0.02, 0.01, padding=0)
@@ -407,7 +408,6 @@ class SensorMonitor(QWidget):
         # Aplicar tema moderno
         ppg_plot.setBackground('#FFFFFF')
         ppg_plot.showGrid(x=True, y=True, alpha=0.2)
-        ppg_plot.setFixedHeight(height)
         
         # Configurar ejes con estilo moderno
         x_axis = ppg_plot.getAxis('bottom')
@@ -415,6 +415,14 @@ class SensorMonitor(QWidget):
         x_axis.setPen(pg.mkPen('#CCCCCC', width=1))
         x_axis.setTextPen(pg.mkPen('#424242'))
         
+        # ===== AÑADIR CONFIGURACIÓN PARA REDUCIR ESPACIADO DEL EJE X =====
+        x_axis.setStyle(
+            tickTextOffset=2,      # Reducir distancia entre ticks y valores numéricos
+            autoExpandTextSpace=False,  # No expandir automáticamente
+            tickTextHeight=10      # Reducir altura del área de texto
+        )
+        x_axis.setHeight(25)       # Reducir altura total del eje X (valor por defecto ~40)
+    
         # Configurar eje Y con espaciado personalizado
         self.configure_y_axis_spacing(ppg_plot, 'PPG (ADU)', axis_width=60)
         

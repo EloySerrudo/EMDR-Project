@@ -19,7 +19,9 @@ class Selector(QWidget):
         # Etiqueta para mostrar el valor
         self.value_label = QLabel()
         self.value_label.setAlignment(Qt.AlignCenter)
-        self.value_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.value_label.setStyleSheet("""font-size: 14px; 
+                                       font-weight: bold;
+                                       min-height: 12px;""")
         
         # Guardar referencias a los botones para compatibilidad
         self.btn_plus = btn_plus
@@ -83,7 +85,7 @@ class Selector(QWidget):
         main_layout.addWidget(self.value_label)
         
         # Configurar tamaño fijo
-        self.setFixedSize(188, 61)
+        self.setFixedSize(188, 51)  # Original: 188x61
         
         # Almacenar datos
         self.format = format_str

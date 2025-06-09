@@ -176,7 +176,7 @@ class EMDRControllerWidget(QWidget):
                 font-size: 14px;
                 border: 2px solid #00A99D;
                 padding: 10px 20px;
-                min-height: 40px;
+                min-height: 20px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -215,7 +215,7 @@ class EMDRControllerWidget(QWidget):
                 font-size: 14px;
                 border: 2px solid #D32F2F;
                 padding: 10px 20px;
-                min-height: 40px;
+                min-height: 20px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -362,18 +362,21 @@ class EMDRControllerWidget(QWidget):
         
         # Crear controles de velocidad
         speed_control_box = QVBoxLayout()
-        speed_control_box.setSpacing(4)
+        speed_control_box.setSpacing(0)
         
         # Título para velocidad
         speed_title = QLabel("VELOCIDAD")
+        # speed_title.setFixedHeight(14)
         speed_title.setAlignment(Qt.AlignCenter)
         speed_title.setStyleSheet("""
             QLabel {
                 font-weight: bold;
                 font-size: 12px;
-                border: none;
+                border: 1px solid #00A99D;
+                border-radius: 0px;
                 background: transparent;
-                padding: 5px;
+                padding: 0px;
+                min-height: 10px;
             }
         """)
         speed_control_box.addWidget(speed_title)
@@ -420,8 +423,9 @@ class EMDRControllerWidget(QWidget):
                                   self.btn_speed_minus, self.btn_speed_plus, 
                                   self.update_speed, ticks=Config.speeds, parent=self)
         self.sel_speed.setStyleSheet("""
-            QLabel {
-                border: none;
+            QWidget {
+                border: 1px solid #00A99D;
+                border-radius: 0px;
                 background: transparent;
             }
         """)
@@ -608,25 +612,6 @@ class EMDRControllerWidget(QWidget):
         headphone_layout = QVBoxLayout(headphone_container)
         headphone_layout.setContentsMargins(0, 0, 0, 0)
         headphone_layout.setSpacing(0)
-
-        # Título para controles de audio modernizado
-        audio_title = QLabel("CONTROLES DE AUDIO")
-        audio_title.setStyleSheet("""
-            QLabel {
-                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-                                          stop: 0 rgba(0, 169, 157, 0.3),
-                                          stop: 0.5 rgba(0, 200, 170, 0.4),
-                                          stop: 1 rgba(0, 169, 157, 0.3));
-                color: #FFFFFF;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 12px 20px;
-                border-radius: 0px;
-                border: 2px solid rgba(0, 200, 170, 0.5);
-            }
-        """) # Aquí había un margin-bottom: 10px;
-        audio_title.setAlignment(Qt.AlignCenter)
-        headphone_layout.addWidget(audio_title)
 
         # Contenedor para controles de audio
         audio_controls = QFrame()
