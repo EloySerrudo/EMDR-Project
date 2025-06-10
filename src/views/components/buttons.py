@@ -4,10 +4,8 @@ from PySide6.QtCore import Qt, Signal
 class CustomButton(QPushButton):
     """Botón normal que mantiene compatibilidad con el botón personalizado original"""
     
-    def __init__(self, x, y, title, callback=None, togglable=False, size=(100, 60), parent=None):
+    def __init__(self, title, callback=None, togglable=False, size=(100, 60), parent=None):
         super().__init__(title, parent)
-        self.pos_x = x
-        self.pos_y = y
         self.active = True
         self.title = title
         

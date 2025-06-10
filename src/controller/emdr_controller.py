@@ -6,7 +6,8 @@ import os
 # PyQtGraph y PySide6 imports
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QApplication, QTabWidget, 
-    QPushButton, QLabel, QSpacerItem, QSizePolicy, QFrame, QCheckBox, QScrollArea
+    QPushButton, QLabel, QSpacerItem, QSizePolicy, QFrame, QCheckBox, QScrollArea,
+    QGridLayout
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QPainter, QColor, QBrush, QPen
@@ -142,26 +143,32 @@ class EMDRControllerWidget(QWidget):
             self.main_layout.addWidget(self.device_status_label)
         
         # 2. Contenedor de botones principales con estilo moderno
-        button_container = QFrame()
-        button_container.setFrameShape(QFrame.StyledPanel)
-        button_container.setStyleSheet("""
+        control_container = QFrame()
+        control_container.setFrameShape(QFrame.StyledPanel)
+        control_container.setStyleSheet("""
             QFrame {
                 background: transparent;
                 border-radius: 12px;
                 border: 2px solid #444444;
-                padding: 8px;
+                padding: 0px;
             }
         """)
         
-        button_layout = QVBoxLayout(button_container)
-        button_layout.setContentsMargins(10, 2, 10, 2)
-        button_layout.setSpacing(8)
+        control_layout = QHBoxLayout(control_container)
+        control_layout.setContentsMargins(10, 5, 10, 5)
+        control_layout.setSpacing(20)
+        control_layout.addStretch()
         
+        # Layout de reja de botones principales
+        button_layout = QGridLayout()
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(5)
+
         # Crear botones principales con estilo moderno
-        self.btn_start = CustomButton(0, 0, 'Play', self.start_click)
-        self.btn_start24 = CustomButton(1, 0, 'Play 24', self.start24_click)
-        self.btn_stop = CustomButton(2, 0, 'Stop', self.stop_click)
-        self.btn_pause = CustomButton(3, 0, 'Pause', self.pause_click, togglable=True)
+        self.btn_start = CustomButton('Play', self.start_click)
+        self.btn_start24 = CustomButton('Play 24', self.start24_click)
+        self.btn_stop = CustomButton('Stop', self.stop_click)
+        self.btn_pause = CustomButton('Pause', self.pause_click, togglable=True)
         
         # Aplicar estilos modernos a los botones principales
         main_button_style = """
@@ -247,56 +254,18 @@ class EMDRControllerWidget(QWidget):
         self.btn_stop.setStyleSheet(stop_button_style)
         self.btn_pause.setStyleSheet(main_button_style)
         
-        # Layout horizontal para botones principales
-        top_button_row = QHBoxLayout()
-        top_button_row.setSpacing(10)
-        top_button_row.addWidget(self.btn_start)
-        top_button_row.addWidget(self.btn_start24)
-        top_button_row.addWidget(self.btn_stop)
-        top_button_row.addWidget(self.btn_pause)
+        # Añadir los botones principales al layout de reja
+        button_layout.addWidget(self.btn_start, 0, 0)
+        button_layout.addWidget(self.btn_start24, 0, 1)
+        button_layout.addWidget(self.btn_pause, 1, 0)
+        button_layout.addWidget(self.btn_stop, 1, 1)
         
-        button_layout.addLayout(top_button_row)
-        
-        # Checkbox para capturar señales con estilo moderno
-        self.chk_capture_signals = QCheckBox("¿Capturar señales?")
-        self.chk_capture_signals.setStyleSheet("""
-            QCheckBox {
-                background: transparent;
-                color: #FFFFFF;
-                font-weight: bold;
-                font-size: 13px;
-                padding: 8px;
-                border-radius: 6px;
-            }
-            QCheckBox:hover {
-                background: rgba(255, 255, 255, 0.1);
-            }
-            QCheckBox::indicator {
-                width: 20px;
-                height: 20px;
-                border-radius: 3px;
-                border: 2px solid #00A99D;
-                background-color: #424242;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #00A99D;
-                border: 2px solid #00C2B3;
-            }
-            QCheckBox::indicator:checked:hover {
-                background-color: #00C2B3;
-            }
-        """)
-        
-        capture_checkbox_row = QHBoxLayout()
-        capture_checkbox_row.addItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        capture_checkbox_row.addWidget(self.chk_capture_signals)
-        capture_checkbox_row.addItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        
-        button_layout.addLayout(capture_checkbox_row)
-        
+        control_layout.addLayout(button_layout)
+        control_layout.addStretch()
+
         # Botón de escaneo (solo visible si se ejecuta como ventana independiente)
         if self.parent():
-            self.btn_scan_usb = CustomButton(4, 0, 'Escanear', self.scan_usb_click)
+            self.btn_scan_usb = CustomButton('Escanear', self.scan_usb_click)
             self.btn_scan_usb.setStyleSheet("""
                 QPushButton {
                     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -335,11 +304,43 @@ class EMDRControllerWidget(QWidget):
                 }
             """)
             
-            scan_button_row = QHBoxLayout()
-            scan_button_row.addWidget(self.btn_scan_usb)
-            button_layout.addLayout(scan_button_row)
+            control_layout.addWidget(self.btn_scan_usb)
+            control_layout.addStretch()
         
-        self.main_layout.addWidget(button_container)
+        # Checkbox para capturar señales con estilo moderno
+        self.chk_capture_signals = QCheckBox("¿Capturar señales?")
+        self.chk_capture_signals.setStyleSheet("""
+            QCheckBox {
+                background: transparent;
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 13px;
+                padding: 8px;
+                border-radius: 6px;
+            }
+            QCheckBox:hover {
+                background: rgba(255, 255, 255, 0.1);
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+                border-radius: 3px;
+                border: 2px solid #00A99D;
+                background-color: #424242;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #00A99D;
+                border: 2px solid #00C2B3;
+            }
+            QCheckBox::indicator:checked:hover {
+                background-color: #00C2B3;
+            }
+        """)
+        
+        control_layout.addWidget(self.chk_capture_signals)
+        control_layout.addStretch()
+        
+        self.main_layout.addWidget(control_container)
         
         # 3. Contenedor de velocidad y contador con estilo moderno
         speed_counter_container = QFrame()
@@ -353,32 +354,36 @@ class EMDRControllerWidget(QWidget):
                 border-radius: 12px;
                 border: 2px solid rgba(0, 200, 170, 0.4);
                 color: #FFFFFF;
+                padding: 0px;
             }
         """)
         
         speed_counter_layout = QHBoxLayout(speed_counter_container)
-        speed_counter_layout.setContentsMargins(10, 0, 10, 0)
+        speed_counter_layout.setContentsMargins(10, 5, 10, 5)
         speed_counter_layout.setSpacing(20)
         
+        label_style = """
+            QLabel {
+                font-weight: bold;
+                font-size: 12px;
+                border-radius: 0px;
+                border: none;
+                background: transparent;
+                padding: 0px;
+                min-height: 9px;
+                max-height: 9px
+            }
+        """
+
         # Crear controles de velocidad
         speed_control_box = QVBoxLayout()
-        speed_control_box.setSpacing(0)
+        speed_control_box.setSpacing(5)
         
         # Título para velocidad
         speed_title = QLabel("VELOCIDAD")
         # speed_title.setFixedHeight(14)
         speed_title.setAlignment(Qt.AlignCenter)
-        speed_title.setStyleSheet("""
-            QLabel {
-                font-weight: bold;
-                font-size: 12px;
-                border: 1px solid #00A99D;
-                border-radius: 0px;
-                background: transparent;
-                padding: 0px;
-                min-height: 10px;
-            }
-        """)
+        speed_title.setStyleSheet(label_style)
         speed_control_box.addWidget(speed_title)
         
         # Layout horizontal para controles de velocidad
@@ -414,9 +419,9 @@ class EMDRControllerWidget(QWidget):
             }
         """
         
-        self.btn_speed_minus = CustomButton(0, 1, '-', size=(30, 30))
+        self.btn_speed_minus = CustomButton('-', size=(30, 30))
         self.btn_speed_minus.setStyleSheet(speed_button_style)
-        self.btn_speed_plus = CustomButton(2, 1, '+', size=(30, 30))
+        self.btn_speed_plus = CustomButton('+', size=(30, 30))
         self.btn_speed_plus.setStyleSheet(speed_button_style)
         
         self.sel_speed = Selector('Velocidad', Config.speeds, '{0:d}/min', 
@@ -443,20 +448,12 @@ class EMDRControllerWidget(QWidget):
         
         # Crear contador con estilo moderno
         counter_box = QVBoxLayout()
-        counter_box.setSpacing(1)
+        counter_box.setSpacing(5)
         
         # Título para contador
         counter_title = QLabel("CONTADOR")
         counter_title.setAlignment(Qt.AlignCenter)
-        counter_title.setStyleSheet("""
-            QLabel {
-                font-weight: bold;
-                font-size: 12px;
-                border: none;
-                background: transparent;
-                padding: 5px;
-            }
-        """)
+        counter_title.setStyleSheet(label_style)
         counter_box.addWidget(counter_title)
         
         # Selector de contador
@@ -473,20 +470,12 @@ class EMDRControllerWidget(QWidget):
         
         # === CRONÓMETRO (lado derecho) ===
         chronometer_box = QVBoxLayout()
-        chronometer_box.setSpacing(1)
+        chronometer_box.setSpacing(5)
 
         # Título para cronómetro
         chronometer_title = QLabel("TIEMPO")
         chronometer_title.setAlignment(Qt.AlignCenter)
-        chronometer_title.setStyleSheet("""
-            QLabel {
-                font-weight: bold;
-                font-size: 12px;
-                border: none;
-                background: transparent;
-                padding: 5px;
-            }
-        """)
+        chronometer_title.setStyleSheet(label_style)
         chronometer_box.addWidget(chronometer_title)
 
         # Widget cronómetro
@@ -648,7 +637,7 @@ class EMDRControllerWidget(QWidget):
         self.switch_headphone.set_value = lambda value: self.switch_headphone.setChecked(value)
 
         # Botón de prueba modernizado
-        self.btn_headphone_test = CustomButton(2, 0, 'Prueba', self.headphone_test_click)
+        self.btn_headphone_test = CustomButton('Prueba', self.headphone_test_click)
         self.btn_headphone_test.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -713,9 +702,9 @@ class EMDRControllerWidget(QWidget):
         volume_layout.addWidget(volume_title)
         
         # Botones de volumen con estilo moderno
-        self.btn_headphone_volume_minus = CustomButton(0, 1, '-', size=(30, 30))
+        self.btn_headphone_volume_minus = CustomButton('-', size=(30, 30))
         self.btn_headphone_volume_minus.setStyleSheet(speed_button_style)
-        self.btn_headphone_volume_plus = CustomButton(2, 1, '+', size=(30, 30))
+        self.btn_headphone_volume_plus = CustomButton('+', size=(30, 30))
         self.btn_headphone_volume_plus.setStyleSheet(speed_button_style)
         
         self.sel_headphone_volume = Selector('Volumen', Config.volumes, '{0:d}%', 
@@ -767,7 +756,7 @@ class EMDRControllerWidget(QWidget):
         """)
         tone_layout.addWidget(tone_title)
 
-        self.btn_headphone_tone_minus = CustomButton(0, 2, '◀', size=(30, 30))
+        self.btn_headphone_tone_minus = CustomButton('◀', size=(30, 30))
         self.btn_headphone_tone_minus.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -796,7 +785,7 @@ class EMDRControllerWidget(QWidget):
                 border: 2px solid #6A1B9A;
             }
         """)
-        self.btn_headphone_tone_plus = CustomButton(2, 2, '▶', size=(30, 30))
+        self.btn_headphone_tone_plus = CustomButton('▶', size=(30, 30))
         self.btn_headphone_tone_plus.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -949,7 +938,7 @@ class EMDRControllerWidget(QWidget):
         self.switch_light.set_value = lambda value: self.switch_light.setChecked(value)
 
         # Botón de prueba de luz modernizado
-        self.btn_light_test = CustomButton(1, 0, 'Prueba', self.light_test_click, togglable=True)
+        self.btn_light_test = CustomButton('Prueba', self.light_test_click, togglable=True)
         self.btn_light_test.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -984,7 +973,7 @@ class EMDRControllerWidget(QWidget):
         """)
         
         # Botón para cambiar entre tiras LED modernizado
-        self.btn_light_switch_strip = CustomButton(2, 0, 'Cambiar', self.switch_strip_click)
+        self.btn_light_switch_strip = CustomButton('Cambiar', self.switch_strip_click)
         self.btn_light_switch_strip.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -1053,7 +1042,7 @@ class EMDRControllerWidget(QWidget):
         # Controles de color con botones
         color_controls_row = QHBoxLayout()
         
-        self.btn_light_color_minus = CustomButton(0, 1, '◀', size=(30, 30))
+        self.btn_light_color_minus = CustomButton('◀', size=(30, 30))
         self.btn_light_color_minus.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -1082,7 +1071,7 @@ class EMDRControllerWidget(QWidget):
                 border: 2px solid #AD1457;
             }
         """)
-        self.btn_light_color_plus = CustomButton(2, 1, '▶', size=(30, 30))
+        self.btn_light_color_plus = CustomButton('▶', size=(30, 30))
         self.btn_light_color_plus.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -1162,9 +1151,9 @@ class EMDRControllerWidget(QWidget):
         # Controles de intensidad con botones
         intensity_controls_row = QHBoxLayout()
         
-        self.btn_light_intens_minus = CustomButton(0, 2, '-', size=(30, 30))
+        self.btn_light_intens_minus = CustomButton('-', size=(30, 30))
         self.btn_light_intens_minus.setStyleSheet(speed_button_style)
-        self.btn_light_intens_plus = CustomButton(2, 2, '+', size=(30, 30))
+        self.btn_light_intens_plus = CustomButton('+', size=(30, 30))
         self.btn_light_intens_plus.setStyleSheet(speed_button_style)
         
         self.sel_light_intens = Selector('Brillo', Config.intensities, '{0:d}%',
@@ -1288,7 +1277,7 @@ class EMDRControllerWidget(QWidget):
         self.switch_buzzer.set_value = lambda value: self.switch_buzzer.setChecked(value)
 
         # Botón de prueba de buzzer modernizado
-        self.btn_buzzer_test = CustomButton(2, 0, 'Prueba', self.buzzer_test_click)
+        self.btn_buzzer_test = CustomButton('Prueba', self.buzzer_test_click)
         self.btn_buzzer_test.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -1355,7 +1344,7 @@ class EMDRControllerWidget(QWidget):
         # Controles de duración con botones modernizados
         duration_controls_row = QHBoxLayout()
         
-        self.btn_buzzer_duration_minus = CustomButton(0, 1, '-', size=(30, 30))
+        self.btn_buzzer_duration_minus = CustomButton('-', size=(30, 30))
         self.btn_buzzer_duration_minus.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -1384,7 +1373,7 @@ class EMDRControllerWidget(QWidget):
                 border: 2px solid #6A1B9A;
             }
         """)
-        self.btn_buzzer_duration_plus = CustomButton(2, 1, '+', size=(30, 30))
+        self.btn_buzzer_duration_plus = CustomButton('+', size=(30, 30))
         self.btn_buzzer_duration_plus.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -2037,7 +2026,6 @@ if __name__ == "__main__":
     # Crear una ventana principal que contendrá el widget
     main_window = QMainWindow()
     main_window.setWindowTitle("Controlador EMDR")
-    main_window.setGeometry(100, 100, 480, 700)
     
     # Crear el widget del controlador para modo independiente
     controller_widget = EMDRControllerWidget(parent=main_window)

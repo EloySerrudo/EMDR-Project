@@ -811,7 +811,7 @@ class EMDRControlPanel(QMainWindow):
         therapist_label = QLabel(f"Terapeuta: {username}")
         therapist_label.setStyleSheet("""
             QLabel {
-                color: white;
+                color: #003454;
                 font-size: 13px;
                 font-weight: 600;
                 background: transparent;
@@ -827,7 +827,7 @@ class EMDRControlPanel(QMainWindow):
         patient_label = QLabel("Paciente:")
         patient_label.setStyleSheet("""
             QLabel {
-                color: white;
+                color: #003454;
                 font-weight: 600;
                 background: transparent;
                 border-radius: 12px;

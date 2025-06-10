@@ -41,8 +41,8 @@ class SimpleSelectorTest(QMainWindow):
         main_layout.addWidget(title)
         
         # Crear botones para el selector
-        self.btn_minus = CustomButton(0, 0, '-', size=(30, 30))
-        self.btn_plus = CustomButton(0, 0, '+', size=(30, 30))
+        self.btn_minus = CustomButton('-', size=(30, 30))
+        self.btn_plus = CustomButton('+', size=(30, 30))
         
         # Estilo para los botones
         button_style = """
