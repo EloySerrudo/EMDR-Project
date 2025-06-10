@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
     QTabWidget, QSplitter, QGridLayout, QMessageBox, QFrame, QComboBox,
@@ -35,8 +36,7 @@ class EMDRControlPanel(QMainWindow):
         self.current_session = None
         
         self.setWindowTitle(f"EMDR Project - Dashboard Terapéutico")
-        # Ajustar el tamaño inicial para pantallas más pequeñas
-        # self.resize(1364, 690) # Este ajuste da como resultado una ventana real de 1366 x 722
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
         
         # Widget central
         central_widget = QWidget()
@@ -44,7 +44,7 @@ class EMDRControlPanel(QMainWindow):
         
         # Layout principal - reducir márgenes
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(3, 3, 3, 3)
+        main_layout.setContentsMargins(0, 0, 0, 2)
         main_layout.setSpacing(3)
         
         # ===== 1. BARRA SUPERIOR CON INFORMACIÓN CONTEXTUAL =====
@@ -56,14 +56,14 @@ class EMDRControlPanel(QMainWindow):
         self.device_status_frame.setFrameShape(QFrame.StyledPanel)
         self.device_status_frame.setStyleSheet("""
             QFrame {
-                background-color: #424242;
-                border: 2px solid #555555;
-                border-radius: 8px;
+                background-color: transparent;
+                border: none;
+                border-radius: 0px;
             }
         """)
 
         device_status_layout = QHBoxLayout(self.device_status_frame)
-        device_status_layout.setContentsMargins(15, 8, 15, 8)
+        device_status_layout.setContentsMargins(15, 0, 15, 0)
         device_status_layout.setSpacing(20)
 
         # Texto descriptivo
@@ -127,7 +127,7 @@ class EMDRControlPanel(QMainWindow):
         device_status_layout.addStretch()
 
         # Botón de escaneo
-        self.scan_button = QPushButton("Escanear Dispositivos")
+        self.scan_button = QPushButton("Conectar Dispositivos")
         self.scan_button.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -443,13 +443,13 @@ class EMDRControlPanel(QMainWindow):
         footer_frame.setStyleSheet("""
             QFrame {
                 background: transparent;
-                border: 2px solid #444444;
-                border-radius: 8px;
-                padding: 5px;
+                border: none;
+                border-radius: 0px;
+                padding: 0px;
             }
         """)
         footer_layout = QHBoxLayout(footer_frame)
-        footer_layout.setContentsMargins(12, 8, 12, 8)
+        footer_layout.setContentsMargins(12, 0, 12, 0)
 
         # Información de sesión con estilo mejorado
         self.session_info = QLabel("Sesión: No iniciada")
@@ -459,6 +459,8 @@ class EMDRControlPanel(QMainWindow):
                 font-size: 13px;
                 font-weight: 600;
                 background: transparent;
+                background-color: rgba(244, 67, 54, 0.1);
+                border: 1px solid rgba(244, 67, 54, 0.3);
                 padding: 2px 8px;
             }
         """)
@@ -728,12 +730,12 @@ class EMDRControlPanel(QMainWindow):
                                        stop: 0.6 rgba(0, 140, 130, 0.8),
                                        stop: 0.8 rgba(0, 200, 160, 0.85),
                                        stop: 1 rgba(120, 255, 180, 0.9));
-                border-radius: 12px;
+                border-radius: 0px;
                 border-top: 2px solid rgba(200, 255, 220, 0.8);
                 border-left: 1px solid rgba(255, 255, 255, 0.6);
                 border-right: 1px solid rgba(0, 0, 0, 0.3);
                 border-bottom: 2px solid rgba(0, 0, 0, 0.4);
-                padding: 5px 20px;
+                padding: 0px;
             }
         """)
         header_frame.setMinimumHeight(60)
@@ -742,53 +744,62 @@ class EMDRControlPanel(QMainWindow):
         header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(15, 5, 15, 5)
         
-        # ===== LOGO EMDR =====
-        logo_label = QLabel()
-        try:
-            # Intentar cargar el logo
-            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'assets', 'emdr_logo.png')
-            if os.path.exists(logo_path):
-                from PySide6.QtGui import QPixmap
-                pixmap = QPixmap(logo_path)
-                # Escalar el logo manteniendo proporción
-                scaled_pixmap = pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                logo_label.setPixmap(scaled_pixmap)
-            else:
-                # Si no existe el logo, mostrar texto alternativo
-                logo_label.setText("EMDR")
-                logo_label.setStyleSheet("""
-                    QLabel {
-                        color: white;
-                        font-size: 16px;
-                        font-weight: bold;
-                        background: transparent;
-                        padding: 4px;
-                    }
-                """)
-        except Exception as e:
-            print(f"Error cargando logo: {e}")
-            # Fallback a texto
-            logo_label.setText("EMDR")
-            logo_label.setStyleSheet("""
-                QLabel {
-                    color: white;
-                    font-size: 16px;
-                    font-weight: bold;
-                    background: transparent;
-                    padding: 4px;
-                }
-            """)
+        # ESTE FRAGMENT DE CÓDIGO ESTÁ COMENTADO PORQUE NO SE UTILIZA EL LOGO EMDR ACTUALMENTE
+        # # ===== LOGO EMDR =====
+        # logo_label = QLabel()
+        # try:
+        #     # Intentar cargar el logo
+        #     logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        #     if os.path.exists(logo_path):
+        #         from PySide6.QtGui import QPixmap
+        #         pixmap = QPixmap(logo_path)
+        #         # Escalar el logo manteniendo proporción
+        #         scaled_pixmap = pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        #         logo_label.setPixmap(scaled_pixmap)
+        #         logo_label.setStyleSheet("""
+        #             QLabel {
+        #                 background: transparent;
+        #                 border: none;
+        #                 padding: 0px;
+        #             }
+        #         """)
+        #     else:
+        #         # Si no existe el logo, mostrar texto alternativo
+        #         logo_label.setText("EMDR")
+        #         logo_label.setStyleSheet("""
+        #             QLabel {
+        #                 color: white;
+        #                 font-size: 16px;
+        #                 font-weight: bold;
+        #                 background: transparent;
+        #                 padding: 4px;
+        #             }
+        #         """)
+        # except Exception as e:
+        #     print(f"Error cargando logo: {e}")
+        #     # Fallback a texto
+        #     logo_label.setText("EMDR")
+        #     logo_label.setStyleSheet("""
+        #         QLabel {
+        #             color: white;
+        #             font-size: 16px;
+        #             font-weight: bold;
+        #             background: transparent;
+        #             padding: 4px;
+        #         }
+        #     """)
         
-        header_layout.addWidget(logo_label)
+        # header_layout.addWidget(logo_label)
         
         # Título principal
-        title_label = QLabel("THERAPY DASHBOARD")
+        title_label = QLabel("PANEL DE CONTROL EMDR")
         title_label.setStyleSheet("""
             QLabel {
                 color: white;
                 font-size: 18px;
                 font-weight: bold;
                 background: transparent;
+                border-radius: 12px;
                 margin-left: 10px;
             }
         """)
@@ -804,6 +815,7 @@ class EMDRControlPanel(QMainWindow):
                 font-size: 13px;
                 font-weight: 600;
                 background: transparent;
+                border-radius: 12px;
             }
         """)
         header_layout.addWidget(therapist_label)
@@ -818,6 +830,7 @@ class EMDRControlPanel(QMainWindow):
                 color: white;
                 font-weight: 600;
                 background: transparent;
+                border-radius: 12px;
             }
         """)
         header_layout.addWidget(patient_label)
@@ -1446,7 +1459,7 @@ if __name__ == "__main__":
     
     # Crear dashboard de prueba (necesita un username válido en la BD)
     control_panel = EMDRControlPanel("Lic. Margarita Valdivia")  # Usar el usuario de ejemplo
-    control_panel.setGeometry(100, 100, 1364, 690) # Este ajuste da como resultado una ventana real de 1366 x 722
+    # control_panel.setGeometry(0, 0, 1364, 688) # Este ajuste da como resultado una ventana real de 1366 x 722
     
     control_panel.show()
     

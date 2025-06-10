@@ -25,6 +25,7 @@ from src.utils.signal_processing import RealTimeFilter, PulseDetector  # Añadir
 # Configuración constantes
 SAMPLE_RATE = 125  # Hz (tasa efectiva: 250 SPS ÷ 2 canales)
 DISPLAY_TIME = 5   # Segundos de datos a mostrar en la gráfica
+GRAPH_PADDING = 0.01  # Espacio entre el borde de la gráfica y los datos
 BUFFER_SIZE = 512  # Tamaño máximo de buffer
 
 # Constantes para el protocolo binario
@@ -218,23 +219,25 @@ class SensorMonitor(QWidget):
                 border: 2px solid #444444;
                 border-radius: 0px;
                 margin: 0px;
+                padding: -2px;
             }
         """)
         # ===== CREAR LAYOUT ESPECÍFICO PARA LAS GRÁFICAS =====
         plots_layout = QVBoxLayout(plots_frame)
-        plots_layout.setContentsMargins(0, 0, 0, 0)
-        plots_layout.setSpacing(0)
+        plots_layout.setContentsMargins(2, 2, 2, 2)
+        plots_layout.setSpacing(2)
         
-        GRAPH_HEIGHT = 105  # Altura uniforme para todas las gráficas
+        GRAPH_HEIGHT = 132  # Altura uniforme para todas las gráficas
         
         # Crear gráficas individuales
         self.eog_plot = self.create_eog_plot(display_time, height=GRAPH_HEIGHT)
         self.bpm_plot = self.create_bpm_plot(display_time, height=GRAPH_HEIGHT)
-        self.ppg_plot = self.create_ppg_plot(display_time, height=GRAPH_HEIGHT + 40)
+        self.ppg_plot = self.create_ppg_plot(display_time, height=GRAPH_HEIGHT + 25)
         
         plots_layout.addWidget(self.eog_plot)
         plots_layout.addWidget(self.bpm_plot)
         plots_layout.addWidget(self.ppg_plot)
+        # plots_layout.addStretch()
         
         # ===== CREAR CURVAS DE DATOS =====
         self.create_data_curves()
@@ -332,8 +335,8 @@ class SensorMonitor(QWidget):
         eog_plot = pg.PlotWidget()
         eog_plot.setFixedHeight(height)
         eog_plot.setLabel('bottom', '')
-        eog_plot.setYRange(-50000, 50000)
-        eog_plot.setXRange(-display_time-0.02, 0.01, padding=0)
+        eog_plot.setYRange(-60000, 60000)
+        eog_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
         eog_plot.setBackground('#FFFFFF')
@@ -351,7 +354,7 @@ class SensorMonitor(QWidget):
         
         # Estilo del área de ploteo
         plot_item = eog_plot.getPlotItem()
-        plot_item.getViewBox().setDefaultPadding(0.02)
+        plot_item.getViewBox().setDefaultPadding(GRAPH_PADDING)
         
         # Configurar líneas de grilla con colores suaves
         plot_item.getAxis('bottom').setGrid(200)
@@ -364,8 +367,8 @@ class SensorMonitor(QWidget):
         bpm_plot = pg.PlotWidget()
         bpm_plot.setFixedHeight(height)
         bpm_plot.setLabel('bottom', '')
-        bpm_plot.setYRange(40, 150)
-        bpm_plot.setXRange(-display_time-0.02, 0.01, padding=0)
+        bpm_plot.setYRange(40, 145)
+        bpm_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
         bpm_plot.setBackground('#FFFFFF')
@@ -383,15 +386,23 @@ class SensorMonitor(QWidget):
         
         # Estilo del área de ploteo
         plot_item = bpm_plot.getPlotItem()
-        plot_item.getViewBox().setDefaultPadding(0.02)
+        plot_item.getViewBox().setDefaultPadding(GRAPH_PADDING)
         
         # Configurar líneas de grilla con colores suaves
         plot_item.getAxis('bottom').setGrid(200)
         plot_item.getAxis('left').setGrid(200)
         
         # Añadir líneas de referencia para rangos normales de BPM
-        reference_line_60 = pg.InfiniteLine(pos=60, angle=0, pen=pg.mkPen('#4CAF50', width=1, style=pg.QtCore.Qt.DashLine))
-        reference_line_100 = pg.InfiniteLine(pos=100, angle=0, pen=pg.mkPen('#FF9800', width=1, style=pg.QtCore.Qt.DashLine))
+        reference_line_60 = pg.InfiniteLine(
+            pos=60, 
+            angle=0, 
+            pen=pg.mkPen('#4CAF50', width=1, style=pg.QtCore.Qt.DashLine)
+        )
+        reference_line_100 = pg.InfiniteLine(
+            pos=100, 
+            angle=0, 
+            pen=pg.mkPen('#FF9800', width=1, style=pg.QtCore.Qt.DashLine)
+        )
         bpm_plot.addItem(reference_line_60)
         bpm_plot.addItem(reference_line_100)
         
@@ -402,8 +413,8 @@ class SensorMonitor(QWidget):
         ppg_plot = pg.PlotWidget()
         ppg_plot.setFixedHeight(height)
         ppg_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
-        ppg_plot.setYRange(-35000, 35000)
-        ppg_plot.setXRange(-display_time-0.02, 0.01, padding=0)
+        ppg_plot.setYRange(-40000, 40000)
+        ppg_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
         ppg_plot.setBackground('#FFFFFF')
@@ -428,7 +439,7 @@ class SensorMonitor(QWidget):
         
         # Estilo del área de ploteo
         plot_item = ppg_plot.getPlotItem()
-        plot_item.getViewBox().setDefaultPadding(0.02)
+        plot_item.getViewBox().setDefaultPadding(GRAPH_PADDING)
         
         # Configurar líneas de grilla con colores suaves
         plot_item.getAxis('bottom').setGrid(200)
@@ -446,36 +457,60 @@ class SensorMonitor(QWidget):
     def add_legends_and_extras(self, display_time):
         """Añadir leyendas y elementos adicionales con estilo moderno"""
         # Leyenda para EOG con estilo moderno
-        eog_legend = pg.LegendItem(offset=(10, 10), labelTextSize='9pt')
+        eog_legend = pg.LegendItem(
+            offset=(75, 10), 
+            labelTextSize='9pt',
+            spacing=0,      # Sin espaciado extra
+            rowSpacing=0,   # Sin espaciado entre filas
+            colSpacing=0    # Mínimo espaciado entre ícono y texto
+        )
         eog_legend.setParentItem(self.eog_plot.graphicsItem())
         eog_legend.addItem(self.eog_curve, "Movimiento Ocular")
         eog_legend.setBrush(pg.mkBrush(255, 255, 255, 200))  # Fondo semi-transparente
-        eog_legend.setPen(pg.mkPen('#CCCCCC', width=1))
+        eog_legend.layout.setContentsMargins(0, 0, 0, 0)  # izq, arr, der, aba
+        eog_legend.layout.setSpacing(0)  # Espaciado entre elementos
+        eog_legend.setGeometry(pg.QtCore.QRectF(0, 0, 134, 14))  # Tamaño fijo
         
         # Texto para mostrar el valor de BPM actual con estilo moderno
         self.bpm_text = pg.TextItem(
             text="BPM: --", 
-            color=(66, 66, 66),  # Color #424242
+            color=(150, 150, 150),  # Color #969696
             anchor=(0, 0),
-            border=pg.mkPen('#CCCCCC', width=1),
             fill=pg.mkBrush(255, 255, 255, 200)
         )
-        self.bpm_text.setPos(-display_time * 0.95, 140)
+        self.bpm_text.setPos(-3.5, 145)
         self.bpm_plot.addItem(self.bpm_text)
         
         # Leyenda para BPM con estilo moderno
-        bpm_legend = pg.LegendItem(offset=(10, 10), labelTextSize='9pt')
+        bpm_legend = pg.LegendItem(
+            offset=(75, 10), 
+            labelTextSize='9pt', 
+            spacing=0, 
+            rowSpacing=0, 
+            colSpacing=0
+        )
         bpm_legend.setParentItem(self.bpm_plot.graphicsItem())
         bpm_legend.addItem(self.bpm_curve, "Frecuencia Cardíaca")
         bpm_legend.setBrush(pg.mkBrush(255, 255, 255, 200))
-        bpm_legend.setPen(pg.mkPen('#CCCCCC', width=1))
+        bpm_legend.layout.setContentsMargins(0, 0, 0, 0)
+        bpm_legend.layout.setSpacing(0)
+        bpm_legend.setGeometry(pg.QtCore.QRectF(0, 0, 137, 14))
         
         # Leyenda para PPG con estilo moderno
-        ppg_legend = pg.LegendItem(offset=(10, 10), labelTextSize='9pt')
+        ppg_legend = pg.LegendItem(
+            offset=(75, 10), 
+            labelTextSize='9pt', 
+            spacing=0, 
+            rowSpacing=0, 
+            colSpacing=0
+        )
         ppg_legend.setParentItem(self.ppg_plot.graphicsItem())
         ppg_legend.addItem(self.ppg_curve, "Señal PPG")
         ppg_legend.setBrush(pg.mkBrush(255, 255, 255, 200))
-        ppg_legend.setPen(pg.mkPen('#CCCCCC', width=1))
+        ppg_legend.layout.setContentsMargins(0, 0, 0, 0)
+        ppg_legend.layout.setSpacing(0)
+        # ppg_legend.setPen(pg.mkPen('#CCCCCC', width=1))
+        ppg_legend.setGeometry(pg.QtCore.QRectF(0, 0, 85, 14))
 
     def toggle_acquisition(self):
         """Toggle between start and stop acquisition"""
@@ -904,9 +939,9 @@ class SensorMonitor(QWidget):
                     self.bpm_text.setColor((66, 66, 66))   # Gris para otros casos
         
         # Fijar siempre el rango X entre -5 y 0
-        self.ppg_plot.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
-        self.bpm_plot.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
-        self.eog_plot.setXRange(-DISPLAY_TIME-0.02, 0.01, padding=0)
+        self.ppg_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
+        self.bpm_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
+        self.eog_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
 
     def save_data_to_csv(self):
         """Save collected data to CSV file with modern dialog"""
