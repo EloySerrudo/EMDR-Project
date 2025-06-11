@@ -7,9 +7,10 @@ from PySide6.QtWidgets import (
     QTabWidget, QSplitter, QGridLayout, QMessageBox, QFrame, QComboBox,
     QPushButton, QStackedWidget, QDialog, QFormLayout, QLineEdit, QTextEdit
 )
-from PySide6.QtCore import Qt, QTimer, Signal, QObject
+from PySide6.QtCore import Qt, QTimer, Signal, QObject, QSize
 from PySide6.QtGui import QFont, QIcon, QIntValidator, QPixmap  # Añadir QPixmap
 import pyqtgraph as pg
+import qtawesome as qta
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -612,20 +613,38 @@ class EMDRControlPanel(QMainWindow):
         self.load_patients()
     
     def create_device_status_box(self, device_name, is_connected):
-        """Crear una caja de estado para un dispositivo con efecto LED"""
+        """Crear una caja de estado para un dispositivo con efecto LED e icono"""
         # Frame contenedor
         box_frame = QFrame()
         box_frame.setFrameShape(QFrame.StyledPanel)
-        box_frame.setFixedSize(100, 40)  # Tamaño fijo para consistencia
+        box_frame.setFixedSize(120, 45)  # Aumentar tamaño para icono
         
-        # Layout horizontal para LED + texto
+        # Layout horizontal para icono + LED + texto
         box_layout = QHBoxLayout(box_frame)
         box_layout.setContentsMargins(8, 6, 8, 6)
-        box_layout.setSpacing(8)
+        box_layout.setSpacing(6)
         
-        # LED circular (usando QLabel con estilo)
+        # Icono del dispositivo
+        icon_label = QLabel()
+        icon_label.setFixedSize(20, 20)
+        
+        # Mapear dispositivos a iconos
+        device_icons = {
+            "USB": "mdi.usb-flash-drive",
+            "Luces": "mdi.led-strip",
+            "Vibración": "mdi.watch-vibrate",
+            "Sensores": "mdi.pulse"
+        }
+        
+        icon_name = device_icons.get(device_name, "fa5s.question")
+        icon_color = "#66FF66" if is_connected else "#FF6666"
+        
+        icon = qta.icon(icon_name, color=icon_color)
+        icon_label.setPixmap(icon.pixmap(20, 20))
+        
+        # LED circular (reducir tamaño)
         led_label = QLabel()
-        led_label.setFixedSize(12, 12)
+        led_label.setFixedSize(10, 10)
         led_label.setStyleSheet(self.get_led_style(is_connected))
         
         # Texto del dispositivo
@@ -634,16 +653,16 @@ class EMDRControlPanel(QMainWindow):
         text_label.setStyleSheet("""
             QLabel {
                 color: #FFFFFF;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 600;
                 background: transparent;
-                border-radius: 0px;
                 border: none;
                 padding: 0px;
             }
         """)
         
         # Añadir al layout
+        box_layout.addWidget(icon_label)
         box_layout.addWidget(led_label)
         box_layout.addWidget(text_label)
         
@@ -653,6 +672,7 @@ class EMDRControlPanel(QMainWindow):
         # Guardar referencias para poder actualizar
         box_frame.led_label = led_label
         box_frame.text_label = text_label
+        box_frame.icon_label = icon_label
         box_frame.device_name = device_name
         
         return box_frame
@@ -715,6 +735,20 @@ class EMDRControlPanel(QMainWindow):
             
             # Actualizar frame
             box.setStyleSheet(self.get_box_style(is_connected))
+            
+            # Actualizar icono
+            device_icons = {
+                "Master Controller": "mdi.usb-flash-drive",
+                "Lightbar": "mdi.led-strip", 
+                "Buzzer": "mdi.watch-vibrate",
+                "Sensor": "mdi.pulse"
+            }
+            
+            icon_name = device_icons.get(device_key, "fa5s.question")
+            icon_color = "#66FF66" if is_connected else "#FF6666"
+            
+            icon = qta.icon(icon_name, color=icon_color)
+            box.icon_label.setPixmap(icon.pixmap(20, 20))
 
     def create_header_bar(self, username):
         """Crea la barra superior con información contextual"""
@@ -834,17 +868,22 @@ class EMDRControlPanel(QMainWindow):
             }
         """)
         header_layout.addWidget(patient_label)
-        
+
         self.patient_selector = QComboBox()
+
+        # Configurar íconos para las flechas del dropdown
+        self.combo_arrow_down = qta.icon('fa6s.chevron-down', color='#FFFFFF')
+        self.combo_arrow_up = qta.icon('fa6s.chevron-up', color='#FFFFFF')
+
         self.patient_selector.setStyleSheet("""
             QComboBox {
-                background-color: #424242;
-                color: white;
+                padding: 8px 12px 8px 12px;
                 border: 2px solid #555555;
                 border-radius: 6px;
-                padding: 4px 12px;
-                min-width: 160px;
                 font-size: 13px;
+                min-width: 160px;
+                background-color: #424242;
+                color: white;
                 font-weight: 500;
             }
             QComboBox:focus {
@@ -882,34 +921,69 @@ class EMDRControlPanel(QMainWindow):
                 background-color: #00A99D;
             }
         """)
-        self.patient_selector.currentIndexChanged.connect(self.change_patient)
-        header_layout.addWidget(self.patient_selector)
-        
-        # Botón para añadir paciente
-        add_patient_btn = QPushButton("Crear paciente")
-        add_patient_btn.setToolTip("Añadir nuevo paciente")
-        add_patient_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #424242;
-                color: white;
-                border: 2px solid #424242;
-                border-radius: 6px;
-                padding: 4px 12px;
-                margin-left: 8px;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #555555;
-                border: 2px solid #555555;
-            }
-            QPushButton:pressed {
-                background-color: #333333;
-                border: 2px solid #333333;
+
+        # Crear un contenedor para el ComboBox y la flecha personalizada
+        patient_combo_container = QFrame()
+        patient_combo_container.setStyleSheet("""
+            QFrame { 
+                border: none; 
+                background: transparent; 
+                padding: 0px; 
             }
         """)
-        add_patient_btn.clicked.connect(self.add_new_patient)
-        header_layout.addWidget(add_patient_btn)
+        patient_combo_layout = QHBoxLayout(patient_combo_container)
+        patient_combo_layout.setContentsMargins(0, 0, 0, 0)
+        patient_combo_layout.setSpacing(0)
+
+        patient_combo_layout.addWidget(self.patient_selector)
+
+        # Crear el ícono de flecha personalizado
+        self.patient_dropdown_arrow_label = QLabel()
+        self.patient_dropdown_arrow_label.setPixmap(self.combo_arrow_down.pixmap(16, 16))
+        self.patient_dropdown_arrow_label.setStyleSheet("""
+            QLabel {
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }
+        """)
+
+        # Posicionar el ícono de flecha sobre el combo box
+        self.patient_dropdown_arrow_label.setParent(self.patient_selector)
+        self.patient_dropdown_arrow_label.move(self.patient_selector.width() - 25, 
+                                          (self.patient_selector.height() - 16) // 2)
+
+        # Sobrescribir métodos para manejar el cambio de ícono
+        original_show_popup = self.patient_selector.showPopup
+        original_hide_popup = self.patient_selector.hidePopup
+        original_resize_event = self.patient_selector.resizeEvent
+
+        def patient_combo_show_popup():
+            """Cambia el ícono cuando se despliega el combo"""
+            self.patient_dropdown_arrow_label.setPixmap(self.combo_arrow_up.pixmap(16, 16))
+            original_show_popup()
+
+        def patient_combo_hide_popup():
+            """Cambia el ícono cuando se colapsa el combo"""
+            self.patient_dropdown_arrow_label.setPixmap(self.combo_arrow_down.pixmap(16, 16))
+            original_hide_popup()
+
+        def patient_combo_resize_event(event):
+            """Reposiciona la flecha cuando el combo se redimensiona"""
+            original_resize_event(event)
+            self.patient_dropdown_arrow_label.move(self.patient_selector.width() - 25, 
+                                              (self.patient_selector.height() - 16) // 2)
+
+        # Asignar los métodos sobrescritos
+        self.patient_selector.showPopup = patient_combo_show_popup
+        self.patient_selector.hidePopup = patient_combo_hide_popup
+        self.patient_selector.resizeEvent = patient_combo_resize_event
+
+        # Conectar el evento de cambio
+        self.patient_selector.currentIndexChanged.connect(self.change_patient)
+
+        # Añadir el contenedor al layout
+        header_layout.addWidget(patient_combo_container)
         
         return header_frame
     

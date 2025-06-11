@@ -70,22 +70,17 @@ class SimpleSelectorTest(QMainWindow):
                                 self.update_selector, ticks=Config.speeds, parent=self)
         
         # APLICAR EL CONTORNO ROJO AL SELECTOR
-        self.selector.setStyleSheet("""
-            Selector {
-                border: 1px solid #FF0000;
-                background-color: rgba(255, 255, 255, 0.9);
-            }
-            Selector QLabel {
-                color: #333333;
-                background-color: transparent;
-                border: 1px solid #FF0000;
-                font-weight: bold;
-            }
-            Selector QSlider {
-                background-color: transparent;
-                border: 1px solid #FF0000;
-            }
-        """)
+        # self.selector.setStyleSheet("""
+        #     Selector QLabel {
+        #         color: #333333;
+        #         background-color: transparent;
+        #         border: 1px solid #FF0000;
+        #         font-weight: bold;
+        #     }
+        #     Selector QSlider {
+        #         border: 1px solid #FF0000;
+        #     }
+        # """)
         
         # Conectar botones
         self.btn_plus.clicked.connect(self.selector.next_value)

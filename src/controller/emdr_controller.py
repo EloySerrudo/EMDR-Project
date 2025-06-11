@@ -381,7 +381,6 @@ class EMDRControllerWidget(QWidget):
         
         # Título para velocidad
         speed_title = QLabel("VELOCIDAD")
-        # speed_title.setFixedHeight(14)
         speed_title.setAlignment(Qt.AlignCenter)
         speed_title.setStyleSheet(label_style)
         speed_control_box.addWidget(speed_title)
@@ -427,13 +426,6 @@ class EMDRControllerWidget(QWidget):
         self.sel_speed = Selector('Velocidad', Config.speeds, '{0:d}/min', 
                                   self.btn_speed_minus, self.btn_speed_plus, 
                                   self.update_speed, ticks=Config.speeds, parent=self)
-        self.sel_speed.setStyleSheet("""
-            QWidget {
-                border: 1px solid #00A99D;
-                border-radius: 0px;
-                background: transparent;
-            }
-        """)
         
         # Conectar botones de velocidad
         self.btn_speed_plus.clicked.connect(self.sel_speed.next_value)
@@ -710,13 +702,7 @@ class EMDRControllerWidget(QWidget):
         self.sel_headphone_volume = Selector('Volumen', Config.volumes, '{0:d}%', 
                                              self.btn_headphone_volume_minus, self.btn_headphone_volume_plus, 
                                            self.update_sound, ticks=Config.volumes, parent=self)
-        self.sel_headphone_volume.setStyleSheet("""
-            QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
-
+        
         # Conectar botones de volumen
         self.btn_headphone_volume_plus.clicked.connect(self.sel_headphone_volume.next_value)
         self.btn_headphone_volume_minus.clicked.connect(self.sel_headphone_volume.prev_value)
@@ -818,13 +804,7 @@ class EMDRControllerWidget(QWidget):
         self.sel_headphone_tone = Selector('Tono/Duración', Config.tones, '{0}', 
                                            self.btn_headphone_tone_minus, self.btn_headphone_tone_plus, 
                                         self.update_sound, cyclic=True, ticks=range(len(Config.tones)), parent=self)
-        self.sel_headphone_tone.setStyleSheet("""
-            QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
-
+        
         # Conectar botones de tono
         self.btn_headphone_tone_plus.clicked.connect(self.sel_headphone_tone.next_value)
         self.btn_headphone_tone_minus.clicked.connect(self.sel_headphone_tone.prev_value)
@@ -1104,13 +1084,7 @@ class EMDRControllerWidget(QWidget):
         self.sel_light_color = Selector('Color', Config.colors, '{0}', 
                                         self.btn_light_color_minus, self.btn_light_color_plus,
                                       self.update_light, cyclic=True, ticks=range(len(Config.colors)), parent=self)
-        self.sel_light_color.setStyleSheet("""
-            QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
-
+        
         # Conectar botones de color
         self.btn_light_color_plus.clicked.connect(self.sel_light_color.next_value)
         self.btn_light_color_minus.clicked.connect(self.sel_light_color.prev_value)
@@ -1159,13 +1133,7 @@ class EMDRControllerWidget(QWidget):
         self.sel_light_intens = Selector('Brillo', Config.intensities, '{0:d}%',
                                        self.btn_light_intens_minus, self.btn_light_intens_plus, 
                                        self.update_light, ticks=Config.intensities, parent=self)
-        self.sel_light_intens.setStyleSheet("""
-            QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
-
+        
         # Conectar botones de intensidad
         self.btn_light_intens_plus.clicked.connect(self.sel_light_intens.next_value)
         self.btn_light_intens_minus.clicked.connect(self.sel_light_intens.prev_value)
@@ -1406,12 +1374,6 @@ class EMDRControllerWidget(QWidget):
         self.sel_buzzer_duration = Selector('Duración', Config.durations, '{0:d} ms', 
                                           self.btn_buzzer_duration_minus, self.btn_buzzer_duration_plus, 
                                           self.update_buzzer, ticks=Config.durations, parent=self)
-        self.sel_buzzer_duration.setStyleSheet("""
-            QLabel {
-                border: none;
-                background: transparent;
-            }
-        """)
 
         # Conectar botones de duración
         self.btn_buzzer_duration_plus.clicked.connect(self.sel_buzzer_duration.next_value)

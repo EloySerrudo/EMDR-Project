@@ -19,11 +19,13 @@ class Selector(QWidget):
         # Etiqueta para mostrar el valor
         self.value_label = QLabel()
         self.value_label.setAlignment(Qt.AlignCenter)
-        self.value_label.setStyleSheet("""font-size: 14px;
-                font-weight: bold;
-                padding: 0px;
-                min-height: 11px;
-                max-height: 11px""")
+        self.value_label.setStyleSheet("""font-size: 14px; 
+                                       font-weight: bold; 
+                                       padding: 0px; 
+                                       background: transparent;
+                                       border: none;
+                                       min-height: 11px; 
+                                       max-height: 11px""")
         
         # Guardar referencias a los botones para compatibilidad
         self.btn_plus = btn_plus
@@ -39,42 +41,36 @@ class Selector(QWidget):
         self.slider.setFixedWidth(100)
         
         # Aumentar la altura para que haya suficiente espacio para los ticks
-        self.slider.setFixedHeight(40)  # Mayor altura para acomodar los ticks
+        self.slider.setFixedHeight(30)
         
         # Establecer pageStep como en el ejemplo funcional
         self.slider.setPageStep(10)
         
-        # Aquí está el problema principal - el estilo CSS debe modificarse
-        # para permitir que se vean los ticks adecuadamente
+        # CSS modificado para hacer visibles los ticks
         self.slider.setStyleSheet("""
             QSlider::groove:horizontal {
-                height: 8px;
-                background: #f0f0f0;
-                border: 1px solid #c0c0c0;
-                border-radius: 4px;
-                margin: 2px 0;
+                height: 2px;
             }
             QSlider::handle:horizontal {
-                width: 16px;
-                background: #80c0ff;
+                width: 14px;
+                height: 14px;
+                background: #9Fc0ff;
                 border: 1px solid #5080ff;
-                border-radius: 8px;
-                margin: -8px 0;
+                border-radius: 25px;
             }
             QSlider::sub-page:horizontal {
-                background: #c0e0ff;
-                border: 1px solid #8080c0;
+                background: #00A99D;
+                border: 1px solid #424242;
                 border-radius: 4px;
             }
             QSlider::add-page:horizontal {
                 background: #f0f0f0;
             }
-            /* Modificado para que los ticks sean más visibles */
-            QSlider::tick-mark {
+            QSlider::TicksBothSides {
                 background: #505050;
                 width: 2px;
                 height: 10px;
-                margin-top: 10px;  /* Importante: dejar espacio para los ticks */
+                margin-top: 10px;
             }
         """)
         
@@ -109,8 +105,8 @@ class Selector(QWidget):
             
             # Configurar los ticks (marcas de escala)
             if ticks is not None:
-                # IMPORTANTE: Usar TicksAbove en lugar de TicksBelow
-                self.slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+                # IMPORTANTE: Usar TicksBothSides en lugar de TicksBelow
+                self.slider.setTickPosition(QSlider.TickPosition.TicksBothSides)
                 
                 if isinstance(ticks, range) or isinstance(ticks, list):
                     # Si ticks es una lista o range, usar distancia entre valores
