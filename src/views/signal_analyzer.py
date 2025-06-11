@@ -9,6 +9,7 @@ from datetime import datetime
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from src.database.database_manager import DatabaseManager
+from src.sensor.sensor_monitor import SAMPLE_RATE
 
 
 class SignalAnalyzer:
@@ -82,7 +83,7 @@ class SignalAnalyzer:
         # Plot EOG
         if eog_data is not None:
             eog_array = np.array(eog_data)
-            time_eog = np.linspace(0, len(eog_array)/250, len(eog_array))  # Asumiendo 250 Hz
+            time_eog = np.linspace(0, len(eog_array)/SAMPLE_RATE, len(eog_array))
             axes[0].plot(time_eog, eog_array, 'b-', linewidth=0.8)
             axes[0].set_title('Señal EOG (Electrooculograma)')
             axes[0].set_ylabel('Amplitud (µV)')
@@ -93,7 +94,7 @@ class SignalAnalyzer:
         # Plot PPG
         if ppg_data is not None:
             ppg_array = np.array(ppg_data)
-            time_ppg = np.linspace(0, len(ppg_array)/250, len(ppg_array))  # Asumiendo 250 Hz
+            time_ppg = np.linspace(0, len(ppg_array)/SAMPLE_RATE, len(ppg_array))
             axes[1].plot(time_ppg, ppg_array, 'r-', linewidth=0.8)
             axes[1].set_title('Señal PPG (Fotopletismografía)')
             axes[1].set_ylabel('Amplitud')
@@ -104,8 +105,8 @@ class SignalAnalyzer:
         # Plot BPM
         if bpm_data is not None:
             bpm_array = np.array(bpm_data)
-            time_bpm = np.linspace(0, len(bpm_array)/1, len(bpm_array))  # BPM normalmente 1 Hz
-            axes[2].plot(time_bpm, bpm_array, 'g-', linewidth=1.5, marker='o', markersize=3)
+            time_bpm = np.linspace(0, len(bpm_array)/SAMPLE_RATE, len(bpm_array))  # BPM capturado a SAMPLE_RATE Hz
+            axes[2].plot(time_bpm, bpm_array, 'g-', linewidth=1.5)
             axes[2].set_title('Frecuencia Cardíaca (BPM)')
             axes[2].set_ylabel('BPM')
             axes[2].set_xlabel('Tiempo (s)')
@@ -141,7 +142,7 @@ class SignalAnalyzer:
         if eog_data is not None:
             eog_array = np.array(eog_data)
             print(f"\nEOG:")
-            print(f"  Duración: {len(eog_array)/250:.2f} segundos")
+            print(f"  Duración: {len(eog_array)/SAMPLE_RATE:.2f} segundos")
             print(f"  Media: {np.mean(eog_array):.2f} µV")
             print(f"  Desviación estándar: {np.std(eog_array):.2f} µV")
             print(f"  Rango: {np.min(eog_array):.2f} - {np.max(eog_array):.2f} µV")
@@ -150,7 +151,7 @@ class SignalAnalyzer:
         if ppg_data is not None:
             ppg_array = np.array(ppg_data)
             print(f"\nPPG:")
-            print(f"  Duración: {len(ppg_array)/250:.2f} segundos")
+            print(f"  Duración: {len(ppg_array)/SAMPLE_RATE:.2f} segundos")
             print(f"  Media: {np.mean(ppg_array):.2f}")
             print(f"  Desviación estándar: {np.std(ppg_array):.2f}")
             print(f"  Rango: {np.min(ppg_array):.2f} - {np.max(ppg_array):.2f}")
@@ -244,6 +245,6 @@ if __name__ == "__main__":
         analyzer.plot_session_signals(3)#, save_path='session_analysis.png')
         
         # Comparar sesiones (si hay múltiples)
-        analyzer.compare_sessions(save_path='sessions_comparison.png')
+        # analyzer.compare_sessions(save_path='sessions_comparison.png')
     else:
         print("Error cargando datos")

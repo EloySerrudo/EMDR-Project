@@ -231,7 +231,7 @@ class DatabaseManager:
         
         if include_data:
             cursor.execute(
-                "SELECT id, id_paciente, fecha, datos_eog, datos_ppg, notas " +
+                "SELECT id, id_paciente, fecha, datos_eog, datos_ppg, datos_bpm, notas " +
                 "FROM sesiones WHERE id = ?",
                 (session_id,)
             )
@@ -246,7 +246,8 @@ class DatabaseManager:
                 "fecha": session[2],
                 "datos_eog": session[3],
                 "datos_ppg": session[4],
-                "notas": session[5]
+                "datos_bpm": session[5],
+                "notas": session[6]
             }
         else:
             cursor.execute(
