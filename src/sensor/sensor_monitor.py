@@ -43,6 +43,12 @@ class SensorMonitor(QWidget):
         self.running = False
         self.reading_thread = None
         
+        # Flag para indicar si estamos cerrando
+        self.is_closing_flag = False
+        
+        # Si parent es QMainWindow , es una app independiente
+        self.is_standalone = isinstance(parent, QMainWindow)
+        
         # Data storage for display
         self.display_size = display_time * SAMPLE_RATE
         self.sample_interval = 1.0 / SAMPLE_RATE
@@ -107,7 +113,7 @@ class SensorMonitor(QWidget):
         self.main_layout.setSpacing(5)
         
         # ===== HEADER CON CONTROLES =====
-        if self.parent():
+        if self.is_standalone:
             header_frame = QFrame()
             header_frame.setFrameShape(QFrame.StyledPanel)
             header_frame.setStyleSheet("""
@@ -249,7 +255,7 @@ class SensorMonitor(QWidget):
         self.main_layout.addWidget(plots_frame)
         
         # ===== BARRA DE ESTADO =====
-        if self.parent():
+        if self.is_standalone:
             status_frame = QFrame()
             status_frame.setFrameShape(QFrame.StyledPanel)
             status_frame.setStyleSheet("""
@@ -987,11 +993,11 @@ class SensorMonitor(QWidget):
             data = {
                 'ID': self.idx,
                 'Timestamp_ms': self.tiempos,
-                'BPM': self.bpm_datos,  # Añadir BPM al CSV
+                'EOG_raw': self.eog_datos,
+                'EOG_filtrado': self.eog_datos_filtrados,
                 'PPG_raw': self.ppg_datos,
                 'PPG_filtrado': self.ppg_datos_filtrados,
-                'EOG_raw': self.eog_datos,
-                'EOG_filtrado': self.eog_datos_filtrados
+                'BPM': self.bpm_datos
             }
             df = pd.DataFrame(data)
             
@@ -1078,60 +1084,50 @@ class SensorMonitor(QWidget):
             """)
             msg.exec()
 
-    def closeEvent(self, event):
-        """Clean up when window is closed"""
-        self.stop_acquisition()
-        
-        # Save data before closing if we have any
-        if len(self.idx) > 0:
-            print("\nGuardando datos antes de salir...")
-            self.save_data_to_csv()
-            
-        # Si es parte de otra ventana, permitir el comportamiento por defecto
-        if self.parent():
-            event.accept()
-        else:
-            super().closeEvent(event)
-            
-    # Método para permitir integración con otras ventanas
     def cleanup(self):
-        """Método para limpiar recursos cuando el widget es parte de otra ventana"""
-        self.stop_acquisition()
-        if self.timer:
+        """Método de limpieza - maneja el evento de cierre de la ventana"""
+        print("Iniciando limpieza de SensorMonitor...")
+        self.is_closing_flag = True
+        
+        # Detener adquisición si está corriendo
+        if self.running:
+            self.stop_acquisition()
+            
+        # Detener timer de actualización
+        if hasattr(self, 'timer') and self.timer.isActive():
             self.timer.stop()
-        if len(self.idx) > 0:
+            
+        # Esperar a que termine el thread de lectura
+        if self.reading_thread and self.reading_thread.is_alive():
+            self.reading_thread.join(timeout=2.0)
+            if self.reading_thread.is_alive():
+                print("Advertencia: Thread de lectura no terminó correctamente")
+        
+        if self.is_standalone and len(self.idx) > 0:
+            # Si es aplicación independiente, guardar datos si existen
+            print("\nGuardando datos en CSV antes de salir...")
             self.save_data_to_csv()
+        
+        print("Limpieza de SensorMonitor completada")
     
-    def print_widget_sizes(self):
-        """Imprimir los tamaños actuales de los widgets de gráficas con información detallada"""
-        print("\n--- Información de tamaños de widgets ---")
-        
-        # EOG Widget
-        eog_size = self.eog_plot_widget.size()
-        eog_hint = self.eog_plot_widget.sizeHint()
-        print(f"EOG Plot Widget:")
-        print(f"  Tamaño actual: {eog_size.width()} x {eog_size.height()}")
-        print(f"  Altura: {eog_hint.height()}")
-        
-        # BPM Widget  
-        bpm_size = self.bpm_plot_widget.size()
-        bpm_hint = self.bpm_plot_widget.sizeHint()
-        print(f"BPM Plot Widget:")
-        print(f"  Tamaño actual: {bpm_size.width()} x {bpm_size.height()}")
-        print(f"  Altura: {bpm_hint.height()}")
-        
-        # PPG Widget
-        ppg_size = self.ppg_plot_widget.size()
-        ppg_hint = self.ppg_plot_widget.sizeHint()
-        print(f"PPG Plot Widget:")
-        print(f"  Tamaño actual: {ppg_size.width()} x {ppg_size.height()}")
-        print(f"  Altura: {ppg_hint.height()}")
-        
-        # Información adicional
-        total_height = eog_size.height() + bpm_size.height() + ppg_size.height()
-        print(f"\nAltura total de gráficas: {total_height}")
-        print(f"Altura promedio por gráfica: {total_height / 3:.1f}")
-        print("----------------------------------------\n")
+    def is_busy(self) -> bool:
+        """Verificar si está ocupado"""
+        return self.running
+    
+    def closeEvent(self, event=None):
+        """Manejo del evento de cierre"""
+        # Actualmente este método nunca se usa, debido a que el widget cuando 
+        # se ejecut 'independientemente', en realidad se hereda de QMainWindow
+        # y cuando no, es parte de control_panel.
+        if self.is_standalone:
+            # Solo manejar closeEvent si es aplicación independiente
+            self.cleanup()
+            if event:
+                event.accept()
+        else:
+            # Si es widget integrado, no manejar closeEvent aquí
+            # El parent se encargará de llamar cleanup()
+            pass
 
 
 # Solo cuando se ejecuta como aplicación independiente
@@ -1164,11 +1160,16 @@ if __name__ == "__main__":
     monitor_widget = SensorMonitor(parent=main_window)
     main_window.setCentralWidget(monitor_widget)
     
+    # Crear cleanup manager para app independiente
+    from src.utils.cleanup_interface import CleanupManager
+    cleanup_manager = CleanupManager()
+    cleanup_manager.register_component(monitor_widget)
+    
+    # Conectar cierre de aplicación
+    app.aboutToQuit.connect(lambda: cleanup_manager.request_close())
+    
     # Mostrar ventana y ejecutar aplicación
     main_window.show()
-    
-    # Cuando se cierra la ventana principal, asegurar la limpieza
-    app.aboutToQuit.connect(monitor_widget.cleanup)
     
     # Start Qt event loop
     sys.exit(app.exec())

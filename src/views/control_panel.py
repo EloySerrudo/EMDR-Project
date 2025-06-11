@@ -21,7 +21,7 @@ from src.utils.events import event_system
 from src.controller.emdr_controller import EMDRControllerWidget
 from src.sensor.sensor_monitor import SensorMonitor
 from src.database.database_manager import DatabaseManager
-
+from src.utils.cleanup_interface import CleanupManager
 
 class SignalsObject(QObject):
     device_status_updated = Signal(dict, bool)
@@ -611,6 +611,17 @@ class EMDRControlPanel(QMainWindow):
         
         # Cargar pacientes por defecto
         self.load_patients()
+
+        # Manager de limpieza
+        self.cleanup_manager = CleanupManager()
+        
+        # Registrar componentes cuando se crean
+        self.cleanup_manager.register_component(self.emdr_controller)
+        self.cleanup_manager.register_component(self.sensor_monitor)
+        
+        # Conectar señales de limpieza
+        self.cleanup_manager.cleanup_completed.connect(self.on_cleanup_completed)
+        self.cleanup_manager.cleanup_failed.connect(self.on_cleanup_failed)
     
     def create_device_status_box(self, device_name, is_connected):
         """Crear una caja de estado para un dispositivo con efecto LED e icono"""
@@ -1246,15 +1257,42 @@ class EMDRControlPanel(QMainWindow):
 
     def closeEvent(self, event):
         """Manejador del evento de cierre de aplicación"""
-        # Detener cualquier adquisición en curso
-        if self.sensor_monitor.running:
-            self.sensor_monitor.cleanup()
+        print("Iniciando cierre de aplicación...")
         
-        # Cerrar el controlador EMDR
-        self.emdr_controller.closeEvent()
-        
-        # Continuar con el cierre normal
-        event.accept()
+        # Solicitar cierre coordinado
+        if self.cleanup_manager.request_close():
+            print("Cierre coordinado exitoso")
+            event.accept()
+        else:
+            print("No se pudo realizar el cierre coordinado")
+            # Mostrar mensaje al usuario
+            from PySide6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self,
+                'Forzar cierre',
+                'Algunos componentes están ocupados. ¿Desea forzar el cierre?',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                # Forzar limpieza y cerrar
+                try:
+                    self.emdr_controller.cleanup()
+                    self.sensor_monitor.cleanup()
+                except Exception as e:
+                    print(f"Error en limpieza forzada: {e}")
+                event.accept()
+            else:
+                event.ignore()
+    
+    def on_cleanup_completed(self):
+        """Callback cuando se completa la limpieza"""
+        print("Limpieza de todos los componentes completada")
+    
+    def on_cleanup_failed(self, error_msg):
+        """Callback cuando falla la limpieza"""
+        print(f"Error en limpieza: {error_msg}")
 
     def add_new_patient(self):
         """Muestra un diálogo para añadir un nuevo paciente"""

@@ -108,6 +108,12 @@ class EMDRControllerWidget(QWidget):
         self.pausing = False
         self.stopping = False
         
+        # Flag para indicar si estamos cerrando
+        self.is_closing_flag = False
+        
+        # Si parent es QMainWindow , es una app independiente
+        self.is_standalone = isinstance(parent, QMainWindow)
+        
         self.setStyleSheet("""
             QFrame {
                 border: 2px solid #444444;
@@ -124,7 +130,7 @@ class EMDRControllerWidget(QWidget):
         self.main_layout.setSpacing(0)
         
         # 1. Etiqueta de estado de dispositivos modernizada
-        if self.parent():
+        if self.is_standalone:
             self.device_status_label = QLabel("Estado de dispositivos: Desconocido")
             self.device_status_label.setStyleSheet("""
                 QLabel {
@@ -264,7 +270,7 @@ class EMDRControllerWidget(QWidget):
         control_layout.addStretch()
 
         # Botón de escaneo (solo visible si se ejecuta como ventana independiente)
-        if self.parent():
+        if self.is_standalone:
             self.btn_scan_usb = CustomButton('Escanear', self.scan_usb_click)
             self.btn_scan_usb.setStyleSheet("""
                 QPushButton {
@@ -1942,20 +1948,71 @@ class EMDRControllerWidget(QWidget):
             if "Lightbar" in found_devices:
                 Devices.set_led(Devices.led_num // 2 + 1)
     
-    def closeEvent(self):
-        """Maneja el evento de cierre de la ventana"""
-        print("Cerrando aplicación y limpiando recursos...")
+    def cleanup(self):
+        """Implementación de CleanupInterface"""
+        print("Iniciando limpieza de EMDRController...")
+        self.is_closing_flag = True
         
         # Detener cualquier acción EMDR en progreso
         if self.mode == 'action':
-            self.stopping = True
-            self.config_mode()
+            self.stop_click()
+            
+        # Detener cronómetro si está corriendo
+        if hasattr(self, 'chronometer'):
+            self.chronometer.stop()
+            
+        # Detener timer de sondeo si existe
+        if hasattr(self, 'probe_timer') and self.probe_timer.isActive():
+            self.probe_timer.stop()
         
         # Apagar todos los dispositivos de estimulación
         Devices.set_led(0)  # Apagar todos los LEDs
+            
+        # Guardar configuración
+        try:
+            self.save_config()
+        except Exception as e:
+            print(f"Error guardando configuración: {e}")
+            
+        # Limpiar dispositivos
+        # try:
+        #     Devices.cleanup()  # Si existe un método cleanup en Devices
+        # except Exception as e:
+        #     print(f"Error limpiando dispositivos: {e}")
         
-        # Guardar la configuración actual
-        self.save_config()
+        print("Limpieza de EMDRController completada")
+    
+    def is_busy(self) -> bool:
+        """Verificar si está en medio de una acción EMDR crítica"""
+        return self.mode == 'action' and not self.stopping and not self.pausing
+    
+    def closeEvent(self, event=None):
+        """Manejo del evento de cierre"""
+        # Actualmente este método nunca se usa, debido a que el widget cuando 
+        # se ejecut 'independientemente', en realidad se hereda de QMainWindow
+        # y cuando no, es parte de control_panel.
+        if self.is_standalone:
+            # Verificar si está ocupado antes de cerrar
+            if self.is_busy():
+                from PySide6.QtWidgets import QMessageBox
+                reply = QMessageBox.question(
+                    self, 
+                    'Sesión EMDR en progreso',
+                    '¿Está seguro de que desea cerrar? La sesión EMDR está en progreso.',
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.No:
+                    if event:
+                        event.ignore()
+                    return
+            
+            self.cleanup()
+            if event:
+                event.accept()
+        else:
+            # Si es widget integrado, no manejar closeEvent aquí
+            pass
 
     def update_visualizer(self):
         """Actualiza el visualizador de patrón EMDR"""
@@ -1996,10 +2053,18 @@ if __name__ == "__main__":
     # Inicializar controlador
     controller_widget.load_config()
     
+    # Crear cleanup manager para app independiente
+    from src.utils.cleanup_interface import CleanupManager
+    cleanup_manager = CleanupManager()
+    cleanup_manager.register_component(controller_widget)
+    
+    # Conectar cierre de aplicación
+    app.aboutToQuit.connect(lambda: cleanup_manager.request_close())
+    
     # Mostrar ventana y ejecutar aplicación
     main_window.show()
     
-    # Antes de salir, guardar configuración
-    app.aboutToQuit.connect(controller_widget.closeEvent)
+    # # Antes de salir, guardar configuración
+    # app.aboutToQuit.connect(controller_widget.closeEvent)
     
     sys.exit(app.exec())
