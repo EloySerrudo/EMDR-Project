@@ -1099,7 +1099,7 @@ class EMDRControlPanel(QMainWindow):
                 bpm_data = np.array(self.sensor_monitor.bpm_datos)
                 bpm_bytes = pickle.dumps(bpm_data)
                 bpm_compressed = zlib.compress(bpm_bytes)
-                
+                self.sensor_monitor.save_data_to_csv()
                 # Actualizar registro en la base de datos
                 DatabaseManager.update_session(
                     self.current_session,
