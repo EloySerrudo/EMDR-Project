@@ -600,6 +600,25 @@ class EMDRControllerWidget(QWidget):
         headphone_layout.setContentsMargins(0, 0, 0, 0)
         headphone_layout.setSpacing(0)
 
+        # Título para controles de audio
+        audio_title = QLabel("CONTROLES DE AUDIO")
+        audio_title.setStyleSheet("""
+            QLabel {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                          stop: 0 rgba(0, 169, 157, 0.3),
+                                          stop: 0.5 rgba(0, 200, 170, 0.4),
+                                          stop: 1 rgba(0, 169, 157, 0.3));
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 12px 20px;
+                border-radius: 0px;
+                border: 2px solid rgba(0, 200, 170, 0.5);
+            }
+        """) # Aquí había un margin-bottom: 10px;
+        audio_title.setAlignment(Qt.AlignCenter)
+        headphone_layout.addWidget(audio_title)
+
         # Contenedor para controles de audio
         audio_controls = QFrame()
         audio_controls.setFrameShape(QFrame.StyledPanel)

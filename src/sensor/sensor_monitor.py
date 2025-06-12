@@ -233,7 +233,7 @@ class SensorMonitor(QWidget):
         plots_layout.setContentsMargins(2, 2, 2, 2)
         plots_layout.setSpacing(2)
         
-        GRAPH_HEIGHT = 132  # Altura uniforme para todas las gráficas
+        GRAPH_HEIGHT = 130  # Altura uniforme para todas las gráficas
         
         # Crear gráficas individuales
         self.eog_plot = self.create_eog_plot(display_time, height=GRAPH_HEIGHT)
