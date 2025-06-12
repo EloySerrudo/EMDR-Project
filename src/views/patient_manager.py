@@ -905,60 +905,6 @@ class PatientManagerWidget(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al mostrar detalles: {str(e)}")
 
-    def exit_application(self):
-        """Cierra completamente la aplicación"""
-        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-        
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Salir")
-        msg_box.setText("¿Está seguro de que desea salir de la aplicación?")
-        msg_box.setIcon(QMessageBox.Question)
-        
-        # Crear botones personalizados
-        yes_button = msg_box.addButton("Sí", QMessageBox.YesRole)
-        no_button = msg_box.addButton("No", QMessageBox.NoRole)
-        msg_box.setDefaultButton(no_button)
-        
-        # Aplicar estilo personalizado
-        msg_box.setStyleSheet("""
-            QMessageBox {
-                background-color: #323232;
-                color: #FFFFFF;
-                border-top: none;
-                border-left: 2px solid #555555;
-                border-right: 2px solid #555555;
-                border-bottom: 2px solid #555555;
-            }
-            QMessageBox QLabel {
-                color: #FFFFFF;
-                background: transparent;
-                font-size: 14px;
-            }
-            QMessageBox QPushButton {
-                background-color: #00A99D;
-                color: white;
-                border: 2px solid #00A99D;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: bold;
-                min-width: 50px;
-            }
-            QMessageBox QPushButton:hover {
-                background-color: #00C2B3;
-                border: 2px solid #00C2B3;
-            }
-            QMessageBox QPushButton:pressed {
-                background-color: #008C82;
-                border: 2px solid #008C82;
-            }
-        """)
-        
-        msg_box.exec()
-        
-        if msg_box.clickedButton() == yes_button:
-            # Cerrar aplicación completamente
-            QApplication.quit()
-
     def return_to_dashboard(self):
         """Regresa al dashboard del terapeuta"""
         winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
@@ -1019,6 +965,60 @@ class PatientManagerWidget(QMainWindow):
                 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"No se pudo regresar al dashboard: {str(e)}")
+
+    def exit_application(self):
+        """Cierra completamente la aplicación"""
+        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Salir")
+        msg_box.setText("¿Está seguro de que desea salir de la aplicación?")
+        msg_box.setIcon(QMessageBox.Question)
+        
+        # Crear botones personalizados
+        yes_button = msg_box.addButton("Sí", QMessageBox.YesRole)
+        no_button = msg_box.addButton("No", QMessageBox.NoRole)
+        msg_box.setDefaultButton(no_button)
+        
+        # Aplicar estilo personalizado
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: #323232;
+                color: #FFFFFF;
+                border-top: none;
+                border-left: 2px solid #555555;
+                border-right: 2px solid #555555;
+                border-bottom: 2px solid #555555;
+            }
+            QMessageBox QLabel {
+                color: #FFFFFF;
+                background: transparent;
+                font-size: 14px;
+            }
+            QMessageBox QPushButton {
+                background-color: #00A99D;
+                color: white;
+                border: 2px solid #00A99D;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 50px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QMessageBox QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+        """)
+        
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == yes_button:
+            # Cerrar aplicación completamente
+            QApplication.quit()
 
     def closeEvent(self, event):
         """Maneja el evento de cierre de la ventana"""

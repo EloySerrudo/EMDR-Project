@@ -41,22 +41,48 @@ class CleanupManager(QObject):
     def request_close(self) -> bool:
         """Solicitar cierre de todos los componentes"""
         if self.is_closing:
+            print("Ya se está realizando un proceso de cierre")
             return False
         
-        # Verificar si algún componente está ocupado
-        for component in self.components:
-            if component.is_busy():
-                print(f"Componente {component.__class__.__name__} está ocupado, no se puede cerrar")
-                return False
+        print(f"Verificando estado de {len(self.components)} componentes...")
         
+        # Verificar si algún componente está ocupado
+        busy_components = []
+        for component in self.components:
+            try:
+                if component.is_busy():
+                    busy_components.append(component.__class__.__name__)
+                    print(f"❌ Componente {component.__class__.__name__} está ocupado")
+                else:
+                    print(f"✅ Componente {component.__class__.__name__} está listo para cerrar")
+            except Exception as e:
+                print(f"⚠️  Error verificando {component.__class__.__name__}: {e}")
+                busy_components.append(f"{component.__class__.__name__} (error)")
+        
+        if busy_components:
+            print(f"BLOQUEO: Los siguientes componentes están ocupados: {', '.join(busy_components)}")
+            self.cleanup_failed.emit(f"Componentes ocupados: {', '.join(busy_components)}")
+            return False
+        
+        print("Todos los componentes están listos. Iniciando limpieza...")
         self.is_closing = True
         
         # Realizar limpieza de todos los componentes
         try:
             for component in self.components:
-                component.cleanup()
+                try:
+                    print(f"Limpiando {component.__class__.__name__}...")
+                    component.cleanup()
+                    print(f"✅ {component.__class__.__name__} limpiado correctamente")
+                except Exception as e:
+                    print(f"❌ Error limpiando {component.__class__.__name__}: {e}")
+                    raise e
+            
+            print("✅ Limpieza de todos los componentes completada")
             self.cleanup_completed.emit()
             return True
         except Exception as e:
-            self.cleanup_failed.emit(str(e))
+            error_msg = f"Error durante la limpieza: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.cleanup_failed.emit(error_msg)
             return False

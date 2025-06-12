@@ -1112,7 +1112,13 @@ class SensorMonitor(QWidget):
     
     def is_busy(self) -> bool:
         """Verificar si está ocupado"""
-        return self.running
+        is_running = self.running
+        has_active_thread = self.reading_thread and self.reading_thread.is_alive()
+        
+        # Debug: imprimir estado actual
+        print(f"SensorMonitor.is_busy() - running: {is_running}, active_thread: {has_active_thread}")
+        
+        return is_running or has_active_thread
     
     def closeEvent(self, event=None):
         """Manejo del evento de cierre"""

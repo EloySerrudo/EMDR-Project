@@ -561,7 +561,7 @@ class EMDRControlPanel(QMainWindow):
         
         exit_btn = QPushButton("Salir")
         exit_btn.setFixedSize(134, 36)
-        exit_btn.clicked.connect(self.close)
+        exit_btn.clicked.connect(self.exit_application)
         exit_btn.setStyleSheet("""
             QPushButton {
                 background-color: #424242;
@@ -1278,39 +1278,6 @@ class EMDRControlPanel(QMainWindow):
             if self.sensor_monitor.running:
                 self.sensor_monitor.stop_acquisition()
 
-    def closeEvent(self, event):
-        """Manejador del evento de cierre de aplicación"""
-        print("Iniciando cierre de aplicación...")
-        # Emitir señal cuando la ventana se cierre
-        self.window_closed.emit()
-        
-        # Solicitar cierre coordinado
-        if self.cleanup_manager.request_close():
-            print("Cierre coordinado exitoso")
-            event.accept()
-        else:
-            print("No se pudo realizar el cierre coordinado")
-            # Mostrar mensaje al usuario
-            from PySide6.QtWidgets import QMessageBox
-            reply = QMessageBox.question(
-                self,
-                'Forzar cierre',
-                'Algunos componentes están ocupados. ¿Desea forzar el cierre?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            
-            if reply == QMessageBox.Yes:
-                # Forzar limpieza y cerrar
-                try:
-                    self.emdr_controller.cleanup()
-                    self.sensor_monitor.cleanup()
-                except Exception as e:
-                    print(f"Error en limpieza forzada: {e}")
-                event.accept()
-            else:
-                event.ignore()
-    
     def on_cleanup_completed(self):
         """Callback cuando se completa la limpieza"""
         print("Limpieza de todos los componentes completada")
@@ -1651,6 +1618,91 @@ class EMDRControlPanel(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"No se pudo regresar al dashboard: {str(e)}")
 
+    def exit_application(self):
+        """Cierra completamente la aplicación"""
+        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+        
+        # Mostrar mensaje de confirmación
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Salir")
+        msg_box.setText("¿Está seguro de que desea salir de la aplicación?")
+        msg_box.setIcon(QMessageBox.Question)
+        
+        # Crear botones personalizados
+        yes_button = msg_box.addButton("Sí", QMessageBox.YesRole)
+        no_button = msg_box.addButton("No", QMessageBox.NoRole)
+        msg_box.setDefaultButton(no_button)
+        
+        # Estilo moderno para el mensaje
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: #323232;
+                color: #FFFFFF;
+                border-top: none;
+                border-left: 2px solid #555555;
+                border-right: 2px solid #555555;
+                border-bottom: 2px solid #555555;
+            }
+            QMessageBox QLabel {
+                color: #FFFFFF;
+                background: transparent;
+                font-size: 14px;
+            }
+            QMessageBox QPushButton {
+                background-color: #00A99D;
+                color: white;
+                border: 2px solid #00A99D;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 50px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QMessageBox QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+        """)
+        
+        # Mostrar el mensaje
+        msg_box.exec()
+        
+        # Verificar la respuesta
+        if msg_box.clickedButton() == yes_button:
+            try:
+                print("Iniciando cierre de aplicación...")
+                
+                # Realizar limpieza antes de cerrar
+                if self.cleanup_manager.request_close():
+                    print("✅ Cierre coordinado exitoso")
+                    # Cerrar aplicación completamente
+                    QApplication.quit()
+                else:
+                    print("❌ No se pudo realizar el cierre coordinado")
+                    # Mostrar mensaje al usuario
+                    reply = QMessageBox.question(
+                        self,
+                        'Forzar cierre',
+                        'Algunos componentes están ocupados. ¿Desea forzar el cierre?',
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
+                    )
+                    if reply == QMessageBox.Yes:
+                        print("🔧 Forzando cierre...")
+                        # Forzar limpieza y cerrar
+                        sys.exit(0)
+                        
+            except Exception as e:
+                print(f"Error al cerrar la aplicación: {e}")
+                # Forzar cierre si hay error
+                import sys
+                sys.exit(0)
+
+
+    
 # Para pruebas independientes
 if __name__ == "__main__":
     app = QApplication([])
