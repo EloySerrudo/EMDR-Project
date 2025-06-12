@@ -170,7 +170,7 @@ class TherapistDashboard(QMainWindow):
         
         # Mensaje de saludo personalizado
         if self.therapist_data:
-            nombre_completo = f"{self.therapist_data['nombre']} {self.therapist_data['apellido_paterno']}"
+            self.nombre_completo = f"{self.therapist_data['nombre']} {self.therapist_data['apellido_paterno']}"
             
             # Determinar saludo según género (0 = masculino, 1 = femenino)
             genero = self.therapist_data.get('genero', 0)
@@ -187,7 +187,7 @@ class TherapistDashboard(QMainWindow):
                 saludo_hora = "Buenas noches"
             
             # Etiqueta de saludo
-            greeting_label = QLabel(f"{saludo_hora}, Lic. {nombre_completo}")
+            greeting_label = QLabel(f"{saludo_hora}, Lic. {self.nombre_completo}")
             greeting_label.setAlignment(Qt.AlignCenter)
             greeting_label.setStyleSheet("""
                 QLabel {
@@ -472,7 +472,11 @@ class TherapistDashboard(QMainWindow):
                 self.control_panel_window.close()
             
             # Crear nueva ventana del panel de control
-            self.control_panel_window = EMDRControlPanel(self.username)
+            self.control_panel_window = EMDRControlPanel(self.nombre_completo)
+            
+            # Conectar señal personalizada para mostrar el dashboard cuando se cierre
+            self.control_panel_window.window_closed.connect(self.show_dashboard_on_return)
+            
             self.control_panel_window.showMaximized()
             
             # Ocultar el dashboard

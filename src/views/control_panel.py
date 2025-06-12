@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import winsound
 from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
@@ -29,6 +30,9 @@ class SignalsObject(QObject):
 
 class EMDRControlPanel(QMainWindow):
     """Aplicación principal que integra el controlador EMDR y el monitor de sensores"""
+    
+    # Señal emitida cuando la ventana se cierra
+    window_closed = Signal()  # Nueva señal personalizada
     
     def __init__(self, username=None):
         super().__init__()
@@ -501,6 +505,7 @@ class EMDRControlPanel(QMainWindow):
         footer_layout.addWidget(new_session_btn)
 
         save_btn = QPushButton("Guardar Datos")
+        save_btn.setFixedSize(134, 36)
         save_btn.clicked.connect(self.save_session_data)
         save_btn.setStyleSheet("""
             QPushButton {
@@ -530,32 +535,50 @@ class EMDRControlPanel(QMainWindow):
         """)
         footer_layout.addWidget(save_btn)
 
+        back_btn = QPushButton("Regresar")
+        back_btn.setFixedSize(134, 36)
+        back_btn.clicked.connect(self.return_to_dashboard)
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #6c757d;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+                border: 2px solid #5a6268;
+            }
+            QPushButton:pressed {
+                background-color: #545b62;
+                border: 2px solid #545b62;
+            }
+        """)
+        footer_layout.addWidget(back_btn)
+        
         exit_btn = QPushButton("Salir")
+        exit_btn.setFixedSize(134, 36)
         exit_btn.clicked.connect(self.close)
         exit_btn.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #EF5350,
-                                       stop: 1 #F44336);
+                background-color: #424242;
                 color: white;
-                border: 2px solid #F44336;
-                border-radius: 8px;
-                padding: 8px 16px;
-                font-size: 12px;
+                padding: 10px 20px;
+                border-radius: 6px;
                 font-weight: bold;
-                min-width: 120px;
+                font-size: 13px;
+                border: 2px solid #424242;
             }
             QPushButton:hover {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #E57373,
-                                       stop: 1 #EF5350);
-                border: 2px solid #EF5350;
+                background-color: #555555;
+                border: 2px solid #555555;
             }
             QPushButton:pressed {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #F44336,
-                                       stop: 1 #D32F2F);
-                border: 2px solid #D32F2F;
+                background-color: #333333;
+                border: 2px solid #333333;
             }
         """)
         footer_layout.addWidget(exit_btn)
@@ -1258,6 +1281,8 @@ class EMDRControlPanel(QMainWindow):
     def closeEvent(self, event):
         """Manejador del evento de cierre de aplicación"""
         print("Iniciando cierre de aplicación...")
+        # Emitir señal cuando la ventana se cierre
+        self.window_closed.emit()
         
         # Solicitar cierre coordinado
         if self.cleanup_manager.request_close():
@@ -1564,6 +1589,67 @@ class EMDRControlPanel(QMainWindow):
                 "Error de registro",
                 f"No se pudo registrar el paciente: {str(e)}"
             )
+
+    def return_to_dashboard(self):
+        """Regresa al dashboard del terapeuta"""
+        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Regresar")
+        msg_box.setText("¿Está seguro de que desea regresar al Control de Usuario?")
+        msg_box.setIcon(QMessageBox.Question)
+        
+        # Crear botones personalizados
+        yes_button = msg_box.addButton("Sí", QMessageBox.YesRole)
+        no_button = msg_box.addButton("No", QMessageBox.NoRole)
+        msg_box.setDefaultButton(no_button)
+        
+        # Aplicar estilo personalizado
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: #323232;
+                color: #FFFFFF;
+                border-top: none;
+                border-left: 2px solid #555555;
+                border-right: 2px solid #555555;
+                border-bottom: 2px solid #555555;
+            }
+            QMessageBox QLabel {
+                color: #FFFFFF;
+                background: transparent;
+                font-size: 14px;
+            }
+            QMessageBox QPushButton {
+                background-color: #00A99D;
+                color: white;
+                border: 2px solid #00A99D;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 50px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QMessageBox QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+        """)
+        
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == yes_button:
+            try:
+                # Emitir señal antes de cerrar
+                self.window_closed.emit()
+                
+                # Cerrar la ventana actual
+                self.close()
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"No se pudo regresar al dashboard: {str(e)}")
 
 # Para pruebas independientes
 if __name__ == "__main__":
