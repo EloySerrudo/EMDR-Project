@@ -36,7 +36,7 @@ class PatientDetailsDialog(QDialog):
     def load_patient_data(self):
         """Carga los datos completos del paciente desde la base de datos"""
         try:
-            self.patient_data = DatabaseManager.get_patient_by_id(self.patient_id)
+            self.patient_data = DatabaseManager.get_patient(self.patient_id)
             if not self.patient_data:
                 QMessageBox.warning(self, "Error", "No se encontraron datos del paciente")
                 self.reject()
@@ -315,7 +315,7 @@ class PatientDetailsDialog(QDialog):
     def load_session_history(self, layout):
         """Carga el historial de sesiones del paciente"""
         try:
-            sessions = DatabaseManager.get_patient_sessions(self.patient_id)
+            sessions = DatabaseManager.get_sessions_for_patient(self.patient_id)
             
             if not sessions:
                 no_sessions_label = QLabel("No hay sesiones registradas para este paciente.")

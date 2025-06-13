@@ -1,5 +1,5 @@
 import sqlite3
-import datetime
+from datetime import datetime, date
 import hashlib
 import secrets
 from typing import List, Dict, Tuple, Optional, Union, Any
@@ -32,8 +32,47 @@ def secure_connection(func):
 class DatabaseManager:
     """
     Clase manejadora para operaciones seguras con la base de datos EMDR
-    Proporciona métodos para gestionar pacientes, sesiones y terapeutas
+    Proporciona métodos para gestionar pacientes, sesiones, terapeutas y diagnósticos
     """
+
+    # ===== MÉTODOS AUXILIARES =====
+    @staticmethod
+    def calculate_age(birth_date_str):
+        """
+        Calcula la edad en años a partir de la fecha de nacimiento
+        Args:
+            birth_date_str: Fecha de nacimiento en formato string (YYYY-MM-DD)
+        Returns:
+            int: Edad en años
+        """
+        try:
+            # Si birth_date_str es None o vacío
+            if not birth_date_str:
+                return 0
+            
+            # Convertir string a objeto date
+            if isinstance(birth_date_str, str):
+                birth_date = datetime.strptime(birth_date_str, "%Y-%m-%d").date()
+            elif isinstance(birth_date_str, date):
+                birth_date = birth_date_str
+            else:
+                return 0
+            
+            # Fecha actual
+            today = date.today()
+            
+            # Calcular edad
+            age = today.year - birth_date.year
+            
+            # Ajustar si aún no ha pasado el cumpleaños este año
+            if today.month < birth_date.month or (today.month == birth_date.month and today.day < birth_date.day):
+                age -= 1
+                
+            return max(0, age)  # Asegurar que no sea negativo
+            
+        except (ValueError, TypeError, AttributeError) as e:
+            print(f"Error calculando edad para fecha {birth_date_str}: {e}")
+            return 0
 
     # ===== MÉTODOS PARA PACIENTES =====
     @staticmethod
@@ -42,7 +81,7 @@ class DatabaseManager:
         """Obtiene todos los pacientes de la base de datos"""
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, apellido_paterno, apellido_materno, nombre, edad, celular, notas 
+            SELECT id, apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, fecha_registro, comentarios 
             FROM pacientes 
             ORDER BY apellido_paterno, apellido_materno, nombre
         """)
@@ -54,9 +93,11 @@ class DatabaseManager:
                 "apellido_paterno": p[1],
                 "apellido_materno": p[2],
                 "nombre": p[3],
-                "edad": p[4], 
+                "fecha_nacimiento": p[4], 
+                "edad": DatabaseManager.calculate_age(p[4]),  # Calcular edad
                 "celular": p[5],
-                "notas": p[6]
+                "fecha_registro": p[6],
+                "comentarios": p[7]
             }
             for p in patients
         ]
@@ -67,7 +108,7 @@ class DatabaseManager:
         """Obtiene un paciente específico por su ID"""
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, apellido_paterno, apellido_materno, nombre, edad, celular, notas 
+            SELECT id, apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, fecha_registro, comentarios 
             FROM pacientes 
             WHERE id = ?
         """, (patient_id,))
@@ -81,9 +122,11 @@ class DatabaseManager:
             "apellido_paterno": patient[1],
             "apellido_materno": patient[2],
             "nombre": patient[3],
-            "edad": patient[4],
+            "fecha_nacimiento": patient[4],
+            "edad": DatabaseManager.calculate_age(patient[4]),  # Calcular edad
             "celular": patient[5],
-            "notas": patient[6]
+            "fecha_registro": patient[6],
+            "comentarios": patient[7]
         }
     
     @staticmethod
@@ -92,9 +135,9 @@ class DatabaseManager:
         apellido_paterno: str,
         apellido_materno: str,
         nombre: str,
+        fecha_nacimiento: str,
         celular: str,
-        edad: Optional[int] = None, 
-        notas: str = "", 
+        comentarios: str = "", 
         conn=None
     ) -> int:
         """
@@ -104,9 +147,9 @@ class DatabaseManager:
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO pacientes 
-               (apellido_paterno, apellido_materno, nombre, edad, celular, notas) 
+               (apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, comentarios) 
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (apellido_paterno, apellido_materno, nombre, edad, celular, notas)
+            (apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, comentarios)
         )
         conn.commit()
         return cursor.lastrowid
@@ -118,9 +161,9 @@ class DatabaseManager:
         apellido_paterno: Optional[str] = None,
         apellido_materno: Optional[str] = None,
         nombre: Optional[str] = None,
-        edad: Optional[int] = None,
+        fecha_nacimiento: Optional[str] = None,
         celular: Optional[str] = None, 
-        notas: Optional[str] = None,
+        comentarios: Optional[str] = None,
         conn=None
     ) -> bool:
         """
@@ -136,17 +179,17 @@ class DatabaseManager:
         apellido_paterno = apellido_paterno if apellido_paterno is not None else current["apellido_paterno"]
         apellido_materno = apellido_materno if apellido_materno is not None else current["apellido_materno"]
         nombre = nombre if nombre is not None else current["nombre"]
-        edad = edad if edad is not None else current["edad"]
+        fecha_nacimiento = fecha_nacimiento if fecha_nacimiento is not None else current["fecha_nacimiento"]
         celular = celular if celular is not None else current["celular"]
-        notas = notas if notas is not None else current["notas"]
+        comentarios = comentarios if comentarios is not None else current["comentarios"]
         
         cursor = conn.cursor()
         cursor.execute(
             """UPDATE pacientes 
                SET apellido_paterno = ?, apellido_materno = ?, nombre = ?, 
-                   edad = ?, celular = ?, notas = ? 
+                   fecha_nacimiento = ?, celular = ?, comentarios = ? 
                WHERE id = ?""",
-            (apellido_paterno, apellido_materno, nombre, edad, celular, notas, patient_id)
+            (apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, comentarios, patient_id)
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -167,17 +210,17 @@ class DatabaseManager:
     @secure_connection
     def search_patients(query: str, conn=None) -> List[Dict[str, Any]]:
         """
-        Busca pacientes por nombre, apellidos o notas
+        Busca pacientes por nombre, apellidos o comentarios
         Retorna: Lista de pacientes que coinciden
         """
         cursor = conn.cursor()
         # Usar LIKE para búsqueda parcial case-insensitive
         search_query = f"%{query}%"
         cursor.execute(
-            """SELECT id, apellido_paterno, apellido_materno, nombre, edad, celular, notas 
+            """SELECT id, apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, fecha_registro, comentarios 
                FROM pacientes 
                WHERE nombre LIKE ? OR apellido_paterno LIKE ? OR 
-                     apellido_materno LIKE ? OR notas LIKE ? 
+                     apellido_materno LIKE ? OR comentarios LIKE ? 
                ORDER BY apellido_paterno, apellido_materno, nombre""",
             (search_query, search_query, search_query, search_query)
         )
@@ -189,12 +232,266 @@ class DatabaseManager:
                 "apellido_paterno": p[1],
                 "apellido_materno": p[2],
                 "nombre": p[3],
-                "edad": p[4],
+                "fecha_nacimiento": p[4],
                 "celular": p[5],
-                "notas": p[6]
+                "fecha_registro": p[6],
+                "comentarios": p[7]
             }
             for p in patients
         ]
+    
+    # ===== MÉTODOS PARA DIAGNÓSTICOS =====
+    
+    @staticmethod
+    @secure_connection
+    def get_diagnoses_for_patient(patient_id: int, include_resolved: bool = False, conn=None) -> List[Dict[str, Any]]:
+        """
+        Obtiene todos los diagnósticos de un paciente específico
+        include_resolved: Si es True, incluye diagnósticos resueltos
+        """
+        cursor = conn.cursor()
+        
+        if include_resolved:
+            cursor.execute("""
+                SELECT d.id, d.codigo_diagnostico, d.nombre_diagnostico, d.fecha_diagnostico, 
+                       d.fecha_resolucion, d.estado, d.id_terapeuta, d.comentarios,
+                       t.apellido_paterno, t.apellido_materno, t.nombre as terapeuta_nombre
+                FROM diagnosticos d
+                LEFT JOIN terapeutas t ON d.id_terapeuta = t.id
+                WHERE d.id_paciente = ?
+                ORDER BY d.fecha_diagnostico DESC
+            """, (patient_id,))
+        else:
+            cursor.execute("""
+                SELECT d.id, d.codigo_diagnostico, d.nombre_diagnostico, d.fecha_diagnostico, 
+                       d.fecha_resolucion, d.estado, d.id_terapeuta, d.comentarios,
+                       t.apellido_paterno, t.apellido_materno, t.nombre as terapeuta_nombre
+                FROM diagnosticos d
+                LEFT JOIN terapeutas t ON d.id_terapeuta = t.id
+                WHERE d.id_paciente = ? AND d.estado = 'activo'
+                ORDER BY d.fecha_diagnostico DESC
+            """, (patient_id,))
+        
+        diagnoses = cursor.fetchall()
+        
+        return [
+            {
+                "id": d[0],
+                "codigo_diagnostico": d[1],
+                "nombre_diagnostico": d[2],
+                "fecha_diagnostico": d[3],
+                "fecha_resolucion": d[4],
+                "estado": d[5],
+                "id_terapeuta": d[6],
+                "comentarios": d[7],
+                "terapeuta_nombre_completo": f"{d[8]} {d[9]} {d[10]}" if d[8] else "No asignado"
+            }
+            for d in diagnoses
+        ]
+    
+    @staticmethod
+    @secure_connection
+    def get_diagnosis(diagnosis_id: int, conn=None) -> Optional[Dict[str, Any]]:
+        """Obtiene un diagnóstico específico por su ID"""
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT d.id, d.id_paciente, d.codigo_diagnostico, d.nombre_diagnostico, 
+                   d.fecha_diagnostico, d.fecha_resolucion, d.estado, d.id_terapeuta, d.comentarios,
+                   p.apellido_paterno, p.apellido_materno, p.nombre as paciente_nombre,
+                   t.apellido_paterno as terapeuta_ap, t.apellido_materno as terapeuta_am, 
+                   t.nombre as terapeuta_nombre
+            FROM diagnosticos d
+            LEFT JOIN pacientes p ON d.id_paciente = p.id
+            LEFT JOIN terapeutas t ON d.id_terapeuta = t.id
+            WHERE d.id = ?
+        """, (diagnosis_id,))
+        
+        diagnosis = cursor.fetchone()
+        
+        if not diagnosis:
+            return None
+            
+        return {
+            "id": diagnosis[0],
+            "id_paciente": diagnosis[1],
+            "codigo_diagnostico": diagnosis[2],
+            "nombre_diagnostico": diagnosis[3],
+            "fecha_diagnostico": diagnosis[4],
+            "fecha_resolucion": diagnosis[5],
+            "estado": diagnosis[6],
+            "id_terapeuta": diagnosis[7],
+            "comentarios": diagnosis[8],
+            "paciente_nombre_completo": f"{diagnosis[9]} {diagnosis[10]} {diagnosis[11]}" if diagnosis[9] else "",
+            "terapeuta_nombre_completo": f"{diagnosis[12]} {diagnosis[13]} {diagnosis[14]}" if diagnosis[12] else "No asignado"
+        }
+    
+    @staticmethod
+    @secure_connection
+    def add_diagnosis(
+        id_paciente: int,
+        codigo_diagnostico: str,
+        nombre_diagnostico: str,
+        fecha_diagnostico: Optional[str] = None,
+        id_terapeuta: Optional[int] = None,
+        comentarios: str = "",
+        conn=None
+    ) -> int:
+        """
+        Añade un nuevo diagnóstico para un paciente
+        Retorna: ID del diagnóstico creado
+        """
+        # Verificar que el paciente existe
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM pacientes WHERE id = ?", (id_paciente,))
+        if not cursor.fetchone():
+            raise ValueError(f"El paciente con ID {id_paciente} no existe")
+        
+        # Verificar que el terapeuta existe (si se proporciona)
+        if id_terapeuta:
+            cursor.execute("SELECT id FROM terapeutas WHERE id = ?", (id_terapeuta,))
+            if not cursor.fetchone():
+                raise ValueError(f"El terapeuta con ID {id_terapeuta} no existe")
+        
+        # Si no se proporciona fecha, usar la actual
+        if not fecha_diagnostico:
+            fecha_diagnostico = date.today().strftime("%Y-%m-%d")
+        
+        cursor.execute("""
+            INSERT INTO diagnosticos 
+            (id_paciente, codigo_diagnostico, nombre_diagnostico, fecha_diagnostico, id_terapeuta, comentarios)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (id_paciente, codigo_diagnostico, nombre_diagnostico, fecha_diagnostico, id_terapeuta, comentarios))
+        
+        conn.commit()
+        return cursor.lastrowid
+    
+    @staticmethod
+    @secure_connection
+    def update_diagnosis(
+        diagnosis_id: int,
+        codigo_diagnostico: Optional[str] = None,
+        nombre_diagnostico: Optional[str] = None,
+        fecha_diagnostico: Optional[str] = None,
+        fecha_resolucion: Optional[str] = None,
+        estado: Optional[str] = None,
+        id_terapeuta: Optional[int] = None,
+        comentarios: Optional[str] = None,
+        conn=None
+    ) -> bool:
+        """
+        Actualiza un diagnóstico existente
+        Retorna: True si la actualización fue exitosa
+        """
+        # Obtener diagnóstico actual
+        current = DatabaseManager.get_diagnosis(diagnosis_id)
+        if not current:
+            return False
+        
+        # Usar valores actuales para campos no proporcionados
+        codigo_diagnostico = codigo_diagnostico if codigo_diagnostico is not None else current["codigo_diagnostico"]
+        nombre_diagnostico = nombre_diagnostico if nombre_diagnostico is not None else current["nombre_diagnostico"]
+        fecha_diagnostico = fecha_diagnostico if fecha_diagnostico is not None else current["fecha_diagnostico"]
+        fecha_resolucion = fecha_resolucion if fecha_resolucion is not None else current["fecha_resolucion"]
+        estado = estado if estado is not None else current["estado"]
+        id_terapeuta = id_terapeuta if id_terapeuta is not None else current["id_terapeuta"]
+        comentarios = comentarios if comentarios is not None else current["comentarios"]
+        
+        # Verificar que el terapeuta existe (si se proporciona)
+        if id_terapeuta:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM terapeutas WHERE id = ?", (id_terapeuta,))
+            if not cursor.fetchone():
+                raise ValueError(f"El terapeuta con ID {id_terapeuta} no existe")
+        
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE diagnosticos 
+            SET codigo_diagnostico = ?, nombre_diagnostico = ?, fecha_diagnostico = ?,
+                fecha_resolucion = ?, estado = ?, id_terapeuta = ?, comentarios = ?
+            WHERE id = ?
+        """, (codigo_diagnostico, nombre_diagnostico, fecha_diagnostico, fecha_resolucion, 
+              estado, id_terapeuta, comentarios, diagnosis_id))
+        
+        conn.commit()
+        return cursor.rowcount > 0
+    
+    @staticmethod
+    @secure_connection
+    def resolve_diagnosis(
+        diagnosis_id: int,
+        fecha_resolucion: Optional[str] = None,
+        estado: str = "resuelto",
+        conn=None
+    ) -> bool:
+        """
+        Marca un diagnóstico como resuelto
+        Retorna: True si la operación fue exitosa
+        """
+        if not fecha_resolucion:
+            fecha_resolucion = date.today().strftime("%Y-%m-%d")
+        
+        return DatabaseManager.update_diagnosis(
+            diagnosis_id=diagnosis_id,
+            fecha_resolucion=fecha_resolucion,
+            estado=estado
+        )
+    
+    @staticmethod
+    @secure_connection
+    def delete_diagnosis(diagnosis_id: int, conn=None) -> bool:
+        """
+        Elimina un diagnóstico de la base de datos
+        Retorna: True si la eliminación fue exitosa
+        """
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM diagnosticos WHERE id = ?", (diagnosis_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    
+    @staticmethod
+    @secure_connection
+    def search_diagnoses(query: str, conn=None) -> List[Dict[str, Any]]:
+        """
+        Busca diagnósticos por código, nombre o comentarios
+        Retorna: Lista de diagnósticos que coinciden
+        """
+        cursor = conn.cursor()
+        search_query = f"%{query}%"
+        
+        cursor.execute("""
+            SELECT d.id, d.id_paciente, d.codigo_diagnostico, d.nombre_diagnostico, 
+                   d.fecha_diagnostico, d.fecha_resolucion, d.estado, d.comentarios,
+                   p.apellido_paterno, p.apellido_materno, p.nombre as paciente_nombre
+            FROM diagnosticos d
+            LEFT JOIN pacientes p ON d.id_paciente = p.id
+            WHERE d.codigo_diagnostico LIKE ? OR d.nombre_diagnostico LIKE ? OR d.comentarios LIKE ?
+            ORDER BY d.fecha_diagnostico DESC
+        """, (search_query, search_query, search_query))
+        
+        diagnoses = cursor.fetchall()
+        
+        return [
+            {
+                "id": d[0],
+                "id_paciente": d[1],
+                "codigo_diagnostico": d[2],
+                "nombre_diagnostico": d[3],
+                "fecha_diagnostico": d[4],
+                "fecha_resolucion": d[5],
+                "estado": d[6],
+                "comentarios": d[7],
+                "paciente_nombre_completo": f"{d[8]} {d[9]} {d[10]}" if d[8] else ""
+            }
+            for d in diagnoses
+        ]
+    
+    @staticmethod
+    @secure_connection
+    def get_active_diagnoses_count(conn=None) -> int:
+        """Obtiene el número total de diagnósticos activos en el sistema"""
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM diagnosticos WHERE estado = 'activo'")
+        return cursor.fetchone()[0]
     
     # ===== MÉTODOS PARA SESIONES =====
     
@@ -204,7 +501,7 @@ class DatabaseManager:
         """Obtiene todas las sesiones de un paciente específico"""
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, fecha, notas FROM sesiones " +
+            "SELECT id, fecha, comentarios FROM sesiones " +
             "WHERE id_paciente = ? ORDER BY fecha DESC",
             (patient_id,)
         )
@@ -214,7 +511,7 @@ class DatabaseManager:
             {
                 "id": s[0], 
                 "fecha": s[1], 
-                "notas": s[2],
+                "comentarios": s[2],
                 # No incluimos datos de sensores pues son BLOBs que pueden ser grandes
             }
             for s in sessions
@@ -225,13 +522,13 @@ class DatabaseManager:
     def get_session(session_id: int, include_data: bool = False, conn=None) -> Optional[Dict[str, Any]]:
         """
         Obtiene una sesión específica
-        include_data: Si es True, incluye los datos de EOG y PPG (puede ser pesado)
+        include_data: Si es True, incluye los datos de EOG, PPG y milisegundos (puede ser pesado)
         """
         cursor = conn.cursor()
         
         if include_data:
             cursor.execute(
-                "SELECT id, id_paciente, fecha, datos_eog, datos_ppg, datos_bpm, notas " +
+                "SELECT id, id_paciente, fecha, datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios " +
                 "FROM sesiones WHERE id = ?",
                 (session_id,)
             )
@@ -244,14 +541,15 @@ class DatabaseManager:
                 "id": session[0],
                 "id_paciente": session[1],
                 "fecha": session[2],
-                "datos_eog": session[3],
-                "datos_ppg": session[4],
-                "datos_bpm": session[5],
-                "notas": session[6]
+                "datos_ms": session[3],
+                "datos_eog": session[4],
+                "datos_ppg": session[5],
+                "datos_bpm": session[6],
+                "comentarios": session[7]
             }
         else:
             cursor.execute(
-                "SELECT id, id_paciente, fecha, notas " +
+                "SELECT id, id_paciente, fecha, comentarios " +
                 "FROM sesiones WHERE id = ?",
                 (session_id,)
             )
@@ -264,16 +562,18 @@ class DatabaseManager:
                 "id": session[0],
                 "id_paciente": session[1],
                 "fecha": session[2],
-                "notas": session[3]
+                "comentarios": session[3]
             }
     
     @staticmethod
     @secure_connection
     def add_session(
         id_paciente: int, 
+        datos_ms: Optional[bytes] = None,
         datos_eog: Optional[bytes] = None,
         datos_ppg: Optional[bytes] = None,
-        notas: str = "",
+        datos_bpm: Optional[bytes] = None,
+        comentarios: str = "",
         fecha: Optional[str] = None,
         conn=None
     ) -> int:
@@ -291,12 +591,12 @@ class DatabaseManager:
         
         # Si no se proporciona fecha, usar la actual
         if not fecha:
-            fecha = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
         cursor.execute(
-            "INSERT INTO sesiones (id_paciente, fecha, datos_eog, datos_ppg, notas) " +
-            "VALUES (?, ?, ?, ?, ?)",
-            (id_paciente, fecha, datos_eog, datos_ppg, notas)
+            "INSERT INTO sesiones (id_paciente, fecha, datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (id_paciente, fecha, datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios)
         )
         conn.commit()
         return cursor.lastrowid
@@ -305,10 +605,11 @@ class DatabaseManager:
     @secure_connection
     def update_session(
         session_id: int,
+        datos_ms: Optional[bytes] = None,
         datos_eog: Optional[bytes] = None,
         datos_ppg: Optional[bytes] = None,
-        datos_bpm: Optional[bytes] = None,  # Nuevo parámetro
-        notas: Optional[str] = None,
+        datos_bpm: Optional[bytes] = None,
+        comentarios: Optional[str] = None,
         conn=None
     ) -> bool:
         """
@@ -321,16 +622,17 @@ class DatabaseManager:
             return False
             
         # Solo actualizar campos proporcionados
+        datos_ms = datos_ms if datos_ms is not None else current.get("datos_ms")
         datos_eog = datos_eog if datos_eog is not None else current.get("datos_eog")
         datos_ppg = datos_ppg if datos_ppg is not None else current.get("datos_ppg")
         datos_bpm = datos_bpm if datos_bpm is not None else current.get("datos_bpm")
-        notas = notas if notas is not None else current.get("notas")
+        comentarios = comentarios if comentarios is not None else current.get("comentarios")
         
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE sesiones SET datos_eog = ?, datos_ppg = ?, datos_bpm = ?, notas = ? " +
+            "UPDATE sesiones SET datos_ms = ?, datos_eog = ?, datos_ppg = ?, datos_bpm = ?, comentarios = ? " +
             "WHERE id = ?",
-            (datos_eog, datos_ppg, datos_bpm, notas, session_id)
+            (datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios, session_id)
         )
         conn.commit()
         return cursor.rowcount > 0
@@ -627,6 +929,15 @@ class DatabaseManager:
                 
             result = {"session_info": session}
             
+            # Descomprimir datos de milisegundos si existe
+            if session.get("datos_ms"):
+                try:
+                    ms_decompressed = zlib.decompress(session["datos_ms"])
+                    ms_data = pickle.loads(ms_decompressed)
+                    result["ms_data"] = ms_data
+                except:
+                    result["ms_data"] = None
+            
             # Descomprimir EOG si existe
             if session.get("datos_eog"):
                 try:
@@ -660,7 +971,7 @@ class DatabaseManager:
             print(f"Error al recuperar datos de sesión: {e}")
             return None
 
-# Ejemplo de uso modificado para el nuevo esquema
+# Ejemplo de uso modificado para incluir diagnósticos
 if __name__ == "__main__":
     # Crear un administrador de prueba
     admin_id = DatabaseManager.add_admin("eloysc", "akqjmhil")
@@ -690,18 +1001,34 @@ if __name__ == "__main__":
         apellido_paterno="Pérez",
         apellido_materno="González",
         nombre="Juan",
+        fecha_nacimiento="1988-05-15",
         celular="78551234",
-        edad=35,
-        notas="Paciente con historial de ansiedad"
+        comentarios="Paciente con historial de ansiedad"
     )
     
     if patient_id:
         print(f"✅ Paciente creado con ID: {patient_id}")
         
+        # Obtener el ID del terapeuta para el diagnóstico
+        therapist = DatabaseManager.get_therapist_by_username("dra.valdivia")
+        therapist_id = therapist['id'] if therapist else None
+        
+        # Añadir un diagnóstico para este paciente
+        diagnosis_id = DatabaseManager.add_diagnosis(
+            id_paciente=patient_id,
+            codigo_diagnostico="F41.1",
+            nombre_diagnostico="Trastorno de ansiedad generalizada",
+            id_terapeuta=therapist_id,
+            comentarios="Diagnóstico inicial basado en evaluación clínica"
+        )
+        
+        if diagnosis_id:
+            print(f"✅ Diagnóstico creado con ID: {diagnosis_id}")
+        
         # Añadir una sesión para este paciente
         session_id = DatabaseManager.add_session(
             id_paciente=patient_id,
-            notas="Primera sesión de evaluación"
+            comentarios="Primera sesión de evaluación"
         )
         
         if session_id:
@@ -710,6 +1037,10 @@ if __name__ == "__main__":
             # Mostrar todos los pacientes
             patients = DatabaseManager.get_all_patients()
             print(f"Pacientes en la base de datos: {len(patients)}")
+            
+            # Mostrar diagnósticos del paciente
+            diagnoses = DatabaseManager.get_diagnoses_for_patient(patient_id)
+            print(f"Diagnósticos del paciente: {len(diagnoses)}")
             
             # Mostrar sesiones del paciente
             sessions = DatabaseManager.get_sessions_for_patient(patient_id)
