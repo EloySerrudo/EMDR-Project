@@ -76,6 +76,52 @@ class RealTimeFilter:
             return filtered
 
 
+class OnlineEOGFilter:
+    """Clase para implementar filtros para EOG tiempo real."""
+    def __init__(self, fs=125, lowcut=0.05, highcut=30.0):
+        self.fs = fs    # Frecuencia de muestreo
+        nyq = self.fs*0.5    # Frecuencia de Nyquist
+        self.lowcut = lowcut
+        self.highcut = highcut
+
+        # 1. High-pass 0.05 Hz, 1er orden
+        # Objetivo: Descentra cada ventana y evita saturar el codec gráfico
+        # Por qué: retiras parpadeos de baseline sin tocar la componente de posición ocular (< 0.1 Hz).
+        self.b_hp, self.a_hp = signal.butter(1, self.lowcut/nyq, 'highpass')
+        self.z_hp = signal.lfilter_zi(self.b_hp, self.a_hp)
+
+        # 2. Notch 50 Hz
+        # Objetivo: Matar interferencia residual sin subir el orden del FIR principal
+        # Por qué: Solo un bi-quad; 0.3 ms de cómputo en un ESP32, atenuación > 35 dB y fase plana en < 30 Hz.
+        f0 = 50  # Frecuencia de la interferencia de la red eléctrica
+        Q = 30   # Factor de calidad del notch
+        self.b_notch, self.a_notch = signal.iirnotch(f0/(nyq), Q)
+        self.z_notch = signal.lfilter_zi(self.b_notch, self.a_notch)
+
+        # 3. Low-pass FIR 30 Hz
+        # Objetivo: Dejar banda útil 0 – 30 Hz con fase lineal
+        # Por qué: FIR lineal-fase evita distorsionar las sacadas; al ser 100 taps y 125 Hz, 
+        # el retardo ≈ 0.4 s: aceptable para “ver” lo que pasa en clínica (no para control 
+        # en bucle cerrado).
+        self.b_lp = signal.firwin(numtaps=101, cutoff=self.highcut, fs=self.fs, window='hamming')
+        self.zi_lp = np.zeros(len(self.b_lp)-1)
+
+    def reset(self):
+        """Reiniciar el filtro."""
+        self.z_hp = signal.lfilter_zi(self.b_hp, self.a_hp)
+        self.z_notch = signal.lfilter_zi(self.b_notch, self.a_notch)
+        self.zi_lp.fill(0)
+
+    def __call__(self, x):
+        # high-pass
+        y, self.z_hp = signal.lfilter(self.b_hp, self.a_hp, [x], zi=self.z_hp)
+        # notch
+        y, self.z_notch = signal.lfilter(self.b_notch, self.a_notch, y, zi=self.z_notch)
+        # FIR low-pass
+        y, self.zi_lp = signal.lfilter(self.b_lp, [1.0], y, zi=self.zi_lp)
+        return y[0]
+
+
 class PulseDetector:
     """Clase para detectar pulsos cardíacos a partir de señales PPG filtradas"""
     
