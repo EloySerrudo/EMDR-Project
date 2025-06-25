@@ -110,7 +110,7 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *incomingData, int da
                     ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handle, 4000));
                 }
                 break;
-            case 'p':  // Comando de pausa de captura
+            case 'p':  // Comando de stop de captura
                 capturing = false;
                 portENTER_CRITICAL(&dataMux);
                 startTime = 0;  // Reset startTime when ending capture
@@ -166,18 +166,18 @@ void adcTask(void *parameter) {
 
             // Con la librería Adafruit, usando lecturas diferenciales
             if (channel == 0) {   // Canal A0 (Pulso)
-                adcValue_A0 = ads.getLastConversionResults();
+                adcValue_A0 = 20000;//ads.getLastConversionResults();
                 if (startTime == 0) startTime = millis();
                 time = millis() - startTime;
-                adcValue_A0 *= -1;
+                // adcValue_A0 *= -1;
                 // Aumentar la ganancia para la lectura del sensor de EOG
-                ads.setGain(GAIN_SIXTEEN);       // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+                ads.setGain(GAIN_EIGHT);       // 8x gain   +/- 0.512V  1 bit = 0.015625mV
                 ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_1_3, /*continuous=*/false);
             } else {
                 adcValue_A1 = ads.getLastConversionResults();
                 // Almacenar en el buffer circular
                 adcBuffer.write(time, adcValue_A0, adcValue_A1);
-                // Cambiar el canal para la próxima lectura
+                // Cambiar el canal para la lectura del sensor de PPG
                 ads.setGain(GAIN_EIGHT);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
                 ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
             }
@@ -195,7 +195,7 @@ void transmitTask(void *parameter) {
         // Enviar datos si estamos capturando y tenemos conexión ESP-NOW
         if (capturing && espNowConnected && adcBuffer.available() > 0) {
             // Obtener datos del buffer
-            while (adcBuffer.read(&packet)) {
+            if (adcBuffer.read(&packet)) {
                 // Preparar el paquete ESP-NOW
                 myData.header = PACKET_HEADER;
                 myData.id = packet.id;

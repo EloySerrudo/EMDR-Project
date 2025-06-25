@@ -2,6 +2,7 @@ import sys
 import os
 import winsound
 from pathlib import Path
+from functools import partial
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QApplication, QMessageBox, QFrame, QTableWidget, QTableWidgetItem,
@@ -16,7 +17,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Importar la clase DatabaseManager
 from src.database.database_manager import DatabaseManager
-
+from src.views.session_viewer import SessionViewerWindow
 
 class PatientDetailsDialog(QDialog):
     """Diálogo para mostrar los detalles completos de un paciente"""
@@ -25,6 +26,9 @@ class PatientDetailsDialog(QDialog):
         super().__init__(parent)
         self.patient_id = patient_id
         self.patient_data = None
+        
+        # Añadir referencia para la ventana del visor
+        self.session_viewer_window = None
         
         self.setWindowTitle("Detalles del Paciente")
         self.resize(600, 500)
@@ -331,8 +335,8 @@ class PatientDetailsDialog(QDialog):
             else:
                 # Crear tabla para mostrar las sesiones
                 sessions_table = QTableWidget()
-                sessions_table.setColumnCount(4)
-                sessions_table.setHorizontalHeaderLabels(["Fecha", "Duración", "Tipo", "Notas"])
+                sessions_table.setColumnCount(5)  # Añadir columna para botón
+                sessions_table.setHorizontalHeaderLabels(["Fecha", "Duración", "Tipo", "Notas", "Acción"])
                 sessions_table.setRowCount(len(sessions))
                 
                 # Configurar tabla
@@ -369,12 +373,42 @@ class PatientDetailsDialog(QDialog):
                 # Llenar tabla con datos de sesiones
                 for i, session in enumerate(sessions):
                     sessions_table.setItem(i, 0, QTableWidgetItem(str(session.get('fecha', ''))))
-                    sessions_table.setItem(i, 1, QTableWidgetItem(str(session.get('duracion', ''))))
+                    sessions_table.setItem(i, 1, QTableWidgetItem(str(session.get('duracion', 'N/A'))))
                     sessions_table.setItem(i, 2, QTableWidgetItem(str(session.get('tipo', 'EMDR'))))
-                    sessions_table.setItem(i, 3, QTableWidgetItem(str(session.get('notas', ''))))
+                    sessions_table.setItem(i, 3, QTableWidgetItem(str(session.get('comentarios', ''))))
+                    
+                    # === NUEVO: BOTÓN PARA VER ANÁLISIS ===
+                    view_btn = QPushButton("Ver Análisis")
+                    view_btn.setStyleSheet("""
+                        QPushButton {
+                            background-color: #2196F3;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            padding: 4px 8px;
+                            font-weight: bold;
+                            font-size: 11px;
+                        }
+                        QPushButton:hover {
+                            background-color: #42A5F5;
+                        }
+                        QPushButton:pressed {
+                            background-color: #1976D2;
+                        }
+                    """)
+                    
+                    # Conectar el botón con la sesión específica
+                    session_id = session.get('id')
+                    view_btn.clicked.connect(partial(self.view_session_analysis, session_id))
+
+                    sessions_table.setCellWidget(i, 4, view_btn)
                 
                 # Ajustar columnas
-                sessions_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+                sessions_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+                sessions_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+                sessions_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+                sessions_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+                sessions_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
                 
                 layout.addWidget(sessions_table)
                 
@@ -388,6 +422,67 @@ class PatientDetailsDialog(QDialog):
                 }
             """)
             layout.addWidget(error_label)
+    
+    # === NUEVO MÉTODO: VER ANÁLISIS DE SESIÓN ===
+    def view_session_analysis(self, session_id: int):
+        """Abre el visor de análisis para una sesión específica"""
+        try:
+            # Si ya hay una ventana abierta, cerrarla
+            if self.session_viewer_window:
+                self.session_viewer_window.close()
+            
+            # Crear nueva ventana del visor
+            self.session_viewer_window = SessionViewerWindow(
+                session_id=session_id,
+                parent=self
+            )
+            
+            # Configurar para mostrar solo sesiones de este paciente
+            self.filter_sessions_for_patient()
+            
+            # Conectar señal de cierre
+            self.session_viewer_window.window_closed.connect(self.on_session_viewer_closed)
+            
+            # Mostrar ventana
+            self.session_viewer_window.show()
+            
+            # Cerrar este diálogo para no abarrotar la pantalla
+            self.accept()
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"No se pudo abrir el análisis de la sesión:\n{str(e)}"
+            )
+    
+    def filter_sessions_for_patient(self):
+        """Filtra las sesiones en el visor para mostrar solo de este paciente"""
+        if not self.session_viewer_window:
+            return
+        
+        try:
+            # Obtener sesiones del paciente
+            patient_sessions = DatabaseManager.get_sessions_for_patient(self.patient_id)
+            
+            # Limpiar y llenar el combo del visor
+            self.session_viewer_window.session_combo.clear()
+            
+            for session in patient_sessions:
+                patient_name = f"{self.patient_data['nombre']} {self.patient_data['apellido_paterno']}"
+                display_text = f"Sesión {session['id']} - {patient_name} ({session['fecha']})"
+                self.session_viewer_window.session_combo.addItem(display_text, session['id'])
+            
+            # Actualizar título
+            patient_name = f"{self.patient_data['nombre']} {self.patient_data['apellido_paterno']}"
+            self.session_viewer_window.setWindowTitle(f"EMDR Project - Análisis de Sesiones: {patient_name}")
+            
+        except Exception as e:
+            print(f"Error filtrando sesiones para paciente: {e}")
+    
+    def on_session_viewer_closed(self):
+        """Maneja el cierre de la ventana del visor"""
+        self.session_viewer_window = None
     
     def edit_patient(self):
         """Abre un diálogo para editar los datos del paciente"""

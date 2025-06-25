@@ -11,17 +11,17 @@ from datetime import datetime
 
 # PyQtGraph y PySide6 imports
 from PySide6.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
-from PySide6.QtCore import QTimer, Qt, Signal, QObject
+from PySide6.QtCore import QTimer, Qt
 import pyqtgraph as pg
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 # Importaciones para gestión de dispositivos
-from src.models.devices import Devices, KNOWN_SLAVES
+from src.models.devices import Devices
 
 # Importación del filtro en tiempo real
-from src.utils.signal_processing import RealTimeFilter
+from src.utils.signal_processing import OnlineEOGFilter
 
 # Configuración constantes
 SAMPLE_RATE = 125  # Hz (tasa efectiva: 250 SPS ÷ 2 canales)
@@ -33,9 +33,6 @@ BUFFER_SIZE = 512  # Tamaño máximo de buffer
 PACKET_HEADER = 0xAA55  # Debe coincidir con el header en el código Arduino
 PACKET_SIZE = 15        # Tamaño en bytes de cada paquete
 
-class SignalsObject(QObject):
-    device_status_updated = Signal(dict, bool)
-    
 class EOGMonitor(QWidget):
     def __init__(self, display_time=DISPLAY_TIME, parent=None):
         super().__init__(parent)
@@ -70,19 +67,20 @@ class EOGMonitor(QWidget):
         self.eog_datos_filtrados = []
         
         # Filtro para EOG
-        self.eog_filter = RealTimeFilter(
-            filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.1, highcut=20.0, order=6
+        self.eog_filter = OnlineEOGFilter(
+            fs=SAMPLE_RATE,
+            hp_cutoff=0.05,        # Conserva posición ocular sostenida
+            lp_cutoff=30.0,        # Banda útil para sacadas
+            notch_freq=50.0,       # Soporte 50Hz o 60Hz
+            notch_q=30,            # Selectividad alta
+            fir_taps=101           # ~400ms retardo
         )
         
         self.last_packet_id = -1  # Para detectar paquetes duplicados
         
         # Slave device tracking
-        self.slave_status = {slave_id: False for slave_id in KNOWN_SLAVES}
-        self.required_devices_connected = False
-        self.slave_count = 0
+        self.sensor_connected = False
         self.connection_thread = None
-        self.signals = SignalsObject()
-        self.signals.device_status_updated.connect(self.update_device_status)
         
         # Setup UI
         self.setup_ui(display_time)
@@ -129,6 +127,42 @@ class EOGMonitor(QWidget):
             header_layout.addStretch()
             
             # Botón de control de adquisición
+            self.btn_scan = QPushButton("Escanear Dispositivos")
+            self.btn_scan.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #66BB6A,
+                                            stop: 1 #4CAF50);
+                    color: white;
+                    border: 2px solid #4CAF50;
+                    border-radius: 8px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    min-width: 140px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #81C784,
+                                            stop: 1 #66BB6A);
+                    border: 2px solid #66BB6A;
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #4CAF50,
+                                            stop: 1 #388E3C);
+                    border: 2px solid #388E3C;
+                }
+                QPushButton:disabled {
+                    background-color: #555555;
+                    border: 2px solid #555555;
+                    color: #888888;
+                }
+            """)
+            self.btn_scan.clicked.connect(self.check_slave_connections)
+            header_layout.addWidget(self.btn_scan)
+            
+            # Botón de control de adquisición
             self.btn_start_stop = QPushButton("Iniciar Adquisición")
             self.btn_start_stop.setStyleSheet("""
                 QPushButton {
@@ -163,10 +197,11 @@ class EOGMonitor(QWidget):
             """)
             self.btn_start_stop.clicked.connect(self.toggle_acquisition)
             header_layout.addWidget(self.btn_start_stop)
+            self.btn_start_stop.setEnabled(False)  # Deshabilitar hasta que se detecte el sensor
             
             # Botón para guardar datos
-            save_btn = QPushButton("Guardar CSV")
-            save_btn.setStyleSheet("""
+            self.save_btn = QPushButton("Guardar CSV")
+            self.save_btn.setStyleSheet("""
                 QPushButton {
                     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                             stop: 0 #42A5F5,
@@ -191,9 +226,15 @@ class EOGMonitor(QWidget):
                                             stop: 1 #1976D2);
                     border: 2px solid #1976D2;
                 }
+                QPushButton:disabled {
+                    background-color: #555555;
+                    border: 2px solid #555555;
+                    color: #888888;
+                }
             """)
-            save_btn.clicked.connect(self.save_data_to_csv)
-            header_layout.addWidget(save_btn)
+            self.save_btn.clicked.connect(self.save_data_to_csv)
+            header_layout.addWidget(self.save_btn)
+            self.save_btn.setEnabled(False)  # Deshabilitar hasta que se adquiera algún dato
             
             self.main_layout.addWidget(header_frame)
         
@@ -320,7 +361,7 @@ class EOGMonitor(QWidget):
         eog_raw_plot = pg.PlotWidget()
         eog_raw_plot.setFixedHeight(height)
         eog_raw_plot.setLabel('bottom', '')
-        eog_raw_plot.setYRange(-60000, 60000)
+        eog_raw_plot.setYRange(-20000, 20000)
         eog_raw_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
@@ -348,7 +389,7 @@ class EOGMonitor(QWidget):
         eog_filtered_plot = pg.PlotWidget()
         eog_filtered_plot.setFixedHeight(height)
         eog_filtered_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
-        eog_filtered_plot.setYRange(-60000, 60000)
+        eog_filtered_plot.setYRange(-20000, 20000)
         eog_filtered_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
@@ -478,18 +519,24 @@ class EOGMonitor(QWidget):
             """)
 
     def start_acquisition(self):
-        """Start data acquisition"""
+        """Iniciar adquisición de datos"""
         # Verificar que el controlador maestro esté conectado
-        if not Devices.master_plugged_in() or self.running:
-            print("No hay conexión con el controlador maestro o ya está adquiriendo datos")
+        if self.running:
+            print("Ya está adquiriendo datos")
             return
         
-        if not self.required_devices_connected:
-            print("\nNo se puede iniciar la adquisición: dispositivos requeridos no conectados.")
+        # Verificar que el controlador maestro esté conectado
+        if not Devices.master_plugged_in():
+            print("No hay conexión con el controlador maestro")
+            return
+        
+        if not self.sensor_connected:
+            print("\nSensor no conectado.")
             print("Use el botón 'Escanear Dispositivos' para verificar conexiones.\n")
             return
         
         self.last_packet_id = -1
+        
         # Reset filter
         self.eog_filter.reset()
         
@@ -523,7 +570,7 @@ class EOGMonitor(QWidget):
         print("Adquisición EOG iniciada")
 
     def stop_acquisition(self):
-        """Stop data acquisition"""
+        """Parar adquisición de datos"""
         if Devices.master_plugged_in() and self.running:
             # Send command to ESP32 to stop capture
             Devices.stop_sensor()
@@ -548,78 +595,43 @@ class EOGMonitor(QWidget):
 
     def check_slave_connections(self):
         """Send command to check for connected slaves"""
-        found_devices = Devices.probe()
-        
-        if not found_devices:
-            print("No se encontraron dispositivos")
-            self.device_status_label.setText("Estado de dispositivos: No se encontraron dispositivos")
-            self.device_status_label.setStyleSheet("""
-                QLabel {
-                    color: #FFFFFF;
-                    font-size: 12px;
-                    font-weight: 600;
-                    background-color: rgba(244, 67, 54, 0.8);
-                    border-radius: 4px;
-                    padding: 5px;
-                }
-            """)
-            return
-            
-        if "Master Controller" not in found_devices:
-            print("No se encontró el controlador maestro")
-            self.device_status_label.setText("Estado de dispositivos: No se encontró el controlador maestro")
-            self.device_status_label.setStyleSheet("""
-                QLabel {
-                    color: #FFFFFF;
-                    font-size: 12px;
-                    font-weight: 600;
-                    background-color: rgba(244, 67, 54, 0.8);
-                    border-radius: 4px;
-                    padding: 5px;
-                }
-            """)
-            return
-            
+        Devices.probe()
         print("Verificando dispositivos conectados...")
-        
         # Reset connection status
-        self.slave_status = {slave_id: False for slave_id in KNOWN_SLAVES}
-        self.required_devices_connected = False
-        
-        # Update status from found devices
-        status_dict = {}
-        for slave_id, (name, required) in KNOWN_SLAVES.items():
-            is_connected = name in found_devices
-            self.slave_status[slave_id] = is_connected
-            status_dict[slave_id] = is_connected
-            
-        # Check for required devices
-        required_connected = all(
-            self.slave_status.get(slave_id, False) 
-            for slave_id, (_, required) in KNOWN_SLAVES.items() 
-            if required
-        )
-        
-        self.required_devices_connected = required_connected
-        self.signals.device_status_updated.emit(status_dict, required_connected)
-        self._print_connection_status()
-    
-    def update_device_status(self, status_dict, required_connected):
-        """Update the device status UI - called from main thread"""
-        self.required_devices_connected = required_connected
-        
-        # Update status label
-        status_text = "Estado de dispositivos: "
-        for slave_id, connected in status_dict.items():
-            name, required = KNOWN_SLAVES.get(slave_id, ("Desconocido", False))
-            status = "CONECTADO" if connected else "DESCONECTADO"
-            req = " (Requerido)" if required else ""
-            status_text += f"{name}{req}: {status} | "
-        
-        self.device_status_label.setText(status_text.rstrip(" | "))
-        
-        # Change background color based on connection status
-        if required_connected:
+        self.sensor_connected = Devices.sensor_plugged_in()
+        if not Devices.master_plugged_in():
+            print("No se encontró el controlador maestro")
+            self.device_status_label.setText("No se encontró el controlador maestro")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background-color: rgba(244, 67, 54, 0.8);
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+            """)
+            self.btn_start_stop.setEnabled(False)  # Deshabilitar botón de inicio
+            self.save_btn.setEnabled(False)  # Deshabilitar botón de guardar datos
+        elif not self.sensor_connected:
+            print("No se encontró el sensor EOG")
+            self.device_status_label.setText("No se encontró el sensor EOG")
+            self.device_status_label.setStyleSheet("""
+                QLabel {
+                    color: #FFFFFF;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background-color: rgba(244, 67, 54, 0.8);
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+            """)
+            self.btn_start_stop.setEnabled(False)  # Deshabilitar botón de inicio
+            self.save_btn.setEnabled(False)  # Deshabilitar botón de guardar datos
+        else:
+            print("Sensor EOG conectado")
+            self.device_status_label.setText("Sensor EOG conectado")
             self.device_status_label.setStyleSheet("""
                 QLabel {
                     color: #FFFFFF;
@@ -630,36 +642,9 @@ class EOGMonitor(QWidget):
                     padding: 5px;
                 }
             """)
-        else:
-            self.device_status_label.setStyleSheet("""
-                QLabel {
-                    color: #FFFFFF;
-                    font-size: 12px;
-                    font-weight: 600;
-                    background-color: rgba(244, 67, 54, 0.8);
-                    border-radius: 4px;
-                    padding: 5px;
-                }
-            """)
-
-    def _print_connection_status(self):
-        """Print connection status to terminal"""
-        print("\n--- Estado de conexión de esclavos ---")
-        
-        for slave_id, (name, required) in KNOWN_SLAVES.items():
-            connected = self.slave_status.get(slave_id, False)
-            status = "CONECTADO" if connected else "DESCONECTADO"
-            req_text = "(Requerido)" if required else "(Opcional)"
-            print(f"Esclavo ID:{slave_id} - {name} {req_text}: {status}")
-        
-        print("-------------------------------------\n")
-        
-        if self.required_devices_connected:
-            print("Todos los dispositivos requeridos están conectados.\n")
-        else:
-            print("ADVERTENCIA: Uno o más dispositivos requeridos no están conectados.")
-            print("La adquisición de datos está deshabilitada hasta que todos los dispositivos requeridos estén conectados.\n")
-
+            self.btn_start_stop.setEnabled(True)  # Habilitar botón de inicio
+            self.save_btn.setEnabled(True)  # Habilitar botón de guardar datos
+    
     def _read_data(self):
         """Function that runs in a separate thread to read binary data"""
         data_buffer = bytearray()
@@ -934,10 +919,6 @@ class EOGMonitor(QWidget):
             self.reading_thread.join(timeout=2.0)
             if self.reading_thread.is_alive():
                 print("Advertencia: Thread de lectura no terminó correctamente")
-        
-        if self.is_standalone and len(self.idx) > 0:
-            print("\nGuardando datos EOG en CSV antes de salir...")
-            self.save_data_to_csv()
         
         print("Limpieza de EOGMonitor completada")
     

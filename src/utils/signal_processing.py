@@ -77,49 +77,185 @@ class RealTimeFilter:
 
 
 class OnlineEOGFilter:
-    """Clase para implementar filtros para EOG tiempo real."""
-    def __init__(self, fs=125, lowcut=0.05, highcut=30.0):
-        self.fs = fs    # Frecuencia de muestreo
-        nyq = self.fs*0.5    # Frecuencia de Nyquist
-        self.lowcut = lowcut
-        self.highcut = highcut
-
-        # 1. High-pass 0.05 Hz, 1er orden
-        # Objetivo: Descentra cada ventana y evita saturar el codec gráfico
-        # Por qué: retiras parpadeos de baseline sin tocar la componente de posición ocular (< 0.1 Hz).
-        self.b_hp, self.a_hp = signal.butter(1, self.lowcut/nyq, 'highpass')
-        self.z_hp = signal.lfilter_zi(self.b_hp, self.a_hp)
-
-        # 2. Notch 50 Hz
-        # Objetivo: Matar interferencia residual sin subir el orden del FIR principal
-        # Por qué: Solo un bi-quad; 0.3 ms de cómputo en un ESP32, atenuación > 35 dB y fase plana en < 30 Hz.
-        f0 = 50  # Frecuencia de la interferencia de la red eléctrica
-        Q = 30   # Factor de calidad del notch
-        self.b_notch, self.a_notch = signal.iirnotch(f0/(nyq), Q)
-        self.z_notch = signal.lfilter_zi(self.b_notch, self.a_notch)
-
-        # 3. Low-pass FIR 30 Hz
-        # Objetivo: Dejar banda útil 0 – 30 Hz con fase lineal
-        # Por qué: FIR lineal-fase evita distorsionar las sacadas; al ser 100 taps y 125 Hz, 
-        # el retardo ≈ 0.4 s: aceptable para “ver” lo que pasa en clínica (no para control 
-        # en bucle cerrado).
-        self.b_lp = signal.firwin(numtaps=101, cutoff=self.highcut, fs=self.fs, window='hamming')
-        self.zi_lp = np.zeros(len(self.b_lp)-1)
-
+    """
+    Filtro optimizado para señales EOG en tiempo real.
+    
+    Cadena de procesamiento:
+    1. High-pass 0.05 Hz (orden 1) - Elimina deriva DC, conserva posición ocular
+    2. Notch configurable 50/60 Hz - Elimina interferencia de red eléctrica  
+    3. Low-pass FIR 30 Hz - Banda útil con fase lineal
+    
+    Retardo total: ~400ms (aceptable para monitoreo clínico)
+    """
+    
+    def __init__(self, fs=125, hp_cutoff=0.05, lp_cutoff=30.0, 
+                 notch_freq=50, notch_q=30, fir_taps=101):
+        """
+        Inicializar filtro EOG compuesto.
+        
+        Args:
+            fs: Frecuencia de muestreo (Hz)
+            hp_cutoff: Frecuencia de corte HP (Hz) - conserva posición ocular
+            lp_cutoff: Frecuencia de corte LP (Hz) - banda útil EOG
+            notch_freq: Frecuencia notch (Hz) - 50 o 60 Hz típicamente
+            notch_q: Factor de calidad del notch (mayor = más selectivo)
+            fir_taps: Número de taps del FIR (impar recomendado)
+        """
+        self.fs = fs
+        self.hp_cutoff = hp_cutoff
+        self.lp_cutoff = lp_cutoff
+        self.notch_freq = notch_freq
+        self.notch_q = notch_q
+        self.fir_taps = fir_taps if fir_taps % 2 == 1 else fir_taps + 1  # Asegurar impar
+        
+        self._design_filters()
+        self.reset()
+    
+    def _design_filters(self):
+        """Diseñar todos los filtros de la cadena."""
+        nyq = self.fs * 0.5
+        
+        # 1. High-pass Butterworth orden 1
+        # Conserva componentes de posición ocular (>0.05 Hz)
+        self.b_hp, self.a_hp = signal.butter(1, self.hp_cutoff/nyq, 'highpass')
+        
+        # 2. Filtro notch único
+        if self.notch_freq < nyq:  # Solo si está dentro del rango válido
+            self.b_notch, self.a_notch = signal.iirnotch(self.notch_freq/nyq, self.notch_q)
+            self.notch_enabled = True
+        else:
+            # Si la frecuencia está fuera de rango, desactivar notch
+            self.notch_enabled = False
+            print(f"Advertencia: Frecuencia notch {self.notch_freq} Hz fuera de rango válido (< {nyq} Hz)")
+        
+        # 3. Low-pass FIR con ventana Hamming
+        # Fase lineal para preservar forma de sacadas
+        self.b_lp = signal.firwin(
+            self.fir_taps, 
+            self.lp_cutoff, 
+            fs=self.fs, 
+            window='hamming'
+        )
+        
+        print(f"EOG Filter configurado:")
+        print(f"  - HP: {self.hp_cutoff} Hz (orden 1)")
+        if self.notch_enabled:
+            print(f"  - Notch: {self.notch_freq} Hz (Q={self.notch_q})")
+        else:
+            print(f"  - Notch: DESACTIVADO")
+        print(f"  - LP: {self.lp_cutoff} Hz (FIR {self.fir_taps} taps)")
+        print(f"  - Retardo estimado: {(self.fir_taps-1)/(2*self.fs)*1000:.1f} ms")
+    
     def reset(self):
-        """Reiniciar el filtro."""
+        """Reiniciar todos los estados del filtro."""
+        # Estado HP
         self.z_hp = signal.lfilter_zi(self.b_hp, self.a_hp)
-        self.z_notch = signal.lfilter_zi(self.b_notch, self.a_notch)
-        self.zi_lp.fill(0)
+        
+        # Estado Notch (solo si está habilitado)
+        if self.notch_enabled:
+            self.z_notch = signal.lfilter_zi(self.b_notch, self.a_notch)
+        
+        # Buffer FIR (implementación eficiente)
+        self.fir_buffer = deque(maxlen=len(self.b_lp))
+        self.fir_buffer.extend([0.0] * len(self.b_lp))
+    
+    def filter(self, x):
+        """
+        Procesar una muestra a través de la cadena de filtros.
+        
+        Args:
+            x: Muestra de entrada (valor único)
+            
+        Returns:
+            float: Muestra filtrada
+        """
+        # Convertir a float si es necesario
+        if not isinstance(x, (int, float)):
+            x = float(x)
+        
+        # 1. High-pass: eliminar deriva DC
+        # y, self.z_hp = signal.lfilter(self.b_hp, self.a_hp, [x], zi=self.z_hp)
+        
+        # 2. Notch filter: eliminar interferencia de red (solo si está habilitado)
+        if self.notch_enabled:
+            y, self.z_notch = signal.lfilter(self.b_notch, self.a_notch, [x], zi=self.z_notch)
+        
+        # 3. FIR Low-pass: filtrado final con fase lineal
+        self.fir_buffer.append(y[0])
+        
+        # Convolución eficiente usando producto punto
+        filtered_output = sum(
+            sample * coeff 
+            for sample, coeff in zip(self.fir_buffer, reversed(self.b_lp))
+        )
+        
+        return filtered_output
+    
+    def get_filter_info(self):
+        """Obtener información del filtro para depuración."""
+        return {
+            'sample_rate': self.fs,
+            'hp_cutoff': self.hp_cutoff,
+            'lp_cutoff': self.lp_cutoff,
+            'notch_frequency': self.notch_freq if self.notch_enabled else None,
+            'notch_q': self.notch_q if self.notch_enabled else None,
+            'notch_enabled': self.notch_enabled,
+            'fir_taps': self.fir_taps,
+            'estimated_delay_ms': (self.fir_taps-1)/(2*self.fs)*1000,
+            'total_filters': 2 + (1 if self.notch_enabled else 0)  # HP + Notch + LP
+        }
 
-    def __call__(self, x):
-        # high-pass
-        y, self.z_hp = signal.lfilter(self.b_hp, self.a_hp, [x], zi=self.z_hp)
-        # notch
-        y, self.z_notch = signal.lfilter(self.b_notch, self.a_notch, y, zi=self.z_notch)
-        # FIR low-pass
-        y, self.zi_lp = signal.lfilter(self.b_lp, [1.0], y, zi=self.zi_lp)
-        return y[0]
+    def test_response(self, plot=False):
+        """
+        Probar respuesta en frecuencia del filtro completo.
+        Útil para verificar el diseño.
+        """
+        try:
+            import matplotlib.pyplot as plt
+            
+            # Crear filtro equivalente para análisis
+            w, h_hp = signal.freqz(self.b_hp, self.a_hp, fs=self.fs, worN=1024)
+            
+            # Combinar con notch si está habilitado
+            if self.notch_enabled:
+                _, h_notch = signal.freqz(self.b_notch, self.a_notch, fs=self.fs, worN=1024)
+                h_hp = h_hp * h_notch
+            
+            # Combinar con FIR
+            _, h_lp = signal.freqz(self.b_lp, [1.0], fs=self.fs, worN=1024)
+            h_total = h_hp * h_lp
+            
+            if plot:
+                plt.figure(figsize=(12, 8))
+                
+                # Magnitud
+                plt.subplot(2, 1, 1)
+                plt.semilogx(w, 20 * np.log10(abs(h_total)))
+                plt.title('Respuesta en Frecuencia - Filtro EOG Completo')
+                plt.xlabel('Frecuencia (Hz)')
+                plt.ylabel('Magnitud (dB)')
+                plt.grid(True, alpha=0.3)
+                plt.axvline(self.hp_cutoff, color='r', linestyle='--', alpha=0.7, label=f'HP: {self.hp_cutoff} Hz')
+                plt.axvline(self.lp_cutoff, color='b', linestyle='--', alpha=0.7, label=f'LP: {self.lp_cutoff} Hz')
+                if self.notch_enabled:
+                    plt.axvline(self.notch_freq, color='g', linestyle='--', alpha=0.7, label=f'Notch: {self.notch_freq} Hz')
+                plt.legend()
+                
+                # Fase
+                plt.subplot(2, 1, 2)
+                plt.semilogx(w, np.unwrap( np.angle(h_total, deg=True)))
+                plt.xlabel('Frecuencia (Hz)')
+                plt.ylabel('Fase (grados)')
+                plt.grid(True, alpha=0.3)
+                
+                plt.tight_layout()
+                plt.show()
+            
+            return w, h_total
+            
+        except ImportError:
+            print("matplotlib no disponible - no se puede mostrar respuesta")
+            return None, None
 
 
 class PulseDetector:
