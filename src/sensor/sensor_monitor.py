@@ -341,7 +341,7 @@ class SensorMonitor(QWidget):
         eog_plot = pg.PlotWidget()
         eog_plot.setFixedHeight(height)
         eog_plot.setLabel('bottom', '')
-        eog_plot.setYRange(-60000, 60000)
+        eog_plot.setYRange(-15000, 15000)
         eog_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno

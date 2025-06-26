@@ -116,7 +116,7 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *incomingData, int da
                 startTime = 0;  // Reset startTime when ending capture
                 channel = 1;
                 portEXIT_CRITICAL(&dataMux);
-                ads.setGain(GAIN_EIGHT);
+                ads.setGain(GAIN_FOUR);
                 digitalWrite(STATUS_LED, LOW);  // Indicar captura inactiva
                 // Detener el timer
                 if (esp_timer_is_active(timer_handle)) {
@@ -166,19 +166,18 @@ void adcTask(void *parameter) {
 
             // Con la librería Adafruit, usando lecturas diferenciales
             if (channel == 0) {   // Canal A0 (Pulso)
-                adcValue_A0 = 20000;//ads.getLastConversionResults();
+                adcValue_A0 = ads.getLastConversionResults();
                 if (startTime == 0) startTime = millis();
                 time = millis() - startTime;
-                // adcValue_A0 *= -1;
                 // Aumentar la ganancia para la lectura del sensor de EOG
-                ads.setGain(GAIN_EIGHT);       // 8x gain   +/- 0.512V  1 bit = 0.015625mV
+                ads.setGain(GAIN_SIXTEEN);       // 16x gain  +/- 0.256V  1 bit = 0.0078125mV
                 ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_1_3, /*continuous=*/false);
             } else {
                 adcValue_A1 = ads.getLastConversionResults();
                 // Almacenar en el buffer circular
                 adcBuffer.write(time, adcValue_A0, adcValue_A1);
                 // Cambiar el canal para la lectura del sensor de PPG
-                ads.setGain(GAIN_EIGHT);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
+                ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
                 ads.startADCReading(ADS1X15_REG_CONFIG_MUX_DIFF_0_3, /*continuous=*/false);
             }
         }
@@ -266,7 +265,7 @@ void setup() {
   
   // Configurar el ADS1115: Canal A0 (Pulso)
   ads.setDataRate(RATE_ADS1115_475SPS); // Usar 475 SPS (similar al original)
-  ads.setGain(GAIN_EIGHT);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
+  ads.setGain(GAIN_FOUR);              // 4x gain   +/- 1.024V  1 bit = 0.03125mV
   // Inicialización correcta
   digitalWrite(STATUS_LED, HIGH);
   delay(500);

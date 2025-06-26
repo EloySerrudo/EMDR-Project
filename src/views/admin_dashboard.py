@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 # Importaciones para componentes específicos
 from src.database.database_manager import DatabaseManager
 from src.views.admin_panel import AdminPanel
+from src.views.pulse_test_window import PulseTestWindow
 
 
 class AdminDashboard(QMainWindow):
@@ -29,6 +30,7 @@ class AdminDashboard(QMainWindow):
         self.username = username
         self.admin_data = None
         self.eog_test_window = None
+        self.pulse_test_window = None  # Añadir referencia a ventana de prueba de pulso
         self.admin_panel_window = None
         
         # Cargar datos del administrador
@@ -239,7 +241,7 @@ class AdminDashboard(QMainWindow):
         """)
         main_buttons_layout = QHBoxLayout(main_buttons_frame)
         main_buttons_layout.setContentsMargins(0, 0, 0, 0)
-        main_buttons_layout.setSpacing(100)
+        main_buttons_layout.setSpacing(50)  # Espaciado reducido para acomodar 3 botones.
         
         # Botón Prueba de EOG
         self.eog_test_btn = QPushButton()
@@ -275,6 +277,41 @@ class AdminDashboard(QMainWindow):
             }
         """)
         self.eog_test_btn.clicked.connect(self.open_eog_test)
+        
+        # Botón Prueba de Pulso
+        self.pulse_test_btn = QPushButton()
+        self.pulse_test_btn.setText("Prueba de\nPulso")
+        self.pulse_test_btn.setFixedSize(150, 110)
+        self.pulse_test_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #00A99D;
+                color: white;
+                border-radius: 10px;
+                font-size: 15px;
+                font-weight: bold;
+                border-top: 2px solid #00E6D6;
+                border-left: 2px solid #00D4C4;
+                border-right: 2px solid #006B61;
+                border-bottom: 2px solid #005A50;
+                padding: 3px;
+            }
+            QPushButton:hover {
+                background-color: #00C2B3;
+                border-top: 2px solid #00F5E5;
+                border-left: 2px solid #00E6D6;
+                border-right: 2px solid #007A70;
+                border-bottom: 2px solid #00695F;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border-top: 2px solid #005A50;
+                border-left: 2px solid #006B61;
+                border-right: 2px solid #00C2B3;
+                border-bottom: 2px solid #00D4C4;
+                padding: 5px 1px 1px 5px;
+            }
+        """)
+        self.pulse_test_btn.clicked.connect(self.open_pulse_test)
         
         # Botón Gestión de Usuarios
         self.user_management_btn = QPushButton()
@@ -314,6 +351,7 @@ class AdminDashboard(QMainWindow):
         # Añadir botones con espaciado
         main_buttons_layout.addStretch()
         main_buttons_layout.addWidget(self.eog_test_btn)
+        main_buttons_layout.addWidget(self.pulse_test_btn)
         main_buttons_layout.addWidget(self.user_management_btn)
         main_buttons_layout.addStretch()
         
@@ -462,6 +500,33 @@ class AdminDashboard(QMainWindow):
                 QMessageBox.Ok
             )
     
+    def open_pulse_test(self):
+        """Abre la ventana de prueba de pulso"""
+        try:
+            # Cerrar ventana anterior si existe
+            if self.pulse_test_window:
+                self.pulse_test_window.close()
+            
+            # Crear nueva ventana de prueba de pulso
+            self.pulse_test_window = PulseTestWindow()
+            
+            # Conectar señal de retorno al dashboard
+            if hasattr(self.pulse_test_window, 'return_to_dashboard'):
+                self.pulse_test_window.return_to_dashboard.connect(self.show_dashboard_on_return)
+            
+            self.pulse_test_window.showMaximized()
+            
+            # Ocultar el dashboard y mostrar la ventana de prueba de pulso
+            self.hide()
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al abrir la prueba de pulso:\n{str(e)}",
+                QMessageBox.Ok
+            )
+    
     def open_user_management(self):
         """Abre la ventana de gestión de usuarios (AdminPanel)"""
         try:
@@ -605,6 +670,8 @@ class AdminDashboard(QMainWindow):
         # Cuando se cierre el dashboard, también cerrar ventanas hijas
         if self.eog_test_window:
             self.eog_test_window.close()
+        if self.pulse_test_window:  # Añadir limpieza de ventana de pulso
+            self.pulse_test_window.close()
         if self.admin_panel_window:
             self.admin_panel_window.close()
         
