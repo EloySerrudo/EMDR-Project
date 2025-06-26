@@ -8,8 +8,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # Importaciones para componentes específicos
 from src.views.login import LoginWidget
 from src.database.db_connection import init_db
-# Añadir import para el panel de administración
-from src.views.admin_panel import AdminPanel
+# Añadir import para el dashboard de administrador
+from src.views.admin_dashboard import AdminDashboard
 # Añadir import para el panel de control de EMDR
 from src.views.therapist_dashboard import TherapistDashboard
 
@@ -24,8 +24,8 @@ def main():
     
     # Variables para las ventanas principales
     login_window = None
-    main_window = None
-    admin_window = None
+    user_dashboard_window = None
+    admin_dashboard_window = None
     
     def show_login():
         """Muestra la ventana de login"""
@@ -41,7 +41,7 @@ def main():
     
     def on_login_success(username, user_type):
         """Maneja el login exitoso"""
-        nonlocal main_window, admin_window
+        nonlocal user_dashboard_window, admin_dashboard_window
         
         # Cerrar ventana de login
         if login_window:
@@ -50,34 +50,33 @@ def main():
         # Abrir la ventana correspondiente según el tipo de usuario
         if user_type == "terapeutas":
             # Crear y mostrar dashboard terapéutico
-            main_window = TherapistDashboard(username)
+            user_dashboard_window = TherapistDashboard(username)
             
             # Conectar señal de logout del dashboard
-            main_window.logout_requested.connect(on_logout_requested)
+            user_dashboard_window.logout_requested.connect(on_logout_requested)
             
-            main_window.show()
+            user_dashboard_window.show()
         else:  # administradores
-            # Crear y mostrar panel de administración
-            admin_window = AdminPanel(username)
+            # Crear y mostrar dashboard administrativo
+            admin_dashboard_window = AdminDashboard(username)
             
-            # Si AdminPanel tiene señal de logout, conectarla también
-            if hasattr(admin_window, 'logout_requested'):
-                admin_window.logout_requested.connect(on_logout_requested)
+            # Conectar señal de logout del dashboard
+            admin_dashboard_window.logout_requested.connect(on_logout_requested)
             
-            admin_window.showMaximized()
+            admin_dashboard_window.show()
     
     def on_logout_requested():
         """Maneja la solicitud de logout"""
-        nonlocal main_window, admin_window
+        nonlocal user_dashboard_window, admin_dashboard_window
         
         # Cerrar ventanas principales si existen
-        if main_window:
-            main_window.close()
-            main_window = None
+        if user_dashboard_window:
+            user_dashboard_window.close()
+            user_dashboard_window = None
         
-        if admin_window:
-            admin_window.close()
-            admin_window = None
+        if admin_dashboard_window:
+            admin_dashboard_window.close()
+            admin_dashboard_window = None
         
         # Mostrar nuevamente la ventana de login
         show_login()

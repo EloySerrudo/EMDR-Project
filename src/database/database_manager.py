@@ -705,6 +705,33 @@ class DatabaseManager:
         new_id = cursor.lastrowid
         return new_id
     
+    @staticmethod
+    @secure_connection
+    def get_admin_by_username(username: str, conn=None) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene los datos de un administrador por su username
+        Args:
+            username: Nombre de usuario del administrador
+        Returns:
+            Dict con los datos del administrador o None si no existe
+        """
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, user, password, created_at FROM administradores WHERE user = ?",
+            (username,)
+        )
+        
+        row = cursor.fetchone()
+        if row:
+            return {
+                'id': row[0],
+                'user': row[1],
+                'nombre': row[1],  # Usar user como nombre por compatibilidad
+                'password': row[2],
+                'created_at': row[3]
+            }
+        return None
+
     # ===== MÉTODOS PARA TERAPEUTAS =====
     
     @staticmethod
