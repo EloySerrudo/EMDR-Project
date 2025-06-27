@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont, QPixmap, QIcon
 
 import pyqtgraph as pg
+import qtawesome as qta
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -134,21 +135,24 @@ class PulseTestWindow(QMainWindow):
         
         # Layout principal
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(10)
         
         # === HEADER ===
         self.create_header(main_layout)
         
-        # === PANEL DE CONTROL ===
-        self.create_control_panel(main_layout)
+        # === BARRA DE ESTADO ===
+        self.create_status_bar(main_layout)
         
         # === ÁREA DE GRÁFICAS ===
         self.create_plots_area(main_layout)
         
-        # === BARRA DE ESTADO ===
-        self.create_status_bar(main_layout)
+        # === PANEL DE CONTROL ===
+        self.create_control_panel(main_layout)
         
+        # === ESPACIO FLEXIBLE AL FINAL ===
+        main_layout.addStretch()  # Esto empuja todo hacia arriba
+    
         # Estilo global
         self.setStyleSheet("""
             QMainWindow {
@@ -160,6 +164,7 @@ class PulseTestWindow(QMainWindow):
                                           stop: 1 #000000);
                 font-family: 'Segoe UI', Arial, sans-serif;
                 color: #FFFFFF;
+                border-radius: 0px;
             }
         """)
     
@@ -176,20 +181,54 @@ class PulseTestWindow(QMainWindow):
                                            stop: 0.6 rgba(0, 140, 130, 0.8),
                                            stop: 0.8 rgba(0, 200, 160, 0.85),
                                            stop: 1 rgba(120, 255, 180, 0.9));
-                border-radius: 12px;
                 border-top: 2px solid rgba(200, 255, 220, 0.8);
                 border-left: 1px solid rgba(255, 255, 255, 0.6);
                 border-right: 1px solid rgba(0, 0, 0, 0.3);
                 border-bottom: 2px solid rgba(0, 0, 0, 0.4);
-                padding: 8px 20px;
+                padding: 0px;
             }
         """)
         
-        header_layout = QVBoxLayout(header_frame)
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(20, 2, 20, 2)
         header_layout.setSpacing(5)
         
+        # Logo o icono principal
+        logo_label = QLabel()
+        
+        # Intentar cargar logo desde recursos
+        logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        if logo_path.exists():
+            # Usar logo existente
+            pixmap = QPixmap(str(logo_path))
+            pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_label.setPixmap(pixmap)
+            logo_label.setAlignment(Qt.AlignCenter)
+            logo_label.setStyleSheet("""
+                QLabel {
+                    border: none;
+                    outline: none;
+                    background: transparent;
+                }
+            """)
+        else:
+            # Usar icono vectorial como alternativa
+            icon = qta.icon('fa5s.heartbeat', 
+                           color='white', 
+                           scale_factor=3.0)
+            pixmap = icon.pixmap(120, 120)
+            logo_label.setPixmap(pixmap)
+            logo_label.setAlignment(Qt.AlignCenter)
+            logo_label.setStyleSheet("""
+                QLabel {
+                    border: none;
+                    outline: none;
+                    background: transparent;
+                }
+            """)
+    
         # Título principal
-        title_label = QLabel("ANÁLISIS DE PULSO CARDÍACO")
+        title_label = QLabel("MONITOR DE SEÑALES PPG Y PULSO CARDÍACO")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFont(QFont('Arial', 20, QFont.Bold))
         title_label.setStyleSheet("""
@@ -200,22 +239,102 @@ class PulseTestWindow(QMainWindow):
             }
         """)
         
-        # Subtítulo
-        subtitle_label = QLabel("Monitor especializado para señales PPG y frecuencia cardíaca")
-        subtitle_label.setAlignment(Qt.AlignCenter)
-        subtitle_label.setStyleSheet("""
-            QLabel {
-                color: #FFFFFF;
-                font-size: 14px;
-                font-weight: 600;
-                background: transparent;
-                margin-top: 5px;
+        header_layout.addWidget(logo_label)
+        header_layout.addStretch()
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        main_layout.addWidget(header_frame)
+    
+    def create_status_bar(self, main_layout):
+        """Crear barra de estado"""
+        status_frame = QFrame()
+        status_frame.setFrameShape(QFrame.StyledPanel)
+        status_frame.setStyleSheet("""
+            QFrame {
+                background-color: transparent;
+                border: none;
             }
         """)
         
-        header_layout.addWidget(title_label)
-        header_layout.addWidget(subtitle_label)
-        main_layout.addWidget(header_frame)
+        status_layout = QHBoxLayout(status_frame)
+        status_layout.setContentsMargins(15, 0, 15, 0)
+        
+        # Estado de conexión
+        self.connection_status_label = QLabel("🔴 ESP32: Desconectado")
+        self.connection_status_label.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-size: 12px;
+                font-weight: 600;
+                background: transparent;
+            }
+        """)
+        
+        # Estado de captura
+        self.capture_status_label = QLabel("⏸️ Captura: Detenida")
+        self.capture_status_label.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-size: 12px;
+                font-weight: 600;
+                background: transparent;
+            }
+        """)
+        
+        # Tasa de muestras
+        self.sample_rate_label = QLabel("📊 Tasa: 0.0 SPS")
+        self.sample_rate_label.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-size: 12px;
+                font-weight: 600;
+                background: transparent;
+            }
+        """)
+        
+        # Contador de muestras
+        self.sample_count_label = QLabel("📈 Muestras: 0")
+        self.sample_count_label.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-size: 12px;
+                font-weight: 600;
+                background: transparent;
+            }
+        """)
+        
+        # Botón Conectar ESP32
+        self.btn_connect = QPushButton("🔌 Conectar ESP32")
+        self.btn_connect.setFixedSize(150, 30)
+        self.btn_connect.setStyleSheet(self.get_button_style("#00A99D"))
+        self.btn_connect.clicked.connect(self.toggle_connection)
+        
+        # Botón Iniciar Adquisición
+        self.btn_acquire = QPushButton("▶️ Iniciar Captura")
+        self.btn_acquire.setFixedSize(150, 30)
+        self.btn_acquire.setStyleSheet(self.get_button_style("#00A99D"))
+        self.btn_acquire.setEnabled(False)
+        self.btn_acquire.clicked.connect(self.toggle_acquisition)
+        
+        # Botón Guardar CSV
+        self.btn_save = QPushButton("💾 Guardar CSV")
+        self.btn_save.setFixedSize(150, 30)
+        self.btn_save.setStyleSheet(self.get_button_style("#00A99D"))
+        self.btn_save.clicked.connect(self.save_data_csv)
+        
+        status_layout.addWidget(self.connection_status_label)
+        status_layout.addStretch()
+        status_layout.addWidget(self.capture_status_label)
+        status_layout.addStretch()
+        status_layout.addWidget(self.sample_rate_label)
+        status_layout.addStretch()
+        status_layout.addWidget(self.sample_count_label)
+        status_layout.addStretch()
+        status_layout.addWidget(self.btn_connect)
+        status_layout.addWidget(self.btn_acquire)
+        status_layout.addWidget(self.btn_save)
+        
+        main_layout.addWidget(status_frame)
     
     def create_control_panel(self, main_layout):
         """Crear panel de control con botones"""
@@ -223,55 +342,45 @@ class PulseTestWindow(QMainWindow):
         control_frame.setFrameShape(QFrame.StyledPanel)
         control_frame.setStyleSheet("""
             QFrame {
-                background-color: #424242;
-                border-radius: 10px;
-                border: 1px solid #555555;
-                padding: 10px;
+                background-color: transparent;
+                border: 0px;
+                padding: 0px;
             }
         """)
         
         control_layout = QHBoxLayout(control_frame)
+        control_layout.setContentsMargins(9, 0, 9, 0)
         control_layout.setSpacing(15)
         
-        # Botón Conectar ESP32
-        self.btn_connect = QPushButton("🔌 Conectar ESP32")
-        self.btn_connect.setFixedSize(150, 45)
-        self.btn_connect.setStyleSheet(self.get_button_style("#2196F3"))
-        self.btn_connect.clicked.connect(self.toggle_connection)
-        
-        # Botón Iniciar Adquisición
-        self.btn_acquire = QPushButton("▶️ Iniciar Captura")
-        self.btn_acquire.setFixedSize(150, 45)
-        self.btn_acquire.setStyleSheet(self.get_button_style("#4CAF50"))
-        self.btn_acquire.setEnabled(False)
-        self.btn_acquire.clicked.connect(self.toggle_acquisition)
-        
-        # Botón Guardar CSV
-        self.btn_save = QPushButton("💾 Guardar CSV")
-        self.btn_save.setFixedSize(150, 45)
-        self.btn_save.setStyleSheet(self.get_button_style("#FF9800"))
-        self.btn_save.clicked.connect(self.save_data_csv)
+        # Etiqueta de pie de página
+        footer_label = QLabel("Sistema de Terapia EMDR - Versión 1.0")
+        footer_label.setStyleSheet("""
+            QLabel {
+                color: #AAAAAA;
+                font-size: 12px;
+                font-style: italic;
+                background: transparent;
+                padding: 5px;
+            }
+        """)
         
         # Botón Regresar
-        self.btn_return = QPushButton("🔙 Regresar")
+        self.btn_return = QPushButton("Regresar")
         self.btn_return.setFixedSize(150, 45)
-        self.btn_return.setStyleSheet(self.get_button_style("#9C27B0"))
+        self.btn_return.setStyleSheet(self.get_button_style("#6c757d"))
         self.btn_return.clicked.connect(self.return_to_dashboard_clicked)
         
         # Botón Salir
-        self.btn_exit = QPushButton("❌ Salir")
+        self.btn_exit = QPushButton("Salir")
         self.btn_exit.setFixedSize(150, 45)
-        self.btn_exit.setStyleSheet(self.get_button_style("#F44336"))
+        self.btn_exit.setStyleSheet(self.get_button_style("#424242"))
         self.btn_exit.clicked.connect(self.exit_application)
         
         # Agregar botones al layout
+        control_layout.addWidget(footer_label)
         control_layout.addStretch()
-        control_layout.addWidget(self.btn_connect)
-        control_layout.addWidget(self.btn_acquire)
-        control_layout.addWidget(self.btn_save)
         control_layout.addWidget(self.btn_return)
         control_layout.addWidget(self.btn_exit)
-        control_layout.addStretch()
         
         main_layout.addWidget(control_frame)
     
@@ -283,7 +392,10 @@ class PulseTestWindow(QMainWindow):
             "#4CAF50": {"light": "#66BB6A", "dark": "#388E3C"},
             "#FF9800": {"light": "#FFB74D", "dark": "#F57C00"},
             "#9C27B0": {"light": "#BA68C8", "dark": "#7B1FA2"},
-            "#F44336": {"light": "#EF5350", "dark": "#D32F2F"}
+            "#F44336": {"light": "#EF5350", "dark": "#D32F2F"},
+            "#00A99D": {"light": "#00C2B3", "dark": "#008C82"},
+            "#6c757d": {"light": "#5a6268", "dark": "#545b62"},
+            "#424242": {"light": "#555555", "dark": "#333333"},
         }
         
         colors = color_variants.get(base_color, {"light": base_color, "dark": base_color})
@@ -313,8 +425,8 @@ class PulseTestWindow(QMainWindow):
                 border: 2px solid {colors["dark"]};
             }}
             QPushButton:disabled {{
-                background-color: #555555;
-                border: 2px solid #555555;
+                background-color: #222222;
+                border: 2px solid #222222;
                 color: #888888;
             }}
         """
@@ -326,28 +438,29 @@ class PulseTestWindow(QMainWindow):
         plots_frame.setStyleSheet("""
             QFrame {
                 background: transparent;
-                border: 2px solid #444444;
                 border-radius: 8px;
-                padding: 5px;
+                border: 2px solid #555555;
             }
         """)
         
         plots_layout = QVBoxLayout(plots_frame)
-        plots_layout.setContentsMargins(5, 5, 5, 5)
-        plots_layout.setSpacing(3)
+        plots_layout.setContentsMargins(10, 10, 10, 10)
+        plots_layout.setSpacing(2)
         
         # Crear las tres gráficas
-        self.create_ppg_raw_plot(plots_layout)
-        self.create_ppg_filtered_plot(plots_layout)
-        self.create_pulse_plot(plots_layout)
+        fixed_hight = 147
+        self.create_ppg_raw_plot(plots_layout, fixed_hight)
+        self.create_ppg_filtered_plot(plots_layout, fixed_hight)
+        self.create_pulse_plot(plots_layout, fixed_hight + 26)
         
         main_layout.addWidget(plots_frame)
     
-    def create_ppg_raw_plot(self, plots_layout):
+    def create_ppg_raw_plot(self, plots_layout, fixed_hight):
         """Crear gráfica de señal PPG cruda"""
         self.ppg_raw_plot = pg.PlotWidget()
-        self.ppg_raw_plot.setFixedHeight(140)
-        self.ppg_raw_plot.setLabel('left', 'PPG Cruda (ADU)', size='10pt', color='#424242')
+        self.ppg_raw_plot.setFixedHeight(fixed_hight)
+        self.ppg_raw_plot.setStyleSheet("QFrame {border: none;}")
+        self.ppg_raw_plot.setLabel('left', 'PPG Cruda (mV)', size='10pt', color='#424242')
         self.ppg_raw_plot.setYRange(-10000, 20000)
         self.ppg_raw_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
         
@@ -362,18 +475,19 @@ class PulseTestWindow(QMainWindow):
         self.ppg_raw_curve = self.ppg_raw_plot.plot(pen=pg.mkPen('#E91E63', width=2))
         
         # Leyenda
-        legend = pg.LegendItem(offset=(10, 10), labelTextSize='9pt')
+        legend = pg.LegendItem(offset=(64, 10), labelTextSize='9pt')
         legend.setParentItem(self.ppg_raw_plot.graphicsItem())
         legend.addItem(self.ppg_raw_curve, "Señal PPG Sin Filtrar")
         legend.setBrush(pg.mkBrush(255, 255, 255, 200))
         
         plots_layout.addWidget(self.ppg_raw_plot)
     
-    def create_ppg_filtered_plot(self, plots_layout):
+    def create_ppg_filtered_plot(self, plots_layout, fixed_hight):
         """Crear gráfica de señal PPG filtrada"""
         self.ppg_filtered_plot = pg.PlotWidget()
-        self.ppg_filtered_plot.setFixedHeight(140)
-        self.ppg_filtered_plot.setLabel('left', 'PPG Filtrada (ADU)', size='10pt', color='#424242')
+        self.ppg_filtered_plot.setFixedHeight(fixed_hight)
+        self.ppg_filtered_plot.setStyleSheet("QFrame {border: none;}")
+        self.ppg_filtered_plot.setLabel('left', 'PPG Filtrada (mV)', size='10pt', color='#424242')
         self.ppg_filtered_plot.setYRange(-10000, 20000)
         self.ppg_filtered_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
         
@@ -388,26 +502,31 @@ class PulseTestWindow(QMainWindow):
         self.ppg_filtered_curve = self.ppg_filtered_plot.plot(pen=pg.mkPen('#00A99D', width=2))
         
         # Leyenda
-        legend = pg.LegendItem(offset=(10, 10), labelTextSize='9pt')
+        legend = pg.LegendItem(offset=(64, 10), labelTextSize='9pt')
         legend.setParentItem(self.ppg_filtered_plot.graphicsItem())
         legend.addItem(self.ppg_filtered_curve, f"Señal PPG Filtrada ({self.lowcut_freq}-{self.highcut_freq}Hz)")
         legend.setBrush(pg.mkBrush(255, 255, 255, 200))
         
         plots_layout.addWidget(self.ppg_filtered_plot)
     
-    def create_pulse_plot(self, plots_layout):
+    def create_pulse_plot(self, plots_layout, fixed_hight):
         """Crear gráfica de pulso calculado"""
         self.pulse_plot = pg.PlotWidget()
-        self.pulse_plot.setFixedHeight(160)
+        self.pulse_plot.setFixedHeight(fixed_hight)
+        self.pulse_plot.setStyleSheet("QFrame {border: none;}")
         self.pulse_plot.setLabel('left', 'Frecuencia (BPM)', size='10pt', color='#424242')
         self.pulse_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
-        self.pulse_plot.setYRange(40, 130)
+        self.pulse_plot.setYRange(50, 130)
         self.pulse_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
         
         # Configurar estilo
         self.pulse_plot.setBackground('#FFFFFF')
         self.pulse_plot.showGrid(x=True, y=True, alpha=0.2)
         
+        # ===== AÑADIR CONFIGURACIÓN PARA REDUCIR ESPACIADO DEL EJE X =====
+        x_axis = self.pulse_plot.getAxis('bottom')
+        x_axis.setHeight(26)       # Reducir altura total del eje X (valor por defecto ~40)
+    
         # Configurar ejes
         self.configure_plot_axis(self.pulse_plot, show_x_values=True)
         
@@ -427,11 +546,11 @@ class PulseTestWindow(QMainWindow):
             anchor=(0, 0),
             fill=pg.mkBrush(255, 255, 255, 200)
         )
-        self.bpm_text.setPos(-DISPLAY_TIME + 0.5, 135)
+        self.bpm_text.setPos(-DISPLAY_TIME + 1.5, 123)
         self.pulse_plot.addItem(self.bpm_text)
         
         # Leyenda
-        legend = pg.LegendItem(offset=(10, 10), labelTextSize='9pt')
+        legend = pg.LegendItem(offset=(64, 10), labelTextSize='9pt')
         legend.setParentItem(self.pulse_plot.graphicsItem())
         legend.addItem(self.pulse_curve, "Frecuencia Cardíaca")
         legend.setBrush(pg.mkBrush(255, 255, 255, 200))
@@ -453,76 +572,6 @@ class PulseTestWindow(QMainWindow):
         y_axis.setStyle(tickTextOffset=3, autoExpandTextSpace=False, tickTextHeight=12)
         y_axis.setPen(pg.mkPen('#424242', width=1))
         y_axis.setTextPen(pg.mkPen('#424242'))
-    
-    def create_status_bar(self, main_layout):
-        """Crear barra de estado"""
-        status_frame = QFrame()
-        status_frame.setFrameShape(QFrame.StyledPanel)
-        status_frame.setStyleSheet("""
-            QFrame {
-                background-color: #424242;
-                border: 2px solid #555555;
-                border-radius: 8px;
-                padding: 8px;
-            }
-        """)
-        
-        status_layout = QHBoxLayout(status_frame)
-        status_layout.setContentsMargins(15, 5, 15, 5)
-        
-        # Estado de conexión
-        self.connection_status_label = QLabel("🔴 ESP32: Desconectado")
-        self.connection_status_label.setStyleSheet("""
-            QLabel {
-                color: #FFFFFF;
-                font-size: 12px;
-                font-weight: 600;
-                background: transparent;
-            }
-        """)
-        
-        # Estado de captura
-        self.capture_status_label = QLabel("⏸️ Captura: Detenida")
-        self.capture_status_label.setStyleSheet("""
-            QLabel {
-                color: #FFFFFF;
-                font-size: 12px;
-                font-weight: 600;
-                background: transparent;
-            }
-        """)
-        
-        # Tasa de muestras
-        self.sample_rate_label = QLabel("📊 Tasa: 0.0 Hz")
-        self.sample_rate_label.setStyleSheet("""
-            QLabel {
-                color: #FFFFFF;
-                font-size: 12px;
-                font-weight: 600;
-                background: transparent;
-            }
-        """)
-        
-        # Contador de muestras
-        self.sample_count_label = QLabel("📈 Muestras: 0")
-        self.sample_count_label.setStyleSheet("""
-            QLabel {
-                color: #FFFFFF;
-                font-size: 12px;
-                font-weight: 600;
-                background: transparent;
-            }
-        """)
-        
-        status_layout.addWidget(self.connection_status_label)
-        status_layout.addStretch()
-        status_layout.addWidget(self.capture_status_label)
-        status_layout.addStretch()
-        status_layout.addWidget(self.sample_rate_label)
-        status_layout.addStretch()
-        status_layout.addWidget(self.sample_count_label)
-        
-        main_layout.addWidget(status_frame)
     
     def toggle_connection(self):
         """Alternar conexión con ESP32"""
@@ -564,8 +613,6 @@ class PulseTestWindow(QMainWindow):
                     font-size: 12px;
                     font-weight: 600;
                     background-color: rgba(76, 175, 80, 0.8);
-                    border-radius: 4px;
-                    padding: 5px;
                 }
             """)
             
@@ -628,8 +675,6 @@ class PulseTestWindow(QMainWindow):
                     font-size: 12px;
                     font-weight: 600;
                     background-color: rgba(76, 175, 80, 0.8);
-                    border-radius: 4px;
-                    padding: 5px;
                 }
             """)
             
@@ -860,7 +905,7 @@ class PulseTestWindow(QMainWindow):
                 self.current_sample_rate = 0
         
         # Actualizar labels
-        self.sample_rate_label.setText(f"📊 Tasa: {self.current_sample_rate:.1f} Hz")
+        self.sample_rate_label.setText(f"📊 Tasa: {self.current_sample_rate:.1f} SPS")
         self.sample_count_label.setText(f"📈 Muestras: {self.sample_count}")
         
         # Guardar valores para próxima iteración
@@ -1019,6 +1064,8 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     window = PulseTestWindow()
-    window.show()
+    window.showMaximized()
     
     sys.exit(app.exec())
+    # print("🔴 ESP32: Desconectado")
+    # ("🟢 ESP32: Conectado")
