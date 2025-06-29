@@ -258,164 +258,269 @@ class OnlineEOGFilter:
             return None, None
 
 
-class PulseDetector:
-    """Clase para detectar pulsos cardíacos a partir de señales PPG filtradas"""
+class PPGHeartRateCalculator:
+    """
+    Calculador de BPM optimizado para monitoreo EMDR en tiempo real.
     
-    def __init__(self, sample_rate, buffer_size=125, threshold_factor=0.6):
+    Estrategia:
+    - Primer cálculo: 8 segundos (permite setup sin prisa)
+    - Actualizaciones: cada 2 segundos con ventana deslizante de 10s
+    - Detección de artefactos y validación automática
+    
+    NOTA: Recibe señal PPG ya filtrada, no aplica filtrado adicional.
+    """
+    
+    def __init__(self, sample_rate=125, min_bpm=40, max_bpm=180):
         """
-        Inicializa el detector de pulsos.
+        Inicializar calculador de BPM.
         
         Args:
-            sample_rate: Frecuencia de muestreo en Hz
-            buffer_size: Tamaño del buffer para análisis (recomendado ~1s de datos)
-            threshold_factor: Factor para calcular el umbral adaptativo
+            sample_rate: Frecuencia de muestreo (Hz)
+            min_bpm: BPM mínimo válido  
+            max_bpm: BPM máximo válido
         """
-        self.sample_rate = sample_rate
-        self.buffer_size = buffer_size
-        self.threshold_factor = threshold_factor
+        self.fs = sample_rate
+        self.min_bpm = min_bpm
+        self.max_bpm = max_bpm
         
-        # Buffer para análisis de pulso
-        self.signal_buffer = deque(maxlen=buffer_size)
+        # Configuración de ventanas
+        self.initial_window_sec = 8      # Primera medición
+        self.update_window_sec = 10      # Ventana deslizante
+        self.update_interval_sec = 2     # Actualizar cada 2s
         
-        # Estado del pulso
-        self.prev_pulse_state = 0  # 0 = sin pulso, 1 = pulso
-        self.pulse_detected = False
-        self.last_pulse_time = 0
-        self.pulse_periods = deque(maxlen=10)  # Últimas 10 mediciones de periodo
+        # Buffer para datos filtrados (NO hay buffer raw ni filtro interno)
+        self.ppg_buffer = deque(maxlen=20 * sample_rate)  # 20 segundos de datos
         
-        # Valores adaptables
-        self.threshold = 0
-        # Aumentar el período refractario a 500ms (adecuado para detectar un solo pico por ciclo)
-        self.minimum_delay_samples = int(0.5 * sample_rate)  # 500 ms mínimo entre pulsos
-        self.samples_since_last_pulse = self.minimum_delay_samples
+        # Estado
+        self.last_bpm = None
+        self.last_update_time = 0
+        self.samples_received = 0
+        self.confidence_score = 0.0
         
-        # Nuevos parámetros para detección de pico dominante
-        self.peak_values = deque(maxlen=5)  # Almacenar los últimos valores pico
-        self.in_potential_pulse = False
-        self.current_pulse_height = 0
-        self.current_pulse_count = 0
-        self.last_peak_time = 0
+        print(f"PPG BPM Calculator iniciado:")
+        print(f"  - Primer cálculo: {self.initial_window_sec}s")
+        print(f"  - Actualizaciones: cada {self.update_interval_sec}s (ventana {self.update_window_sec}s)")
+        print(f"  - Rango BPM válido: {min_bpm}-{max_bpm}")
+        print(f"  - Recibe señal PPG ya filtrada")
     
-    def add_sample(self, filtered_value, timestamp):
+    def add_sample(self, filtered_ppg_value, timestamp_sec):
         """
-        Añade una nueva muestra y analiza si hay un pulso.
+        Añadir nueva muestra PPG filtrada y calcular BPM si es necesario.
         
         Args:
-            filtered_value: Valor de la señal filtrada
-            timestamp: Tiempo asociado a la muestra
+            filtered_ppg_value: Valor PPG ya filtrado
+            timestamp_sec: Tiempo en segundos
             
         Returns:
-            bool: True si se detectó un pulso, False en caso contrario
-            int: Estado del pulso (0 = sin pulso, 1 = pulso)
+            dict: {'bpm': float/None, 'confidence': float, 'updated': bool}
         """
-        self.signal_buffer.append(filtered_value)
-        self.samples_since_last_pulse += 1
+        # Almacenar muestra filtrada directamente
+        self.ppg_buffer.append(filtered_ppg_value)
+        self.samples_received += 1
         
-        # Necesitamos suficientes muestras para calcular el umbral
-        if len(self.signal_buffer) < self.buffer_size // 2:
-            return False, 0
+        # Determinar si calcular BPM
+        should_calculate = False
         
-        # Calcular umbral adaptativo basado en valores recientes
-        recent_signal = list(self.signal_buffer)[-self.buffer_size//2:]
-        signal_min = min(recent_signal)
-        signal_max = max(recent_signal)
-        signal_range = signal_max - signal_min
+        # Primera medición
+        if (self.last_bpm is None and 
+            self.samples_received >= self.initial_window_sec * self.fs):
+            should_calculate = True
+            print(f"Primera medición BPM (después de {self.initial_window_sec}s)")
         
-        # Ajustar umbral
-        self.threshold = signal_min + signal_range * self.threshold_factor
+        # Actualizaciones periódicas
+        elif (self.last_bpm is not None and 
+              timestamp_sec - self.last_update_time >= self.update_interval_sec):
+            should_calculate = True
         
-        # Detectar estado de pulso (subida por encima del umbral)
-        pulse_state = 1 if filtered_value > self.threshold else 0
-        pulse_detected = False
+        if should_calculate:
+            result = self._calculate_bpm()
+            self.last_update_time = timestamp_sec
+            return {
+                'bpm': result['bpm'],
+                'confidence': result['confidence'],
+                'updated': True,
+                'quality': result['quality']
+            }
         
-        # Algoritmo mejorado para detectar picos dominantes
-        if pulse_state == 1:
-            # Estamos por encima del umbral
-            if not self.in_potential_pulse:
-                # Comenzando un nuevo pulso potencial
-                self.in_potential_pulse = True
-                self.current_pulse_height = filtered_value
-                self.current_pulse_count = 0
+        return {
+            'bpm': self.last_bpm,
+            'confidence': self.confidence_score,
+            'updated': False,
+            'quality': 'pending'
+        }
+    
+    def _calculate_bpm(self):
+        """
+        Calcular BPM usando ventana óptima de datos filtrados.
+        
+        Returns:
+            dict: Resultado del cálculo con métricas de calidad
+        """
+        # Usar ventana apropiada
+        window_samples = min(
+            len(self.ppg_buffer),
+            self.update_window_sec * self.fs
+        )
+        
+        if window_samples < 5 * self.fs:  # Mínimo 5 segundos
+            return {'bpm': None, 'confidence': 0.0, 'quality': 'insufficient_data'}
+        
+        # Obtener datos de la ventana (ya filtrados)
+        data = np.array(list(self.ppg_buffer)[-window_samples:])
+        
+        # Método 1: Detección de picos (principal)
+        bpm_peaks, confidence_peaks = self._calculate_bpm_peaks(data)
+        
+        # Método 2: FFT (validación)
+        bpm_fft, confidence_fft = self._calculate_bpm_fft(data)
+        
+        # Fusión inteligente de resultados
+        final_bpm, final_confidence, quality = self._fuse_bpm_estimates(
+            bpm_peaks, confidence_peaks,
+            bpm_fft, confidence_fft
+        )
+        
+        # Actualizar estado
+        if final_bpm is not None:
+            self.last_bpm = final_bpm
+            self.confidence_score = final_confidence
+        
+        return {
+            'bpm': final_bpm,
+            'confidence': final_confidence,
+            'quality': quality,
+            'debug': {
+                'peaks_bpm': bpm_peaks,
+                'fft_bpm': bpm_fft,
+                'window_sec': window_samples / self.fs
+            }
+        }
+    
+    def _calculate_bpm_peaks(self, data):
+        """Calcular BPM usando detección de picos."""
+        try:
+            # Normalizar datos
+            data_norm = (data - np.mean(data)) / np.std(data)
+            
+            # Detectar picos con parámetros optimizados para PPG
+            # Distancia mínima = 60 BPM máximo
+            min_distance = int(self.fs * 60 / self.max_bpm)
+            
+            # Altura mínima = 0.3 desviaciones estándar
+            min_height = 0.3
+            
+            peaks, properties = signal.find_peaks(
+                data_norm,
+                height=min_height,
+                distance=min_distance,
+                prominence=0.2  # Evitar picos falsos
+            )
+            
+            if len(peaks) < 3:  # Necesitamos al menos 3 picos
+                return None, 0.0
+            
+            # Calcular intervalos RR
+            rr_intervals = np.diff(peaks) / self.fs  # En segundos
+            rr_mean = np.mean(rr_intervals)
+            rr_std = np.std(rr_intervals)
+            
+            # BPM promedio
+            bpm = 60.0 / rr_mean
+            
+            # Métricas de confianza
+            cv_rr = rr_std / rr_mean  # Coeficiente de variación
+            confidence = max(0.0, 1.0 - cv_rr * 3)  # Penalizar irregularidad
+            
+            # Validar rango fisiológico
+            if self.min_bpm <= bpm <= self.max_bpm:
+                return bpm, confidence
             else:
-                # Actualizamos la altura si encontramos un valor mayor (buscando pico)
-                if filtered_value > self.current_pulse_height:
-                    self.current_pulse_height = filtered_value
-        else:
-            # Estamos por debajo del umbral
-            if self.in_potential_pulse:
-                # Terminó un pulso potencial, verificamos si es válido
-                time_since_last_peak = timestamp - self.last_peak_time
+                return None, 0.0
                 
-                # Solo consideramos un pulso completo si:
-                # 1. Ha pasado suficiente tiempo desde el último pico principal
-                # 2. El pulso es lo suficientemente alto (al menos 70% del promedio de picos anteriores)
-                avg_peak = np.mean(self.peak_values) if self.peak_values else self.current_pulse_height
-                peak_threshold = avg_peak * 0.7
-                
-                if (time_since_last_peak > 0.4 and  # Mínimo 400ms entre picos principales
-                    self.samples_since_last_pulse >= self.minimum_delay_samples and 
-                    self.current_pulse_height > peak_threshold):
-                    
-                    # Es un pico dominante (principal)
-                    pulse_detected = True
-                    self.peak_values.append(self.current_pulse_height)
-                    
-                    # Calcular periodo entre pulsos
-                    if self.last_pulse_time > 0:
-                        period = timestamp - self.last_pulse_time
-                        if 0.3 < period < 2.0:  # 30-200 BPM es fisiológicamente razonable
-                            self.pulse_periods.append(period)
-                    
-                    self.last_pulse_time = timestamp
-                    self.last_peak_time = timestamp
-                    self.samples_since_last_pulse = 0
-                
-                # Reset para el siguiente pulso
-                self.in_potential_pulse = False
-                self.current_pulse_count = 0
-        
-        self.prev_pulse_state = pulse_state
-        self.pulse_detected = pulse_detected
-        
-        return pulse_detected, pulse_state
+        except Exception as e:
+            print(f"Error en cálculo por picos: {e}")
+            return None, 0.0
     
-    def get_heart_rate(self):
-        """
-        Calcula la frecuencia cardíaca basada en los periodos de pulso medidos.
-        
-        Returns:
-            float: Frecuencia cardíaca en BPM, o 0 si no hay suficientes datos
-        """
-        if not self.pulse_periods or len(self.pulse_periods) < 2:
-            return 0
-        
-        # Calcular frecuencia cardíaca promedio
-        avg_period = sum(self.pulse_periods) / len(self.pulse_periods)
-        if avg_period <= 0:
-            return 0
+    def _calculate_bpm_fft(self, data):
+        """Calcular BPM usando análisis FFT."""
+        try:
+            # Ventana y FFT
+            windowed = data * signal.windows.hann(len(data))
+            fft = np.fft.rfft(windowed)
+            freqs = np.fft.rfftfreq(len(data), 1/self.fs)
             
-        # Convertir periodo (segundos) a BPM
-        heart_rate = 60 / avg_period
+            # Potencia espectral
+            power = np.abs(fft) ** 2
+            
+            # Rango de frecuencias cardiacas
+            f_min = self.min_bpm / 60.0
+            f_max = self.max_bpm / 60.0
+            
+            mask = (freqs >= f_min) & (freqs <= f_max)
+            if not np.any(mask):
+                return None, 0.0
+            
+            # Encontrar pico dominante
+            max_idx = np.argmax(power[mask])
+            peak_freq = freqs[mask][max_idx]
+            bpm = peak_freq * 60.0
+            
+            # Confianza basada en la relación señal/ruido
+            peak_power = power[mask][max_idx]
+            noise_power = np.mean(power[mask])
+            snr = peak_power / (noise_power + 1e-10)
+            confidence = min(1.0, np.log10(snr + 1) / 2)  # Normalizar
+            
+            return bpm, confidence
+            
+        except Exception as e:
+            print(f"Error en cálculo FFT: {e}")
+            return None, 0.0
+    
+    def _fuse_bpm_estimates(self, bpm_peaks, conf_peaks, bpm_fft, conf_fft):
+        """Fusionar estimaciones de BPM de múltiples métodos."""
         
-        # Limitar valores razonables (40-200 BPM)
-        return max(40, min(200, heart_rate))
+        # Si solo uno es válido, usar ese
+        if bpm_peaks is None and bpm_fft is None:
+            return None, 0.0, 'no_valid_estimates'
+        elif bpm_peaks is None:
+            return bpm_fft, conf_fft, 'fft_only'
+        elif bpm_fft is None:
+            return bpm_peaks, conf_peaks, 'peaks_only'
+        
+        # Ambos válidos - verificar concordancia
+        diff_percent = abs(bpm_peaks - bpm_fft) / ((bpm_peaks + bpm_fft) / 2) * 100
+        
+        if diff_percent < 10:  # Concordancia buena (<10% diferencia)
+            # Promedio ponderado por confianza
+            total_conf = conf_peaks + conf_fft
+            if total_conf > 0:
+                fused_bpm = (bpm_peaks * conf_peaks + bpm_fft * conf_fft) / total_conf
+                fused_conf = (conf_peaks + conf_fft) / 2
+                return fused_bpm, fused_conf, 'fused_good'
+        
+        # Discordancia - elegir el más confiable
+        if conf_peaks > conf_fft:
+            return bpm_peaks, conf_peaks, 'peaks_preferred'
+        else:
+            return bpm_fft, conf_fft, 'fft_preferred'
+    
+    def get_status(self):
+        """Obtener estado actual del calculador."""
+        return {
+            'samples_received': self.samples_received,
+            'buffer_size': len(self.ppg_buffer),
+            'last_bpm': self.last_bpm,
+            'confidence': self.confidence_score,
+            'ready_for_first': self.samples_received >= self.initial_window_sec * self.fs,
+            'time_coverage_sec': len(self.ppg_buffer) / self.fs
+        }
     
     def reset(self):
-        """Reinicia el detector de pulsos a su estado inicial"""
-        self.last_beat_time = 0
-        self.bpm = 0
-        self.beat_detected = False
-        self.ibi = 0  # Intervalo entre latidos (Inter-Beat Interval)
-        self.beats = []  # Lista para almacenar los últimos tiempos de latido
-        self.pulse_state = 0  # Estado del pulso (0 = esperando, 1 = detectado)
-        
-        # Reiniciar variables para la detección 
-        self.threshold = 0
-        self.peak = 0
-        self.trough = 0
-        self.average_peak = 0
-        self.average_trough = 0
-        
-        # Si tienes filtros internos, también reinícialos
-        if hasattr(self, '_filter'):
-            self._filter.reset()
+        """Reiniciar el calculador."""
+        self.ppg_buffer.clear()
+        self.last_bpm = None
+        self.last_update_time = 0
+        self.samples_received = 0
+        self.confidence_score = 0.0
+        print("BPM Calculator reiniciado")

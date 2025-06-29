@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.database.database_manager import DatabaseManager
 from src.views.admin_panel import AdminPanel
 from src.views.pulse_test_window import PulseTestWindow
+from src.views.eog_test_window import EOGTestWindow
 
 
 class AdminDashboard(QMainWindow):
@@ -477,20 +478,23 @@ class AdminDashboard(QMainWindow):
         """)
     
     def open_eog_test(self):
-        """Abre la ventana de prueba de EOG (placeholder por ahora)"""
+        """Abre la ventana de prueba de EOG"""
         try:
-            # Placeholder para la futura ventana de prueba de EOG
-            QMessageBox.information(
-                self,
-                "Prueba de EOG",
-                "Esta funcionalidad será implementada próximamente.\n\n"
-                "Aquí se podrán realizar:\n"
-                "• Calibraciones del sistema EOG\n"
-                "• Pruebas de señales\n"
-                "• Configuración de sensores\n"
-                "• Diagnósticos del sistema",
-                QMessageBox.Ok
-            )
+            # Cerrar ventana anterior si existe
+            if self.eog_test_window:
+                self.eog_test_window.close()
+            
+            # Crear nueva ventana de prueba de EOG
+            self.eog_test_window = EOGTestWindow()
+            
+            # Conectar señal de retorno al dashboard
+            if hasattr(self.eog_test_window, 'return_to_dashboard'):
+                self.eog_test_window.return_to_dashboard.connect(self.show_dashboard_on_return)
+            
+            self.eog_test_window.showMaximized()
+            
+            # Ocultar el dashboard y mostrar la ventana de prueba de EOG
+            self.hide()
             
         except Exception as e:
             QMessageBox.critical(

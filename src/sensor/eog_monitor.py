@@ -361,7 +361,7 @@ class EOGMonitor(QWidget):
         eog_raw_plot = pg.PlotWidget()
         eog_raw_plot.setFixedHeight(height)
         eog_raw_plot.setLabel('bottom', '')
-        eog_raw_plot.setYRange(-20000, 20000)
+        eog_raw_plot.setYRange(-700, 700)
         eog_raw_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
@@ -389,7 +389,7 @@ class EOGMonitor(QWidget):
         eog_filtered_plot = pg.PlotWidget()
         eog_filtered_plot.setFixedHeight(height)
         eog_filtered_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
-        eog_filtered_plot.setYRange(-20000, 20000)
+        eog_filtered_plot.setYRange(-700, 700)
         eog_filtered_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
@@ -718,6 +718,10 @@ class EOGMonitor(QWidget):
                                 # Apply real-time filter to EOG
                                 filtered_eog_value = self.eog_filter.filter(eog_value)
                                 
+                                # Convertir a microvoltios
+                                eog_value = eog_value * 0.0078125 * 4.03225806 # Ganacia de 16 del ADS1115 y 248 del AD620 * 1000 uV
+                                filtered_eog_value = filtered_eog_value * 0.0078125 * 4.03225806
+
                                 # Add to deques for display
                                 self.times.append(timestamp_s)
                                 self.eog_raw_values.append(eog_value)

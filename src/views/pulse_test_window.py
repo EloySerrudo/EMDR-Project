@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Importaciones del proyecto
 from src.models.devices import Devices, KNOWN_SLAVES
-from src.utils.signal_processing import RealTimeFilter, PulseDetector
+from src.utils.signal_processing import RealTimeFilter, PPGHeartRateCalculator
 
 # Configuración de constantes
 SAMPLE_RATE = 125  # Hz
@@ -66,18 +66,18 @@ class PulseTestWindow(QMainWindow):
         self.ppg_filtered_values = deque(initial_values, maxlen=self.display_size)
         self.pulse_values = deque(initial_values, maxlen=self.display_size)
         
-        # Datos para CSV
+        # Datos para CSV - CORREGIDO
         self.csv_data = {
             'timestamp': [],
             'ppg_raw': [],
             'ppg_filtered': [],
             'pulse_bpm': [],
-            'pulse_detected': []
+            'pulse_confidence': []  # ✅ Cambiar a confianza
         }
         
         # Procesamiento de señales
-        self.lowcut_freq = 0.5  # Hz
-        self.highcut_freq = 20.0  # Hz
+        self.lowcut_freq = 0.2  # Hz
+        self.highcut_freq = 10.0  # Hz
         self.ppg_filter = RealTimeFilter(
             filter_type='bandpass', 
             fs=SAMPLE_RATE, 
@@ -85,7 +85,7 @@ class PulseTestWindow(QMainWindow):
             highcut=self.highcut_freq, 
             order=4
         )
-        self.pulse_detector = PulseDetector(sample_rate=SAMPLE_RATE)
+        self.bpm_calculator = PPGHeartRateCalculator(sample_rate=SAMPLE_RATE)
         self.current_heart_rate = 0
         self.last_packet_id = -1
         
@@ -302,6 +302,17 @@ class PulseTestWindow(QMainWindow):
                 background: transparent;
             }
         """)
+    
+        # Añadir indicador de confianza BPM - CORREGIDO
+        self.bpm_confidence_label = QLabel("🎯 Confianza: --")  # ✅ bpm no bpm
+        self.bpm_confidence_label.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-size: 12px;
+                font-weight: 600;
+                background: transparent;
+            }
+        """)
         
         # Botón Conectar ESP32
         self.btn_connect = QPushButton("🔌 Conectar ESP32")
@@ -329,6 +340,8 @@ class PulseTestWindow(QMainWindow):
         status_layout.addWidget(self.sample_rate_label)
         status_layout.addStretch()
         status_layout.addWidget(self.sample_count_label)
+        status_layout.addStretch()
+        status_layout.addWidget(self.bpm_confidence_label)  # ✅ bpm no bpm
         status_layout.addStretch()
         status_layout.addWidget(self.btn_connect)
         status_layout.addWidget(self.btn_acquire)
@@ -461,12 +474,12 @@ class PulseTestWindow(QMainWindow):
         self.ppg_raw_plot.setFixedHeight(fixed_hight)
         self.ppg_raw_plot.setStyleSheet("QFrame {border: none;}")
         self.ppg_raw_plot.setLabel('left', 'PPG Cruda (mV)', size='10pt', color='#424242')
-        self.ppg_raw_plot.setYRange(-10000, 20000)
+        self.ppg_raw_plot.setYRange(-400, 900) # (-10000, 20000) (-400, 800)
         self.ppg_raw_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
         
         # Configurar estilo
         self.ppg_raw_plot.setBackground('#FFFFFF')
-        self.ppg_raw_plot.showGrid(x=True, y=True, alpha=0.2)
+        self.ppg_raw_plot.showGrid(x=True, y=True, alpha=0.5)
         
         # Configurar ejes
         self.configure_plot_axis(self.ppg_raw_plot)
@@ -488,12 +501,12 @@ class PulseTestWindow(QMainWindow):
         self.ppg_filtered_plot.setFixedHeight(fixed_hight)
         self.ppg_filtered_plot.setStyleSheet("QFrame {border: none;}")
         self.ppg_filtered_plot.setLabel('left', 'PPG Filtrada (mV)', size='10pt', color='#424242')
-        self.ppg_filtered_plot.setYRange(-10000, 20000)
+        self.ppg_filtered_plot.setYRange(-500, 900) # (-10000, 20000) (-600, 700)
         self.ppg_filtered_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
         
         # Configurar estilo
         self.ppg_filtered_plot.setBackground('#FFFFFF')
-        self.ppg_filtered_plot.showGrid(x=True, y=True, alpha=0.2)
+        self.ppg_filtered_plot.showGrid(x=True, y=True, alpha=0.5)
         
         # Configurar ejes
         self.configure_plot_axis(self.ppg_filtered_plot)
@@ -521,12 +534,12 @@ class PulseTestWindow(QMainWindow):
         
         # Configurar estilo
         self.pulse_plot.setBackground('#FFFFFF')
-        self.pulse_plot.showGrid(x=True, y=True, alpha=0.2)
+        self.pulse_plot.showGrid(x=True, y=True, alpha=0.5)
         
         # ===== AÑADIR CONFIGURACIÓN PARA REDUCIR ESPACIADO DEL EJE X =====
         x_axis = self.pulse_plot.getAxis('bottom')
         x_axis.setHeight(26)       # Reducir altura total del eje X (valor por defecto ~40)
-    
+        
         # Configurar ejes
         self.configure_plot_axis(self.pulse_plot, show_x_values=True)
         
@@ -659,7 +672,7 @@ class PulseTestWindow(QMainWindow):
         try:
             # Reiniciar filtros y detector
             self.ppg_filter.reset()
-            self.pulse_detector = PulseDetector(sample_rate=SAMPLE_RATE)
+            self.bpm_calculator = PPGHeartRateCalculator(sample_rate=SAMPLE_RATE)
             self.last_packet_id = -1
             
             # Limpiar buffers
@@ -686,6 +699,9 @@ class PulseTestWindow(QMainWindow):
             self.sample_count = 0
             self.last_sample_time = time.time()
             
+            # ✅ GUARDAR TIMESTAMP DE INICIO UNA SOLA VEZ
+            self.start_datetime = datetime.now()
+
             # Iniciar hilo de lectura
             self.reading_thread = threading.Thread(target=self.read_data_thread)
             self.reading_thread.daemon = True
@@ -746,9 +762,14 @@ class PulseTestWindow(QMainWindow):
         self.ppg_filtered_values.extend(initial_values)
         self.pulse_values.extend(initial_values)
         
-        # Limpiar datos CSV
-        for key in self.csv_data:
-            self.csv_data[key] = []
+        # ✅ ESTRUCTURA CSV CORREGIDA
+        self.csv_data = {
+            'timestamp': [],
+            'ppg_raw': [],
+            'ppg_filtered': [],
+            'pulse_bpm': [],
+            'pulse_confidence': []
+        }
         
         self.current_heart_rate = 0
     
@@ -828,36 +849,73 @@ class PulseTestWindow(QMainWindow):
             timestamp_s = timestamp_ms / 1000.0
             
             ppg_raw = struct.unpack('<h', packet_data[10:12])[0]
-            # eog_value = struct.unpack('<h', packet_data[12:14])[0]  # No usado en esta ventana
+            ppg_raw_mv = ppg_raw * 0.03125  # Convertir a mV para visualización
             device_id = packet_data[14]
             
-            # Aplicar filtro PPG
-            ppg_filtered = self.ppg_filter.filter(ppg_raw)
+            # ✅ FILTRAR VALOR RAW (SIN CONVERSIÓN)
+            ppg_filtered = self.ppg_filter.filter(ppg_raw)  # Usar valor raw
+            ppg_filtered_mv = ppg_filtered * 0.03125  # Convertir resultado para visualización
             
-            # Detectar pulso
-            pulse_detected, pulse_state = self.pulse_detector.add_sample(ppg_filtered, timestamp_s)
+            # ✅ CALCULAR BPM CON VALOR FILTRADO (SIN CONVERSIÓN)
+            result = self.bpm_calculator.add_sample(ppg_filtered, timestamp_s)
             
-            if pulse_detected:
-                self.current_heart_rate = self.pulse_detector.get_heart_rate()
+            # ✅ EXTRAER BPM Y CONFIANZA CORRECTAMENTE
+            self.current_heart_rate = result['bpm'] if result['bpm'] is not None else 0
+            pulse_confidence = result.get('confidence', 0.0)
+            pulse_updated = result.get('updated', False)
             
             # Actualizar buffers de visualización
             self.times.append(timestamp_s)
-            self.ppg_raw_values.append(ppg_raw)
-            self.ppg_filtered_values.append(ppg_filtered)
-            self.pulse_values.append(self.current_heart_rate)
+            self.ppg_raw_values.append(ppg_raw_mv)
+            self.ppg_filtered_values.append(ppg_filtered_mv)
             
-            # Guardar datos para CSV
+            # ✅ MANEJAR VALORES None EN PULSE_VALUES
+            pulse_display_value = self.current_heart_rate if self.current_heart_rate else 0
+            self.pulse_values.append(pulse_display_value)
+            
+            # ✅ GUARDAR DATOS CSV CORRECTAMENTE
             self.csv_data['timestamp'].append(timestamp_ms)
-            self.csv_data['ppg_raw'].append(ppg_raw)
-            self.csv_data['ppg_filtered'].append(ppg_filtered)
-            self.csv_data['pulse_bpm'].append(self.current_heart_rate)
-            self.csv_data['pulse_detected'].append(1 if pulse_detected else 0)
+            self.csv_data['ppg_raw'].append(ppg_raw)  # Valor raw sin convertir
+            self.csv_data['ppg_filtered'].append(ppg_filtered)  # Valor filtrado sin convertir
+            self.csv_data['pulse_bpm'].append(self.current_heart_rate if self.current_heart_rate else 0)
+            self.csv_data['pulse_confidence'].append(pulse_confidence)
+            
+            # ✅ ACTUALIZAR LABEL DE CONFIANZA (cada 125 muestras = 1 segundo)
+            if hasattr(self, 'sample_count') and self.sample_count % 125 == 0:
+                self.update_confidence_display(pulse_confidence)
             
             return True
             
         except Exception as e:
             print(f"Error procesando paquete: {e}")
             return False
+    
+    def update_confidence_display(self, confidence):
+        """Actualizar display de confianza BPM"""
+        if confidence > 0.8:
+            confidence_text = f"🎯 Confianza: Excelente ({confidence:.1%})"
+            color_style = "background-color: rgba(76, 175, 80, 0.8);"
+        elif confidence > 0.6:
+            confidence_text = f"🎯 Confianza: Buena ({confidence:.1%})"
+            color_style = "background-color: rgba(255, 193, 7, 0.8);"
+        elif confidence > 0.4:
+            confidence_text = f"🎯 Confianza: Regular ({confidence:.1%})"
+            color_style = "background-color: rgba(255, 152, 0, 0.8);"
+        else:
+            confidence_text = f"🎯 Confianza: Baja ({confidence:.1%})"
+            color_style = "background-color: rgba(244, 67, 54, 0.8);"
+        
+        self.bpm_confidence_label.setText(confidence_text)
+        self.bpm_confidence_label.setStyleSheet(f"""
+            QLabel {{
+                color: #FFFFFF;
+                font-size: 12px;
+                font-weight: 600;
+                {color_style}
+                padding: 2px 6px;
+                border-radius: 3px;
+            }}
+        """)
     
     def update_plots(self):
         """Actualizar las gráficas"""
@@ -875,17 +933,30 @@ class PulseTestWindow(QMainWindow):
             self.ppg_filtered_curve.setData(normalized_x, np.array(self.ppg_filtered_values))
             self.pulse_curve.setData(normalized_x, np.array(self.pulse_values))
             
-            # Actualizar texto de BPM
-            hr_str = f"BPM: {int(self.current_heart_rate)}" if self.current_heart_rate > 0 else "BPM: --"
-            self.bpm_text.setText(hr_str)
-            
-            # Cambiar color según rango
-            if 60 <= self.current_heart_rate <= 100:
-                self.bpm_text.setColor((76, 175, 80))
-            elif self.current_heart_rate > 100:
-                self.bpm_text.setColor((255, 152, 0))
+            # ✅ MEJORAR VISUALIZACIÓN BPM CON CONFIANZA
+            if self.current_heart_rate and self.current_heart_rate > 0:
+                hr_str = f"BPM: {int(self.current_heart_rate)}"
+                
+                # Obtener confianza del calculador
+                confidence = getattr(self.bpm_calculator, 'confidence_score', 0.0)
+                
+                # Color basado en CONFIANZA y rango fisiológico
+                if confidence > 0.7:
+                    if 60 <= self.current_heart_rate <= 100:
+                        self.bpm_text.setColor((76, 175, 80))  # Verde - excelente
+                    elif 50 <= self.current_heart_rate <= 120:
+                        self.bpm_text.setColor((255, 193, 7))  # Amarillo - aceptable
+                    else:
+                        self.bpm_text.setColor((255, 152, 0))  # Naranja - fuera de rango normal
+                elif confidence > 0.4:
+                    self.bpm_text.setColor((255, 152, 0))  # Naranja - confianza media
+                else:
+                    self.bpm_text.setColor((244, 67, 54))  # Rojo - baja confianza
             else:
-                self.bpm_text.setColor((100, 100, 100))
+                hr_str = "BPM: --"
+                self.bpm_text.setColor((158, 158, 158))  # Gris - sin datos
+            
+            self.bpm_text.setText(hr_str)
         
         # Fijar rangos X
         for plot in [self.ppg_raw_plot, self.ppg_filtered_plot, self.pulse_plot]:
@@ -922,7 +993,17 @@ class PulseTestWindow(QMainWindow):
                                 QMessageBox.Warning)
                 return
             
-            # Crear DataFrame
+            # ✅ CONVERTIR TIMESTAMPS DIRECTAMENTE EN EL DICCIONARIO EXISTENTE
+            converted_timestamps = []
+            for timestamp_ms in self.csv_data['timestamp']:
+                absolute_timestamp = self.start_datetime + pd.Timedelta(milliseconds=timestamp_ms)
+                timestamp_formatted = absolute_timestamp.strftime("%H:%M:%S.%f")[:-3]  # HH:MM:SS.mmm
+                converted_timestamps.append(timestamp_formatted)
+            
+            # ✅ REEMPLAZAR TIMESTAMPS EN EL DICCIONARIO ORIGINAL
+            self.csv_data['timestamp'] = converted_timestamps
+            
+            # Crear DataFrame directamente con el diccionario modificado
             df = pd.DataFrame(self.csv_data)
             
             # Crear directorio si no existe
@@ -930,16 +1011,32 @@ class PulseTestWindow(QMainWindow):
             data_dir.mkdir(exist_ok=True)
             
             # Generar nombre de archivo
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = data_dir / f"pulse_test_data_{timestamp}.csv"
+            file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = data_dir / f"pulse_test_data_{file_timestamp}.csv"
             
-            # Guardar archivo
-            df.to_csv(filename, index=False)
+            # ✅ AÑADIR METADATOS AL INICIO DEL ARCHIVO
+            session_start = self.start_datetime.strftime("%Y-%m-%d %H:%M:%S")
+            session_duration = (datetime.now() - self.start_datetime).total_seconds()
+            
+            with open(filename, 'w') as f:
+                f.write("# EMDR Pulse Test Session Data\n")
+                f.write(f"# Session Start: {session_start}\n")
+                f.write(f"# Session Duration: {session_duration:.1f} seconds\n")
+                f.write(f"# Sample Rate: {SAMPLE_RATE} Hz\n")
+                f.write(f"# Total Samples: {len(df)}\n")
+                f.write(f"# Filter Range: {self.lowcut_freq}-{self.highcut_freq} Hz\n")
+                f.write("#\n")
+                f.write("# Columns: timestamp (HH:MM:SS.mmm), ppg_raw, ppg_filtered, pulse_bpm, pulse_confidence\n")
+                f.write("#\n")
+            
+            # Guardar datos
+            df.to_csv(filename, mode='a', index=False)
             
             self.show_message("Datos Guardados", 
                             f"Los datos se han guardado exitosamente.\n\n"
                             f"Archivo: {filename.name}\n"
-                            f"Muestras: {len(df)}", 
+                            f"Muestras: {len(df)}\n"
+                            f"Duración: {session_duration:.1f} segundos", 
                             QMessageBox.Information)
             
             print(f"Datos guardados en: {filename}")
