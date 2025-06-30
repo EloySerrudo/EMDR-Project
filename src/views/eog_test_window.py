@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 # Importaciones del proyecto
 from src.models.devices import Devices
 from src.utils.signal_processing import OnlineEOGFilter
+from src.views.step_fixation import StepFixationThread
 
 # Configuración de constantes
 SAMPLE_RATE = 125  # Hz para EOG (mayor frecuencia que para pulso)
@@ -56,6 +57,10 @@ class EOGTestWindow(QMainWindow):
         # Variables específicas de EOG
         self.calibration_active = False
         
+        # Variables para protocolo Step-Fixation
+        self.step_fixation_thread = None
+        self.protocol_running = False
+        
         # Datos para visualización
         self.display_size = DISPLAY_TIME * SAMPLE_RATE
         self.sample_interval = 1.0 / SAMPLE_RATE
@@ -75,7 +80,8 @@ class EOGTestWindow(QMainWindow):
             'timestamp': [],
             'eog_raw': [],
             'eog_filtered': [],
-            'signal_quality': []
+            'signal_quality': [],
+            'event': []
         }
         
         # Procesamiento de señales EOG con filtro especializado
@@ -466,8 +472,15 @@ class EOGTestWindow(QMainWindow):
         self.reset_filter_btn.setStyleSheet(self.get_button_style('#795548'))
         self.reset_filter_btn.clicked.connect(self.reset_filter)
         
+        # Botón análisis offline
+        self.offline_analysis_btn = QPushButton("📊 Análisis Offline")
+        self.offline_analysis_btn.setFixedHeight(35)
+        self.offline_analysis_btn.setStyleSheet(self.get_button_style('#9C27B0'))
+        self.offline_analysis_btn.clicked.connect(self.open_offline_analysis)
+        
         calibration_layout.addWidget(self.filter_info_btn, 0, 0)
         calibration_layout.addWidget(self.reset_filter_btn, 0, 1)
+        calibration_layout.addWidget(self.offline_analysis_btn, 1, 0, 1, 2)  # Span 2 columns
         
         # === GRUPO: PRUEBAS OCULOMOTORAS ===
         oculomotor_group = QGroupBox("Pruebas Oculomotoras")
@@ -674,7 +687,8 @@ class EOGTestWindow(QMainWindow):
                 'timestamp': [],
                 'eog_raw': [],
                 'eog_filtered': [],
-                'signal_quality': []
+                'signal_quality': [],
+                'event': []
             }
             
             # Enviar comando al ESP32 para iniciar captura
@@ -705,6 +719,10 @@ class EOGTestWindow(QMainWindow):
         try:
             if not self.acquiring:
                 return
+            
+            # Detener protocolo Step-Fixation si está ejecutándose
+            if self.protocol_running:
+                self.stop_protocol()
                 
             # Detener adquisición
             self.acquiring = False
@@ -838,13 +856,13 @@ class EOGTestWindow(QMainWindow):
             eog_filtered = self.eog_filter.filter(eog_raw)
             
             # Convertir a microvoltios
-            eog_raw_mv = eog_raw * 0.0078125 * 4.03225806 # Ganacia de 16 del ADS1115 y 248 del AD620 * 1000 uV
-            eog_filtered_mv = eog_filtered * 0.0078125 * 4.03225806
+            eog_raw_uv = eog_raw * 0.0078125 * 4.03225806 # Ganacia de 16 del ADS1115 y 248 del AD620 * 1000 uV
+            eog_filtered_uv = eog_filtered * 0.0078125 * 4.03225806
 
             # Actualizar buffers para visualización
             self.times.append(timestamp_s)
-            self.eog_raw_values.append(eog_raw_mv)
-            self.eog_filtered_values.append(eog_filtered_mv)
+            self.eog_raw_values.append(eog_raw_uv)
+            self.eog_filtered_values.append(eog_filtered_uv)
             
             # Guardar datos para CSV
             self.csv_data['timestamp'].append(timestamp_ms)
@@ -852,6 +870,7 @@ class EOGTestWindow(QMainWindow):
             self.csv_data['eog_raw'].append(eog_raw)
             self.csv_data['eog_filtered'].append(eog_filtered)
             self.csv_data['signal_quality'].append('good')  # Por ahora fijo
+            self.csv_data['event'].append('none')  # Evento 'none' por defecto
             
             # Incrementar contador de muestras
             self.sample_count += 1
@@ -923,19 +942,81 @@ class EOGTestWindow(QMainWindow):
     # === MÉTODOS DE PRUEBAS OCULOMOTORAS ===
     
     def start_saccadic_test(self):
-        """Inicia la prueba de movimientos sacádicos"""
-        QMessageBox.information(
-            self,
-            "Prueba de Movimientos Sacádicos",
-            "Iniciando prueba de movimientos sacádicos...\n\n"
-            "Esta prueba evaluará:\n"
-            "• Velocidad de movimientos oculares rápidos\n"
-            "• Precisión en el seguimiento de objetivos\n"
-            "• Latencia de respuesta\n"
-            "• Patrones de fijación\n\n"
-            "Esta funcionalidad será implementada próximamente.",
-            QMessageBox.Ok
-        )
+        """Inicia la prueba de movimientos sacádicos con protocolo Step-Fixation"""
+        if not self.connected:
+            QMessageBox.warning(
+                self,
+                "Dispositivo no conectado",
+                "Conecte el dispositivo antes de iniciar la prueba."
+            )
+            return
+        
+        if not self.acquiring:
+            QMessageBox.warning(
+                self,
+                "Adquisición no activa",
+                "Inicie la adquisición de datos antes de comenzar la prueba."
+            )
+            return
+        
+        if self.protocol_running:
+            QMessageBox.information(
+                self,
+                "Protocolo en ejecución",
+                "Ya hay un protocolo de estimulación ejecutándose."
+            )
+            return
+        
+        try:
+            # Configurar e iniciar el protocolo Step-Fixation
+            self.step_fixation_thread = StepFixationThread(
+                devices=Devices,
+                mark_event_callback=self.mark_event
+            )
+            
+            # Conectar señales del protocolo
+            self.step_fixation_thread.progress_updated.connect(self.on_protocol_progress)
+            self.step_fixation_thread.stimulus_started.connect(self.on_stimulus_started)
+            self.step_fixation_thread.stimulus_ended.connect(self.on_stimulus_ended)
+            self.step_fixation_thread.sequence_finished.connect(self.on_protocol_finished)
+            
+            # Marcar inicio del protocolo
+            self.protocol_running = True
+            self.saccadic_test_btn.setText("🔄 Protocolo en curso...")
+            self.saccadic_test_btn.setEnabled(False)
+            
+            # Marcar evento de inicio
+            self.mark_event("STEP_FIXATION_START")
+            
+            # Iniciar el hilo
+            self.step_fixation_thread.start()
+            
+            # Calcular duración estimada
+            estimated_duration = self.step_fixation_thread.get_estimated_duration()
+            
+            QMessageBox.information(
+                self,
+                "Protocolo Step-Fixation Iniciado",
+                f"Se ha iniciado el protocolo de estimulación Step-Fixation.\n\n"
+                f"Nuevo patrón de estimulación:\n"
+                f"• LED Central: 10 segundos (inicial)\n"
+                f"• 4 LEDs laterales aleatorios: -30°, -15°, +15°, +30°\n"
+                f"• Cada LED lateral: 5 segundos\n"
+                f"• Retorno al centro: 5 segundos (entre cada lateral)\n"
+                f"• LED Central final: 5 segundos\n\n"
+                f"Duración total estimada: {estimated_duration:.0f} segundos\n"
+                f"Los eventos se registrarán automáticamente en el archivo CSV."
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error en protocolo",
+                f"Error al iniciar el protocolo Step-Fixation:\n{str(e)}"
+            )
+            self.protocol_running = False
+            self.saccadic_test_btn.setText("🎯 Movimientos Sacádicos")
+            self.saccadic_test_btn.setEnabled(True)
     
     def start_smooth_pursuit_sinusoidal(self):
         """Inicia la prueba de seguimiento suave senoidal"""
@@ -966,6 +1047,30 @@ class EOGTestWindow(QMainWindow):
             "Esta funcionalidad será implementada próximamente.",
             QMessageBox.Ok
         )
+    
+    def open_offline_analysis(self):
+        """Abre la ventana de análisis offline de señales EOG"""
+        try:
+            # Importar usando path absoluto
+            import sys
+            from pathlib import Path
+            
+            # Añadir el directorio src al path si no está
+            src_path = Path(__file__).parent.parent
+            if str(src_path) not in sys.path:
+                sys.path.insert(0, str(src_path))
+            
+            from views.offline_analysis_window import OfflineAnalysisWindow
+            
+            self.offline_window = OfflineAnalysisWindow()
+            self.offline_window.show()
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"No se pudo abrir la ventana de análisis offline:\n{str(e)}"
+            )
     
     # === MÉTODOS DE ACTUALIZACIÓN ===
     
@@ -1042,6 +1147,10 @@ class EOGTestWindow(QMainWindow):
         """Maneja el evento de cierre de ventana"""
         self.is_closing = True
         
+        # Detener protocolo Step-Fixation si está ejecutándose
+        if self.protocol_running:
+            self.stop_protocol()
+        
         # Detener timers
         if hasattr(self, 'plot_timer'):
             self.plot_timer.stop()
@@ -1105,7 +1214,71 @@ class EOGTestWindow(QMainWindow):
                 "El estado interno se ha limpiado.",
                 QMessageBox.Ok
             )
+    
+    def mark_event(self, event_label: str):
+        """
+        Marca un evento en el último punto de datos CSV.
+        
+        Args:
+            event_label: Etiqueta del evento a registrar
+        """
+        if self.csv_data['event'] and len(self.csv_data['event']) > 0:
+            # Marcar el evento en la última muestra registrada
+            self.csv_data['event'][-1] = event_label
+            print(f"Evento marcado: {event_label} en timestamp {self.csv_data['timestamp'][-1] if self.csv_data['timestamp'] else 'N/A'}")
+    
+    def on_protocol_progress(self, current: int, total: int):
+        """Maneja la actualización del progreso del protocolo"""
+        progress_text = f"🔄 Estímulo {current}/{total}"
+        self.saccadic_test_btn.setText(progress_text)
+        print(f"Progreso del protocolo: {current}/{total}")
+    
+    def on_stimulus_started(self, angle: int):
+        """Maneja el inicio de un estímulo"""
+        print(f"Estímulo iniciado en ángulo: {angle:+03d}°")
+        # Actualizar UI si es necesario
+        
+    def on_stimulus_ended(self, angle: int):
+        """Maneja el fin de un estímulo"""
+        print(f"Estímulo terminado en ángulo: {angle:+03d}°")
+        # Actualizar UI si es necesario
+        
+    def on_protocol_finished(self):
+        """Maneja la finalización del protocolo"""
+        self.protocol_running = False
+        self.saccadic_test_btn.setText("🎯 Movimientos Sacádicos")
+        self.saccadic_test_btn.setEnabled(True)
+        
+        # Marcar evento de finalización
+        self.mark_event("STEP_FIXATION_END")
+        
+        QMessageBox.information(
+            self,
+            "Protocolo Completado",
+            "El protocolo Step-Fixation ha finalizado correctamente.\n\n"
+            "Todos los eventos han sido registrados en el archivo CSV."
+        )
+        
+        print("Protocolo Step-Fixation completado")
+    
+    def stop_protocol(self):
+        """Detiene el protocolo en ejecución si existe"""
+        if self.step_fixation_thread and self.step_fixation_thread.isRunning():
+            self.step_fixation_thread.stop()
+            self.step_fixation_thread.wait(3000)  # Esperar hasta 3 segundos
+            
+            if self.step_fixation_thread.isRunning():
+                self.step_fixation_thread.terminate()
+                
+            self.mark_event("STEP_FIXATION_ABORTED")
+            self.protocol_running = False
+            self.saccadic_test_btn.setText("🎯 Movimientos Sacádicos")
+            self.saccadic_test_btn.setEnabled(True)
+            
+            print("Protocolo Step-Fixation detenido")
 
+    # === MÉTODOS DE SEGUIMIENTO SUAVE ===
+    # === ============================ ===
 
 # Para pruebas independientes
 if __name__ == "__main__":

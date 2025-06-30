@@ -258,6 +258,288 @@ class OnlineEOGFilter:
             return None, None
 
 
+class OfflineEOGFilter:
+    """
+    Filtro EOG offline optimizado para análisis de sacadas.
+    
+    Estrategia SIMPLE y EFECTIVA:
+    1. DC removal con filtro HP muy suave (0.01 Hz)
+    2. Notch 50 Hz para eliminar ruido de red
+    3. Filtro FIR con filtfilt (FASE CERO) para preservar temporización exacta
+    4. Detección y limpieza de artefactos de parpadeo
+    
+    CLAVE: filtfilt() procesa hacia adelante y hacia atrás = fase cero
+    """
+    
+    def __init__(self, fs=125, hp_cutoff=0.01, lp_cutoff=35.0, 
+                 notch_freq=50, notch_q=30, fir_order=101):
+        """
+        Inicializar filtro EOG offline.
+        
+        Args:
+            fs: Frecuencia de muestreo (Hz)
+            hp_cutoff: Corte HP muy bajo para eliminar deriva DC (0.01 Hz)
+            lp_cutoff: Corte LP para ruido de alta frecuencia (35 Hz)
+            notch_freq: Solo 50 Hz como pediste
+            notch_q: Factor de calidad del notch
+            fir_order: Orden del filtro FIR (debe ser par para filtfilt)
+        """
+        self.fs = fs
+        self.hp_cutoff = hp_cutoff
+        self.lp_cutoff = lp_cutoff
+        self.notch_freq = notch_freq
+        self.notch_q = notch_q
+        self.fir_order = fir_order if fir_order % 2 == 0 else fir_order + 1
+        
+        self._design_filters()
+        
+        print(f"Filtro EOG Offline configurado:")
+        print(f"  - DC removal: {self.hp_cutoff} Hz")
+        print(f"  - Notch: {self.notch_freq} Hz")
+        print(f"  - Low-pass: {self.lp_cutoff} Hz (FIR orden {self.fir_order})")
+        print(f"  - FASE CERO garantizada con filtfilt()")
+    
+    def _design_filters(self):
+        """Diseñar filtros offline optimizados."""
+        nyq = self.fs * 0.5
+        
+        # 1. High-pass Butterworth orden 2 (eliminar deriva DC)
+        self.b_hp, self.a_hp = signal.butter(2, self.hp_cutoff/nyq, 'highpass')
+        
+        # 2. Notch 50 Hz únicamente
+        self.b_notch, self.a_notch = signal.iirnotch(self.notch_freq/nyq, self.notch_q)
+        
+        # 3. FIR Low-pass con ventana Kaiser (excelente para EOG)
+        # Beta=5 da buen balance entre roll-off y ringing
+        self.b_lp = signal.firwin(
+            self.fir_order + 1,
+            self.lp_cutoff,
+            fs=self.fs,
+            window=('kaiser', 5)
+        )
+    
+    def filter_signal(self, eog_data):
+        """
+        Filtrar señal EOG completa con fase cero.
+        
+        Args:
+            eog_data: Array numpy con datos EOG raw
+            
+        Returns:
+            dict: {
+                'filtered': array filtrado,
+                'dc_removed': señal sin deriva DC,
+                'no_powerline': señal sin 50Hz,
+                'metadata': información del procesamiento
+            }
+        """
+        if not isinstance(eog_data, np.ndarray):
+            eog_data = np.array(eog_data)
+        
+        print(f"Filtrando señal EOG: {len(eog_data)} muestras ({len(eog_data)/self.fs:.1f}s)")
+        
+        # PASO 1: Eliminar deriva DC con filtfilt (FASE CERO)
+        dc_removed = signal.filtfilt(self.b_hp, self.a_hp, eog_data)
+        
+        # PASO 2: Eliminar 50 Hz con filtfilt (FASE CERO)
+        no_powerline = signal.filtfilt(self.b_notch, self.a_notch, dc_removed)
+        
+        # PASO 3: Low-pass FIR con filtfilt (FASE CERO)
+        filtered_final = signal.filtfilt(self.b_lp, [1.0], no_powerline)
+        
+        # Detectar y marcar posibles artefactos de parpadeo
+        blink_artifacts = self._detect_blink_artifacts(filtered_final)
+        
+        metadata = {
+            'original_length': len(eog_data),
+            'duration_sec': len(eog_data) / self.fs,
+            'dc_offset_removed': np.mean(eog_data) - np.mean(dc_removed),
+            'powerline_reduction_db': self._estimate_powerline_reduction(eog_data, no_powerline),
+            'blink_artifacts_detected': len(blink_artifacts),
+            'signal_quality': self._assess_signal_quality(filtered_final),
+            'processing_steps': ['DC_removal', 'notch_50Hz', 'lowpass_FIR', 'phase_zero']
+        }
+        
+        return {
+            'filtered': filtered_final,
+            'dc_removed': dc_removed,
+            'no_powerline': no_powerline,
+            'blink_artifacts': blink_artifacts,
+            'metadata': metadata
+        }
+    
+    def _detect_blink_artifacts(self, filtered_signal):
+        """
+        Detectar artefactos de parpadeo basándose en amplitud y duración.
+        
+        Args:
+            filtered_signal: Señal EOG filtrada
+            
+        Returns:
+            list: Lista de índices donde se detectaron parpadeos
+        """
+        # Los parpadeos son típicamente:
+        # - Amplitud muy alta (>3-5 veces la desviación estándar)
+        # - Duración corta (100-400 ms)
+        # - Forma característica (pico negativo seguido de positivo)
+        
+        signal_std = np.std(filtered_signal)
+        threshold = 4 * signal_std  # Umbral conservador
+        
+        # Encontrar picos que excedan el umbral
+        peaks_pos, _ = signal.find_peaks(filtered_signal, height=threshold)
+        peaks_neg, _ = signal.find_peaks(-filtered_signal, height=threshold)
+        
+        # Combinar picos positivos y negativos
+        all_peaks = np.sort(np.concatenate([peaks_pos, peaks_neg]))
+        
+        # Filtrar por duración típica de parpadeos (100-400ms)
+        min_duration = int(0.1 * self.fs)  # 100ms
+        max_duration = int(0.4 * self.fs)  # 400ms
+        
+        blink_candidates = []
+        for peak in all_peaks:
+            # Buscar retorno al baseline
+            start_idx = max(0, peak - max_duration//2)
+            end_idx = min(len(filtered_signal), peak + max_duration//2)
+            
+            # Verificar si la duración está en rango típico
+            if (end_idx - start_idx) >= min_duration:
+                blink_candidates.append(peak)# Buscar retorno al baseline
+            start_idx = max(0, peak - max_duration//2)
+            end_idx = min(len(filtered_signal), peak + max_duration//2)
+            
+            # Verificar si la duración está en rango típico
+            if (end_idx - start_idx) >= min_duration:
+                blink_candidates.append(peak)
+        
+        print(f"Detectados {len(blink_candidates)} posibles artefactos de parpadeo")
+        return blink_candidates
+    
+    def _estimate_powerline_reduction(self, original, filtered):
+        """Estimar reducción de ruido de 50Hz en dB."""
+        try:
+            # FFT de ambas señales
+            fft_orig = np.fft.rfft(original)
+            fft_filt = np.fft.rfft(filtered)
+            freqs = np.fft.rfftfreq(len(original), 1/self.fs)
+            
+            # Encontrar potencia cerca de 50Hz
+            f_idx = np.argmin(np.abs(freqs - 50))
+            
+            power_orig = np.abs(fft_orig[f_idx])**2
+            power_filt = np.abs(fft_filt[f_idx])**2
+            
+            if power_orig > 0 and power_filt > 0:
+                reduction_db = 10 * np.log10(power_orig / power_filt)
+                return reduction_db
+        except:
+            pass
+        
+        return 0.0
+    
+    def _assess_signal_quality(self, filtered_signal):
+        """Evaluar calidad de la señal filtrada."""
+        signal_std = np.std(filtered_signal)
+        signal_range = np.ptp(filtered_signal)  # Peak-to-peak
+        
+        # Métricas simples de calidad
+        if signal_std < 10:  # Muy poco ruido
+            return 'excellent'
+        elif signal_std < 50:
+            return 'good'
+        elif signal_std < 100:
+            return 'acceptable'
+        else:
+            return 'poor'
+    
+    def filter_with_artifact_removal(self, eog_data, remove_blinks=True):
+        """
+        Filtrar con opción de limpieza de artefactos.
+        
+        Args:
+            eog_data: Datos EOG raw
+            remove_blinks: Si True, interpoler sobre artefactos detectados
+            
+        Returns:
+            dict: Resultado del filtrado con artefactos limpiados
+        """
+        # Filtrado normal
+        result = self.filter_signal(eog_data)
+        
+        if remove_blinks and result['blink_artifacts']:
+            print(f"Limpiando {len(result['blink_artifacts'])} artefactos...")
+            
+            cleaned_signal = result['filtered'].copy()
+            
+            # Interpolar sobre cada artefacto
+            for artifact_idx in result['blink_artifacts']:
+                # Definir ventana de interpolación
+                window_size = int(0.3 * self.fs)  # 300ms
+                start_idx = max(0, artifact_idx - window_size//2)
+                end_idx = min(len(cleaned_signal), artifact_idx + window_size//2)
+                
+                # Interpolar linealmente
+                if start_idx > 0 and end_idx < len(cleaned_signal):
+                    x_interp = np.array([start_idx, end_idx])
+                    y_interp = np.array([cleaned_signal[start_idx], cleaned_signal[end_idx]])
+                    
+                    # Crear interpolación
+                    x_fill = np.arange(start_idx, end_idx)
+                    y_fill = np.interp(x_fill, x_interp, y_interp)
+                    
+                    cleaned_signal[start_idx:end_idx] = y_fill
+            
+            result['cleaned'] = cleaned_signal
+            result['metadata']['artifact_removal'] = True
+        
+        return result
+    
+    def test_filter_response(self, plot=True):
+        """Probar respuesta en frecuencia del filtro completo."""
+        try:
+            import matplotlib.pyplot as plt
+            
+            # Diseñar filtro combinado equivalente
+            w, h_hp = signal.freqz(self.b_hp, self.a_hp, fs=self.fs, worN=2048)
+            _, h_notch = signal.freqz(self.b_notch, self.a_notch, fs=self.fs, worN=2048)
+            _, h_lp = signal.freqz(self.b_lp, [1.0], fs=self.fs, worN=2048)
+            
+            # Respuesta combinada
+            h_total = h_hp * h_notch * h_lp
+            
+            if plot:
+                fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+                
+                # Magnitud
+                ax1.semilogx(w, 20 * np.log10(abs(h_total)), 'b-', linewidth=2)
+                ax1.set_title('Respuesta del Filtro EOG Offline (Fase Cero)', fontsize=14)
+                ax1.set_xlabel('Frecuencia (Hz)')
+                ax1.set_ylabel('Magnitud (dB)')
+                ax1.grid(True, alpha=0.3)
+                ax1.axvline(self.hp_cutoff, color='r', linestyle='--', alpha=0.7, label=f'HP: {self.hp_cutoff} Hz')
+                ax1.axvline(self.lp_cutoff, color='g', linestyle='--', alpha=0.7, label=f'LP: {self.lp_cutoff} Hz')
+                ax1.axvline(self.notch_freq, color='orange', linestyle='--', alpha=0.7, label=f'Notch: {self.notch_freq} Hz')
+                ax1.legend()
+                ax1.set_ylim([-80, 5])
+                
+                # Fase (será cero con filtfilt)
+                ax2.semilogx(w, np.angle(h_total, deg=True), 'r-', linewidth=2)
+                ax2.set_xlabel('Frecuencia (Hz)')
+                ax2.set_ylabel('Fase (grados)')
+                ax2.grid(True, alpha=0.3)
+                ax2.set_title('Fase (Se anula con filtfilt - mostrada solo como referencia)')
+                
+                plt.tight_layout()
+                plt.show()
+            
+            return w, h_total
+            
+        except ImportError:
+            print("matplotlib no disponible")
+            return None, None
+
+
 class PPGHeartRateCalculator:
     """
     Calculador de BPM optimizado para monitoreo EMDR en tiempo real.
