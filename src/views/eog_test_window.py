@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.models.devices import Devices
 from src.utils.signal_processing import OnlineEOGFilter
 from src.views.step_fixation import StepFixationThread
+from views.linear_smooth_pursuit import LinealSmoothPursuitThread
 
 # Configuración de constantes
 SAMPLE_RATE = 125  # Hz para EOG (mayor frecuencia que para pulso)
@@ -60,6 +61,9 @@ class EOGTestWindow(QMainWindow):
         # Variables para protocolo Step-Fixation
         self.step_fixation_thread = None
         self.protocol_running = False
+        
+        # Variables para protocolo Smooth-Pursuit
+        self.smooth_pursuit_thread = None
         
         # Datos para visualización
         self.display_size = DISPLAY_TIME * SAMPLE_RATE
@@ -1035,18 +1039,93 @@ class EOGTestWindow(QMainWindow):
     
     def start_smooth_pursuit_linear(self):
         """Inicia la prueba de seguimiento suave lineal"""
-        QMessageBox.information(
-            self,
-            "Seguimiento Suave Lineal",
-            "Iniciando prueba de seguimiento suave lineal...\n\n"
-            "Esta prueba evaluará:\n"
-            "• Seguimiento de velocidad constante\n"
-            "• Respuesta a cambios de dirección\n"
-            "• Precisión en trayectorias rectas\n"
-            "• Coordinación oculomotora\n\n"
-            "Esta funcionalidad será implementada próximamente.",
-            QMessageBox.Ok
-        )
+        # Verificar conexión
+        if not self.connected:
+            QMessageBox.warning(
+                self,
+                "Error",
+                "No hay conexión con el dispositivo.\n"
+                "Por favor, conecte el dispositivo antes de iniciar la prueba."
+            )
+            return
+        
+        # Verificar que la adquisición esté activa
+        if not self.acquiring:
+            QMessageBox.warning(
+                self,
+                "Error",
+                "La adquisición de datos debe estar activa.\n"
+                "Por favor, inicie la adquisición antes de comenzar la prueba."
+            )
+            return
+        
+        # Verificar que no haya otro protocolo ejecutándose
+        if self.protocol_running:
+            QMessageBox.warning(
+                self,
+                "Error",
+                "Ya hay un protocolo en ejecución.\n"
+                "Por favor, espere a que termine o deténgalo antes de iniciar uno nuevo."
+            )
+            return
+        
+        try:
+            # Crear instancia del thread de smooth pursuit (CORREGIDO: usar Devices en lugar de self.devices)
+            self.smooth_pursuit_thread = LinealSmoothPursuitThread(
+                devices=Devices,  # ✅ Cambiar de self.devices a Devices
+                mark_event_callback=self.mark_event
+            )
+            
+            # Obtener duración estimada
+            estimated_duration = self.smooth_pursuit_thread.get_estimated_duration()
+            
+            # Mostrar información del protocolo
+            reply = QMessageBox.question(
+                self,
+                "Seguimiento Suave Lineal",
+                f"Protocolo de Seguimiento Suave Lineal\n\n"
+                f"Secuencia:\n"
+                f"• Baseline: LED central por 10 segundos\n"
+                f"• 3 ciclos de barrido lineal (-20° a +20°)\n"
+                f"• Velocidad constante: 17°/s\n"
+                f"• Fading suave entre LEDs\n"
+                f"• Pausas de 0.5s entre ciclos\n\n"
+                f"Duración estimada: {estimated_duration:.1f} segundos\n\n"
+                f"¿Desea iniciar el protocolo?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            
+            if reply != QMessageBox.Yes:
+                return
+            
+            # Conectar señales del thread
+            self.smooth_pursuit_thread.progress_updated.connect(self.update_protocol_progress)
+            self.smooth_pursuit_thread.sequence_finished.connect(self.on_smooth_pursuit_finished)
+            
+            # Marcar que hay un protocolo ejecutándose
+            self.protocol_running = True
+            
+            # Actualizar UI
+            self.smooth_pursuit_lin_btn.setText("🔄 Ejecutando...")
+            self.smooth_pursuit_lin_btn.setEnabled(False)
+            
+            # Iniciar el thread
+            self.smooth_pursuit_thread.start()
+            
+            print(f"Protocolo Smooth-Pursuit iniciado (duración estimada: {estimated_duration:.1f}s)")
+            
+        except Exception as e:
+            print(f"Error al iniciar protocolo Smooth-Pursuit: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error al iniciar el protocolo:\n{str(e)}"
+            )
+            # Restaurar estado en caso de error
+            self.protocol_running = False
+            self.smooth_pursuit_lin_btn.setText("📈 Seguimiento Suave Lineal")
+            self.smooth_pursuit_lin_btn.setEnabled(True)
     
     def open_offline_analysis(self):
         """Abre la ventana de análisis offline de señales EOG"""
@@ -1276,9 +1355,52 @@ class EOGTestWindow(QMainWindow):
             self.saccadic_test_btn.setEnabled(True)
             
             print("Protocolo Step-Fixation detenido")
+            
+        if self.smooth_pursuit_thread and self.smooth_pursuit_thread.isRunning():
+            self.smooth_pursuit_thread.stop()
+            self.smooth_pursuit_thread.wait(3000)  # Esperar hasta 3 segundos
+            
+            if self.smooth_pursuit_thread.isRunning():
+                self.smooth_pursuit_thread.terminate()
+                
+            self.mark_event("PURSUIT_PROTOCOL_ABORTED")
+            self.protocol_running = False
+            self.smooth_pursuit_lin_btn.setText("📈 Seguimiento Suave Lineal")
+            self.smooth_pursuit_lin_btn.setEnabled(True)
+            
+            print("Protocolo Smooth-Pursuit Lineal detenido")
 
     # === MÉTODOS DE SEGUIMIENTO SUAVE ===
     # === ============================ ===
+
+    def update_protocol_progress(self, phase: str, cycle: int = 0, total_cycles: int = 0):
+        """Maneja la actualización del progreso del protocolo Smooth Pursuit"""
+        if phase == "baseline":
+            progress_text = "🔄 Baseline en curso..."
+        elif phase == "pursuit":
+            progress_text = f"🔄 Ciclo {cycle}/{total_cycles}"
+        else:
+            progress_text = "🔄 Protocolo en curso..."
+        
+        self.smooth_pursuit_lin_btn.setText(progress_text)
+        print(f"Progreso Smooth Pursuit: {phase} - Ciclo {cycle}/{total_cycles}")
+    
+    def on_smooth_pursuit_finished(self):
+        """Maneja la finalización del protocolo Smooth Pursuit"""
+        self.protocol_running = False
+        self.smooth_pursuit_lin_btn.setText("📈 Seguimiento Suave Lineal")
+        self.smooth_pursuit_lin_btn.setEnabled(True)
+        
+        # Marcar evento de finalización
+        self.mark_event("PURSUIT_PROTOCOL_END")
+        
+        QMessageBox.information(
+            self,
+            "Protocolo Completado",
+            "El protocolo Smooth-Pursuit Lineal ha finalizado correctamente.\n\n"
+            "Se completaron 3 ciclos de seguimiento con registro de eventos.\n"
+            "Todos los eventos han sido registrados en el archivo CSV."
+        )
 
 # Para pruebas independientes
 if __name__ == "__main__":
