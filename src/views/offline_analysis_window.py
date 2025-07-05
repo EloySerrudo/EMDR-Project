@@ -37,47 +37,30 @@ class FilteringThread(QThread):
     """Hilo para procesar filtrado offline sin bloquear la UI"""
     
     progress_updated = Signal(int)
-    filtering_completed = Signal(dict)
+    filtering_completed = Signal(np.ndarray)  # ✅ Cambiar a retornar solo el array
     error_occurred = Signal(str)
     
     def __init__(self, eog_data_uv, sample_rate=125):
         super().__init__()
-        self.eog_data_uv = eog_data_uv  # Datos ya en microvoltios
+        self.eog_data_uv = eog_data_uv
         self.sample_rate = sample_rate
         
     def run(self):
         """Ejecutar filtrado en hilo separado"""
         try:
-            # Crear filtro offline
+            self.progress_updated.emit(25)
             offline_filter = OfflineEOGFilter(fs=self.sample_rate)
             
-            # Simular progreso
-            self.progress_updated.emit(25)
-            
-            # Aplicar filtrado con fase cero (usando datos en µV)
+            self.progress_updated.emit(50)
+            # Aplicar filtrado con fase cero
             result = offline_filter.filter_signal(self.eog_data_uv)
             
-            self.progress_updated.emit(75)
-            
-            # Filtrado con limpieza de artefactos
-            result_cleaned = offline_filter.filter_with_artifact_removal(
-                self.eog_data_uv, remove_blinks=True
-            )
-            
             self.progress_updated.emit(100)
-            
-            # Combinar resultados
-            final_result = {
-                'filtered': result['filtered'],
-                'cleaned': result_cleaned.get('cleaned', result['filtered']),
-                'metadata': result['metadata'],
-                'blink_artifacts': result['blink_artifacts']
-            }
-            
-            self.filtering_completed.emit(final_result)
+            # ✅ CORRECCIÓN: Emitir solo el array filtrado
+            self.filtering_completed.emit(result['filtered'])
             
         except Exception as e:
-            self.error_occurred.emit(str(e))
+            self.error_occurred.emit(f"Error en el hilo de filtrado: {e}")
 
 
 class OfflineAnalysisWindow(QMainWindow):
@@ -90,15 +73,15 @@ class OfflineAnalysisWindow(QMainWindow):
         
         # Variables de datos
         self.df = None
-        self.eog_raw = None          # Datos crudos ADC
-        self.eog_raw_uv = None       # Datos crudos en microvoltios
-        self.eog_filtered_uv = None  # Datos filtrados en microvoltios
-        self.timestamps = None
+        self.eog_raw = None
+        self.eog_raw_uv = None
+        self.eog_filtered_uv = None
         self.time_seconds = None
-        self.sample_rate = 125  # Hz por defecto
+        self.sample_rate = 125
+        self.test_name = "Desconocido"
         
         # Variables de visualización
-        self.window_duration = 8  # segundos a mostrar
+        self.window_duration = 8
         self.current_position = 0  # posición actual en segundos
         
         # Thread para filtrado
@@ -182,8 +165,8 @@ class OfflineAnalysisWindow(QMainWindow):
         # Panel de navegación
         self.create_navigation_panel(main_layout)
         
-        # Panel de información
-        self.create_info_panel(main_layout)
+        # ELIMINADO: Panel de información
+        # self.create_info_panel(main_layout)
         
     def create_control_panel(self, main_layout):
         """Crear panel de control para cargar archivos"""
@@ -205,11 +188,7 @@ class OfflineAnalysisWindow(QMainWindow):
         self.file_status_label = QLabel("No hay archivo cargado")
         self.file_status_label.setStyleSheet("color: #FF6B6B; font-weight: bold;")
         
-        # Botón procesar (inicialmente deshabilitado)
-        self.process_btn = QPushButton("⚙️ Procesar con Filtro Offline")
-        self.process_btn.setStyleSheet(self.get_button_style('#4CAF50'))
-        self.process_btn.setEnabled(False)
-        self.process_btn.clicked.connect(self.process_signal)
+        # ELIMINADO: Botón de procesar
         
         # Barra de progreso
         self.progress_bar = QProgressBar()
@@ -232,46 +211,37 @@ class OfflineAnalysisWindow(QMainWindow):
         control_layout.addStretch()
         control_layout.addWidget(self.load_file_btn)
         control_layout.addWidget(self.file_status_label)
-        control_layout.addWidget(self.process_btn)
+        # ELIMINADO: control_layout.addWidget(self.process_btn)
         control_layout.addWidget(self.progress_bar)
         
         main_layout.addWidget(control_frame)
         
     def create_plots_area(self, main_layout):
-        """Crear área de gráficas"""
+        """Crear área de gráficas para la señal procesada y la referencia ideal"""
         plots_frame = QFrame()
         plots_layout = QVBoxLayout(plots_frame)
         plots_layout.setContentsMargins(10, 10, 10, 10)
         
-        # Configurar PyQtGraph para fondo oscuro
         pg.setConfigOption('background', '#1A1A1A')
         pg.setConfigOption('foreground', '#FFFFFF')
         
-        # Gráfica señal cruda (ahora en µV)
-        self.plot_raw = pg.PlotWidget(title="Señal EOG Cruda")
-        self.plot_raw.setFixedHeight(250)
-        self.plot_raw.setLabel('left', 'Amplitud', units='µV', color='#FFFFFF')
-        self.plot_raw.setLabel('bottom', 'Tiempo', units='s', color='#FFFFFF')
-        self.plot_raw.getAxis('left').setTextPen('#FFFFFF')
-        self.plot_raw.getAxis('bottom').setTextPen('#FFFFFF')
-        self.plot_raw.setBackground('#1A1A1A')
-        self.plot_raw.setYRange(-350, 250)
+        # Gráfica superior: Señal EOG procesada
+        self.plot_eog = pg.PlotWidget(title="Señal EOG Procesada (Filtrada y Recortada)")
+        self.plot_eog.setFixedHeight(300)
+        self.plot_eog.setLabel('left', 'Amplitud', units='µV')
+        self.plot_eog.setLabel('bottom', 'Tiempo', units='s')
         
-        # Gráfica señal filtrada (también en µV)
-        self.plot_filtered = pg.PlotWidget(title="Señal EOG Filtrada (Offline)")
-        self.plot_filtered.setFixedHeight(250)
-        self.plot_filtered.setLabel('left', 'Amplitud', units='µV', color='#FFFFFF')
-        self.plot_filtered.setLabel('bottom', 'Tiempo', units='s', color='#FFFFFF')
-        self.plot_filtered.getAxis('left').setTextPen('#FFFFFF')
-        self.plot_filtered.getAxis('bottom').setTextPen('#FFFFFF')
-        self.plot_filtered.setBackground('#1A1A1A')
-        self.plot_filtered.setYRange(-450, 650)
+        # Gráfica inferior: Señal de referencia ideal
+        self.plot_reference = pg.PlotWidget(title="Señal de Referencia Ideal")
+        self.plot_reference.setFixedHeight(200)
+        self.plot_reference.setLabel('left', 'Ángulo', units='°')
+        self.plot_reference.setLabel('bottom', 'Tiempo', units='s')
         
-        # Sincronizar zoom entre gráficas
-        self.plot_filtered.setXLink(self.plot_raw)
+        # Sincronizar zoom y paneo en el eje X
+        self.plot_reference.setXLink(self.plot_eog)
         
-        plots_layout.addWidget(self.plot_raw)
-        plots_layout.addWidget(self.plot_filtered)
+        plots_layout.addWidget(self.plot_eog)
+        plots_layout.addWidget(self.plot_reference)
         
         main_layout.addWidget(plots_frame)
         
@@ -310,59 +280,20 @@ class OfflineAnalysisWindow(QMainWindow):
         
         main_layout.addWidget(nav_frame)
         
-    def create_info_panel(self, main_layout):
-        """Crear panel de información"""
-        info_frame = QFrame()
-        info_layout = QHBoxLayout(info_frame)
-        info_layout.setContentsMargins(10, 5, 10, 5)
-        
-        # Panel estadísticas
-        stats_group = QGroupBox("Estadísticas de la Señal")
-        stats_layout = QGridLayout(stats_group)
-        
-        self.stats_label = QTextEdit()
-        self.stats_label.setMaximumHeight(80)
-        self.stats_label.setReadOnly(True)
-        self.stats_label.setStyleSheet("""
-            QTextEdit {
-                background-color: #2A2A2A;
-                border: 1px solid #555555;
-                color: #FFFFFF;
-                font-family: 'Courier New';
-                font-size: 10px;
-            }
-        """)
-        
-        stats_layout.addWidget(self.stats_label)
-        
-        # Panel calidad
-        quality_group = QGroupBox("Calidad del Filtrado")
-        quality_layout = QGridLayout(quality_group)
-        
-        self.quality_label = QTextEdit()
-        self.quality_label.setMaximumHeight(80)
-        self.quality_label.setReadOnly(True)
-        self.quality_label.setStyleSheet(self.stats_label.styleSheet())
-        
-        quality_layout.addWidget(self.quality_label)
-        
-        info_layout.addWidget(stats_group)
-        info_layout.addWidget(quality_group)
-        
-        main_layout.addWidget(info_frame)
+    # ELIMINADO: create_info_panel
         
     def setup_plots(self):
         """Configurar las curvas de las gráficas"""
-        # Curva para señal cruda
-        self.curve_raw = self.plot_raw.plot(
-            pen=pg.mkPen(color='#FF6B6B', width=2),
-            name='EOG Raw (µV)'
+        # Curva para la señal EOG procesada
+        self.curve_eog = self.plot_eog.plot(
+            pen=pg.mkPen(color='#4ECDC4', width=2),
+            name='EOG Procesada (µV)'
         )
         
-        # Curva para señal filtrada
-        self.curve_filtered = self.plot_filtered.plot(
-            pen=pg.mkPen(color='#4ECDC4', width=2),
-            name='EOG Filtered (µV)'
+        # Curva para la señal de referencia ideal
+        self.curve_reference = self.plot_reference.plot(
+            pen=pg.mkPen(color='#FFCA58', width=2, style=Qt.DashLine),
+            name='Referencia Ideal (°)'
         )
         
     def get_button_style(self, color):
@@ -405,11 +336,15 @@ class OfflineAnalysisWindow(QMainWindow):
         
         if file_path:
             try:
-                # Cargar datos
-                self.df = pd.read_csv(file_path)
+                # Leer el nombre de la prueba de la primera línea
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    self.test_name = f.readline().strip().replace('#', '').strip()
+
+                # Cargar datos saltando las 2 primeras filas de comentarios
+                self.df = pd.read_csv(file_path, skiprows=2)
                 
                 # Verificar columnas requeridas
-                required_columns = ['timestamp', 'eog_raw']
+                required_columns = ['timestamp', 'eog_raw', 'event']
                 missing_columns = [col for col in required_columns if col not in self.df.columns]
                 
                 if missing_columns:
@@ -449,23 +384,12 @@ class OfflineAnalysisWindow(QMainWindow):
                 uv_range = f"{np.min(self.eog_raw_uv):.1f} - {np.max(self.eog_raw_uv):.1f} µV"
                 
                 self.file_status_label.setText(
-                    f"✅ {filename} | {samples} muestras | {duration:.1f}s | {self.sample_rate:.1f} Hz | {uv_range}"
+                    f"✅ {self.test_name} | {samples} muestras | {duration:.1f}s"
                 )
                 self.file_status_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
                 
-                # Habilitar procesamiento
-                self.process_btn.setEnabled(True)
-                
-                # Configurar slider de navegación
-                max_time = max(0, duration - self.window_duration)
-                self.time_slider.setMaximum(int(max_time))
-                self.time_slider.setValue(0)
-                
-                # Mostrar datos crudos iniciales (en µV)
-                self.update_raw_plot()
-                self.update_statistics()
-                
-                print(f"Archivo cargado: {samples} muestras, {duration:.1f}s, {self.sample_rate:.1f} Hz")
+                # Iniciar procesamiento automático
+                self.process_signal()
                 
             except Exception as e:
                 QMessageBox.critical(
@@ -475,63 +399,215 @@ class OfflineAnalysisWindow(QMainWindow):
                 )
                 
     def process_signal(self):
-        """Procesar señal con filtro offline"""
+        """Inicia el hilo de filtrado de la señal cargada."""
         if self.eog_raw_uv is None:
+            QMessageBox.warning(self, "Advertencia", "No hay datos de EOG para procesar.")
             return
             
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+        self.load_file_btn.setEnabled(False)
+        
+        self.filtering_thread = FilteringThread(self.eog_raw_uv, self.sample_rate)
+        self.filtering_thread.progress_updated.connect(self.progress_bar.setValue)
+        self.filtering_thread.filtering_completed.connect(self.on_filtering_completed)
+        self.filtering_thread.error_occurred.connect(self.on_filtering_error)
+        self.filtering_thread.start()
+            
+    def on_filtering_completed(self, filtered_result):
+        """Se ejecuta al completar el filtrado. Inicia la segmentación y graficado."""
+        # ✅ CORRECCIÓN: extraer el array filtrado del resultado
+        if isinstance(filtered_result, dict):
+            self.eog_filtered_uv = filtered_result['filtered']
+            self.filtering_metadata = filtered_result.get('metadata', {})
+        else:
+            # Si es un array directo (por compatibilidad)
+            self.eog_filtered_uv = filtered_result
+            self.filtering_metadata = {}
+        
+        self.progress_bar.setVisible(False)
+        self.load_file_btn.setEnabled(True)
+
+        QMessageBox.information(self, "Procesamiento Completo", "La señal ha sido filtrada. Ahora se segmentará y graficará.")
+
+        self.segment_and_plot_data()
+
+    def segment_and_plot_data(self):
+        """Recorta los datos según eventos y genera la gráfica de referencia."""
         try:
-            # Mostrar barra de progreso
-            self.progress_bar.setVisible(True)
-            self.progress_bar.setValue(0)
-            self.process_btn.setEnabled(False)
+            # Verificar que tenemos datos filtrados
+            if self.eog_filtered_uv is None:
+                raise ValueError("No hay datos filtrados disponibles")
             
-            # Crear y ejecutar hilo de filtrado (usando datos en µV)
-            self.filtering_thread = FilteringThread(self.eog_raw_uv, self.sample_rate)
-            self.filtering_thread.progress_updated.connect(self.progress_bar.setValue)
-            self.filtering_thread.filtering_completed.connect(self.on_filtering_completed)
-            self.filtering_thread.error_occurred.connect(self.on_filtering_error)  # ✅ Corregido
-            self.filtering_thread.start()
+            # ✅ CORRECCIÓN: asegurar que sea array numpy
+            if not isinstance(self.eog_filtered_uv, np.ndarray):
+                self.eog_filtered_uv = np.array(self.eog_filtered_uv)
             
+            print(f"Tipo de eog_filtered_uv: {type(self.eog_filtered_uv)}")
+            print(f"Shape de eog_filtered_uv: {self.eog_filtered_uv.shape}")
+            
+            # Identificar protocolo y recortar datos
+            events_df = self.df[['timestamp', 'event']].dropna()
+            
+            start_event, end_event, protocol_type = (None, None, None)
+
+            if not events_df[events_df['event'] == 'STEP_FIXATION_START'].empty:
+                start_event = 'STEP_FIXATION_START'
+                end_event = 'STEP_FIXATION_END'
+                protocol_type = 'Step Fixation'
+            elif not events_df[events_df['event'] == 'LINEAR_PURSUIT_START'].empty:
+                start_event = 'LINEAR_PURSUIT_START'
+                end_event = 'LINEAR_PURSUIT_END'
+                protocol_type = 'Linear Pursuit'
+            
+            if not protocol_type:
+                raise ValueError("No se encontraron eventos de inicio/fin de protocolo conocidos.")
+
+            # Obtener los índices correctamente
+            start_event_rows = events_df[events_df['event'] == start_event]
+            end_event_rows = events_df[events_df['event'] == end_event]
+            
+            if start_event_rows.empty or end_event_rows.empty:
+                raise ValueError(f"No se encontraron eventos completos para {protocol_type}")
+            
+            # Obtener los índices en el DataFrame original
+            start_idx = start_event_rows.index[0]
+            end_idx = end_event_rows.index[0]
+            
+            print(f"Protocolo detectado: {protocol_type}")
+            print(f"Índice inicio: {start_idx}, Índice fin: {end_idx}")
+            print(f"Longitud original eog_filtered_uv: {len(self.eog_filtered_uv)}")
+            print(f"Longitud original DataFrame: {len(self.df)}")
+            
+            # ✅ CORRECCIÓN: Verificar que los índices sean válidos
+            if start_idx >= len(self.eog_filtered_uv) or end_idx >= len(self.eog_filtered_uv):
+                raise ValueError(f"Índices fuera de rango: start={start_idx}, end={end_idx}, len={len(self.eog_filtered_uv)}")
+            
+            # Convertir timestamps a tiempo relativo desde el inicio
+            timestamps_segment = self.df['timestamp'].iloc[start_idx:end_idx+1].values
+            self.time_seconds = (timestamps_segment - timestamps_segment[0]) / 1000.0
+            
+            # ✅ CORRECCIÓN: Recortar la señal filtrada usando slice numpy
+            self.eog_filtered_uv = self.eog_filtered_uv[start_idx:end_idx+1]
+            
+            print(f"Datos recortados: {len(self.time_seconds)} muestras, {self.time_seconds[-1]:.1f}s")
+            print(f"Nueva longitud eog_filtered_uv: {len(self.eog_filtered_uv)}")
+            
+            # Recortar los eventos también para la generación de referencia
+            events_segment = events_df.iloc[start_idx:end_idx+1].copy()
+            
+            # Generar señal de referencia
+            reference_signal = self.generate_reference_signal(protocol_type, events_segment)
+
+            # Actualizar plots con datos recortados
+            self.update_plots(reference_signal)
+            
+            # Configurar slider de navegación para el nuevo rango
+            duration = self.time_seconds[-1] - self.time_seconds[0]
+            max_time = max(0, duration - self.window_duration)
+            self.time_slider.setMaximum(int(max_time * 10)) # Mayor resolución
+            self.time_slider.setValue(0)
+            self.current_position = self.time_seconds[0] # Posición inicial
+            
+            self.plot_eog.setTitle(f"Señal EOG Procesada - {protocol_type}")
+            
+            print(f"Segmentación completada para {protocol_type}")
+
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error al procesar señal:\n{str(e)}")
-            self.progress_bar.setVisible(False)
-            self.process_btn.setEnabled(True)
+            print(f"Error en segmentación: {e}")
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "Error de Segmentación", f"No se pudo procesar el protocolo: {e}")
+
+    def generate_reference_signal(self, protocol_type, events_df):
+        """Genera la forma de onda ideal (cuadrada o triangular) basada en los eventos."""
+        print(f"Generando señal de referencia para: {protocol_type}")
+        
+        # Crear un array de referencia vacío con la misma longitud que la señal recortada
+        reference = np.zeros_like(self.time_seconds, dtype=float)
+        
+        if protocol_type == 'Step Fixation':
+            # Generar onda cuadrada
+            # Filtrar solo los eventos de estímulo relevantes
+            stim_events = events_df[events_df['event'].str.contains("STIMULUS_ANGLE", na=False)].copy()
+            print(f"Eventos de estímulo encontrados: {len(stim_events)}")
             
-    def on_filtering_completed(self, result):
-        """Callback cuando el filtrado se completa"""
-        try:
-            self.eog_filtered_uv = result['filtered']  # Ya en µV
-            self.filtering_metadata = result['metadata']
-            self.blink_artifacts = result['blink_artifacts']
+            if stim_events.empty:
+                print("No se encontraron eventos STIMULUS_ANGLE")
+                return reference # No hay eventos para procesar
+
+            # Asegurar que los timestamps están ordenados
+            stim_events = stim_events.sort_values('timestamp')
+
+            for i in range(len(stim_events)):
+                current_event = stim_events.iloc[i]
+                
+                # Extraer el ángulo del evento
+                try:
+                    event_parts = current_event['event'].split('_')
+                    angle_str = event_parts[-1]  # Última parte después del último _
+                    angle = float(angle_str)
+                    print(f"Procesando evento: {current_event['event']}, ángulo: {angle}°")
+                except (ValueError, IndexError) as e:
+                    print(f"Error extrayendo ángulo de {current_event['event']}: {e}")
+                    continue # Ignorar eventos mal formados
+
+                # Definir el rango de tiempo para este ángulo
+                start_time = (current_event['timestamp'] - events_df['timestamp'].iloc[0]) / 1000.0
+                
+                if i + 1 < len(stim_events):
+                    end_time = (stim_events.iloc[i + 1]['timestamp'] - events_df['timestamp'].iloc[0]) / 1000.0
+                else:
+                    end_time = self.time_seconds[-1]
+                
+                # Crear una máscara booleana para aplicar el ángulo
+                mask = (self.time_seconds >= start_time) & (self.time_seconds < end_time)
+                samples_affected = np.sum(mask)
+                print(f"  Tiempo: {start_time:.2f}-{end_time:.2f}s, muestras: {samples_affected}")
+                
+                reference[mask] = angle
+        
+        elif protocol_type == 'Linear Pursuit':
+            # Generar onda triangular
+            edge_events = events_df[events_df['event'].str.contains("PURSUIT_EDGE", na=False)].copy()
+            print(f"Eventos de edge encontrados: {len(edge_events)}")
             
-            # Ocultar barra de progreso
-            self.progress_bar.setVisible(False)
-            self.process_btn.setEnabled(True)
-            
-            # Actualizar gráficas
-            self.update_filtered_plot()
-            self.update_quality_info()
-            
-            # Mostrar rango de señal filtrada
-            filtered_range = f"{np.min(self.eog_filtered_uv):.1f} - {np.max(self.eog_filtered_uv):.1f} µV"
-            
-            QMessageBox.information(
-                self,
-                "Filtrado Completado",
-                f"Señal procesada exitosamente!\n\n"
-                f"Duración: {self.filtering_metadata['duration_sec']:.1f}s\n"
-                f"Calidad: {self.filtering_metadata['signal_quality']}\n"
-                f"Artefactos detectados: {self.filtering_metadata['blink_artifacts_detected']}\n"
-                f"Rango filtrado: {filtered_range}"
-            )
-            
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error procesando resultado:\n{str(e)}")
-            
+            if len(edge_events) < 2: 
+                print("Insuficientes eventos PURSUIT_EDGE para generar triangular")
+                return reference
+
+            edge_events = edge_events.sort_values('timestamp')
+
+            for i in range(len(edge_events) - 1):
+                start_event_row = edge_events.iloc[i]
+                end_event_row = edge_events.iloc[i+1]
+                
+                start_angle = -20.0 if 'LEFT' in start_event_row['event'] else 20.0
+                end_angle = -20.0 if 'LEFT' in end_event_row['event'] else 20.0
+                
+                start_time = (start_event_row['timestamp'] - events_df['timestamp'].iloc[0]) / 1000.0
+                end_time = (end_event_row['timestamp'] - events_df['timestamp'].iloc[0]) / 1000.0
+
+                # Asegurarse de que el tiempo no vaya hacia atrás
+                if end_time <= start_time: 
+                    print(f"Tiempo inválido: {start_time} -> {end_time}")
+                    continue
+
+                mask = (self.time_seconds >= start_time) & (self.time_seconds <= end_time)
+                time_segment = self.time_seconds[mask]
+                
+                # Interpolación lineal
+                if len(time_segment) > 0:
+                    reference[mask] = np.interp(time_segment, [start_time, end_time], [start_angle, end_angle])
+                    print(f"  Segmento {i}: {start_angle}° -> {end_angle}°, {len(time_segment)} muestras")
+
+        print(f"Señal de referencia generada: rango {np.min(reference):.1f} - {np.max(reference):.1f}°")
+        return reference
+
     def on_filtering_error(self, error_msg):
         """Callback cuando ocurre error en el filtrado"""
         self.progress_bar.setVisible(False)
-        self.process_btn.setEnabled(True)
+        self.load_file_btn.setEnabled(True)
         QMessageBox.critical(self, "Error en Filtrado", error_msg)
         
     def update_window_duration(self, value):
@@ -540,113 +616,50 @@ class OfflineAnalysisWindow(QMainWindow):
         
         if self.time_seconds is not None:
             # Reconfigurar slider
-            max_time = max(0, self.time_seconds[-1] - self.window_duration)
-            self.time_slider.setMaximum(int(max_time))
+            duration = self.time_seconds[-1] - self.time_seconds[0]
+            max_time = max(0, duration - self.window_duration)
+            self.time_slider.setMaximum(int(max_time * 10))
             
             # Actualizar gráficas
             self.update_plots()
             
     def update_time_position(self, value):
-        """Actualizar posición temporal"""
-        self.current_position = value
+        """Actualizar posición temporal desde el slider."""
+        if self.time_seconds is None: return
+        start_offset = self.time_seconds[0]
+        self.current_position = start_offset + (value / 10.0)
         self.update_plots()
         
-        if self.time_seconds is not None:
-            total_time = self.time_seconds[-1]
-            self.position_label.setText(f"Posición: {value:.1f} / {total_time:.1f} s")
+        total_duration = self.time_seconds[-1] - self.time_seconds[0]
+        current_duration = self.current_position - start_offset
+        self.position_label.setText(f"Posición: {current_duration:.1f} / {total_duration:.1f} s")
             
-    def update_raw_plot(self):
-        """Actualizar gráfica de señal cruda (en µV)"""
-        if self.eog_raw_uv is None or self.time_seconds is None:
-            return
-            
-        # Obtener ventana de datos
-        start_time = self.current_position
-        end_time = start_time + self.window_duration
-        
-        mask = (self.time_seconds >= start_time) & (self.time_seconds <= end_time)
-        time_window = self.time_seconds[mask]
-        data_window = self.eog_raw_uv[mask]  # Usar datos en µV
-        
-        if len(time_window) > 0:
-            self.curve_raw.setData(time_window, data_window)
-            self.plot_raw.setXRange(start_time, end_time, padding=0)
-            
-    def update_filtered_plot(self):
-        """Actualizar gráfica de señal filtrada (en µV)"""
+    def update_plots(self, reference_signal=None):
+        """Actualizar ambas gráficas con los datos actuales."""
         if self.eog_filtered_uv is None or self.time_seconds is None:
             return
-            
-        # Obtener ventana de datos
+
         start_time = self.current_position
         end_time = start_time + self.window_duration
         
         mask = (self.time_seconds >= start_time) & (self.time_seconds <= end_time)
         time_window = self.time_seconds[mask]
-        data_window = self.eog_filtered_uv[mask]  # Usar datos filtrados en µV
         
+        # Actualizar plot EOG
+        eog_window = self.eog_filtered_uv[mask]
         if len(time_window) > 0:
-            self.curve_filtered.setData(time_window, data_window)
-            self.plot_filtered.setXRange(start_time, end_time, padding=0)
-            
-            # Marcar artefactos de parpadeo si existen
-            if hasattr(self, 'blink_artifacts') and self.blink_artifacts:
-                for artifact_idx in self.blink_artifacts:
-                    artifact_time = self.time_seconds[artifact_idx]
-                    if start_time <= artifact_time <= end_time:
-                        # Añadir línea vertical para marcar artefacto
-                        line = pg.InfiniteLine(
-                            artifact_time, 
-                            angle=90, 
-                            pen=pg.mkPen(color='#FF9800', width=2, style=Qt.DashLine)
-                        )
-                        self.plot_filtered.addItem(line)
-            
-    def update_plots(self):
-        """Actualizar ambas gráficas"""
-        self.update_raw_plot()
-        if self.eog_filtered_uv is not None:
-            self.update_filtered_plot()
-            
-    def update_statistics(self):
-        """Actualizar estadísticas de la señal (en µV)"""
-        if self.eog_raw_uv is None:
-            return
-            
-        stats = f"""Estadísticas Señal Cruda:
-• Muestras: {len(self.eog_raw_uv)}
-• Duración: {self.time_seconds[-1]:.2f} segundos
-• Freq. Muestreo: {self.sample_rate:.1f} Hz
-• Media: {np.mean(self.eog_raw_uv):.2f} µV
-• Std: {np.std(self.eog_raw_uv):.2f} µV
-• Rango: {np.min(self.eog_raw_uv):.2f} - {np.max(self.eog_raw_uv):.2f} µV
-• Factor conversión: {ADC_TO_MICROVOLTS:.6f}"""
+            self.curve_eog.setData(time_window, eog_window)
+            self.plot_eog.setXRange(start_time, end_time, padding=0)
+
+        # Actualizar plot de referencia si se proporciona
+        if reference_signal is not None:
+            self.reference_signal = reference_signal # Guardar para futuros updates
         
-        self.stats_label.setText(stats)
-        
-    def update_quality_info(self):
-        """Actualizar información de calidad del filtrado"""
-        if not hasattr(self, 'filtering_metadata'):
-            return
-            
-        meta = self.filtering_metadata
-        
-        # Calcular estadísticas adicionales del filtrado
-        if self.eog_filtered_uv is not None:
-            filtered_std = np.std(self.eog_filtered_uv)
-            noise_reduction = (np.std(self.eog_raw_uv) - filtered_std) / np.std(self.eog_raw_uv) * 100
-        else:
-            noise_reduction = 0
-        
-        quality_info = f"""Información del Filtrado:
-• Calidad: {meta['signal_quality']}
-• DC removido: {meta['dc_offset_removed']:.2f} µV
-• Reducción 50Hz: {meta['powerline_reduction_db']:.1f} dB
-• Reducción ruido: {noise_reduction:.1f}%
-• Artefactos: {meta['blink_artifacts_detected']}
-• Pasos: {', '.join(meta['processing_steps'])}"""
-        
-        self.quality_label.setText(quality_info)
+        if hasattr(self, 'reference_signal'):
+            ref_window = self.reference_signal[mask]
+            if len(time_window) > 0:
+                self.curve_reference.setData(time_window, ref_window)
+                self.plot_reference.setXRange(start_time, end_time, padding=0)
 
 
 # Para pruebas independientes
@@ -654,6 +667,8 @@ if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication
     
     app = QApplication(sys.argv)
+    
+    # Crear ventana de prueba de Análisis Offline
     window = OfflineAnalysisWindow()
     window.show()
     sys.exit(app.exec())
