@@ -49,7 +49,7 @@ class FilteringThread(QThread):
         """Ejecutar filtrado en hilo separado"""
         try:
             self.progress_updated.emit(25)
-            offline_filter = OfflineEOGFilter(fs=self.sample_rate)
+            offline_filter = OfflineEOGFilter(fs=self.sample_rate, lp_cutoff=5.0)
             
             self.progress_updated.emit(50)
             # Aplicar filtrado con fase cero
@@ -222,20 +222,24 @@ class OfflineAnalysisWindow(QMainWindow):
         plots_layout = QVBoxLayout(plots_frame)
         plots_layout.setContentsMargins(10, 10, 10, 10)
         
-        pg.setConfigOption('background', '#1A1A1A')
-        pg.setConfigOption('foreground', '#FFFFFF')
+        pg.setConfigOption('background', 'w') # pg.setConfigOption('background', '#1A1A1A')
+        pg.setConfigOption('foreground', 'k') # pg.setConfigOption('foreground', '#FFFFFF')
         
         # Gráfica superior: Señal EOG procesada
         self.plot_eog = pg.PlotWidget(title="Señal EOG Procesada (Filtrada y Recortada)")
         self.plot_eog.setFixedHeight(300)
         self.plot_eog.setLabel('left', 'Amplitud', units='µV')
         self.plot_eog.setLabel('bottom', 'Tiempo', units='s')
+        self.plot_eog.setYRange(-400, 650)  # Rango inicial de amplitud
+        self.plot_eog.showGrid(x=True, y=True, alpha=0.3)
         
         # Gráfica inferior: Señal de referencia ideal
         self.plot_reference = pg.PlotWidget(title="Señal de Referencia Ideal")
         self.plot_reference.setFixedHeight(200)
         self.plot_reference.setLabel('left', 'Ángulo', units='°')
         self.plot_reference.setLabel('bottom', 'Tiempo', units='s')
+        self.plot_reference.setYRange(-40, 40)  # Rango inicial de ángulo
+        self.plot_reference.showGrid(x=True, y=True, alpha=0.3)
         
         # Sincronizar zoom y paneo en el eje X
         self.plot_reference.setXLink(self.plot_eog)
@@ -254,7 +258,7 @@ class OfflineAnalysisWindow(QMainWindow):
         # Control de ventana de tiempo
         window_label = QLabel("Ventana:")
         self.window_spinbox = QSpinBox()
-        self.window_spinbox.setRange(2, 30)
+        self.window_spinbox.setRange(2, 60)
         self.window_spinbox.setValue(8)
         self.window_spinbox.setSuffix(" segundos")
         self.window_spinbox.valueChanged.connect(self.update_window_duration)

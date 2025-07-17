@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.models.devices import Devices, KNOWN_SLAVES
 
 # Importación del filtro en tiempo real
-from src.utils.signal_processing import RealTimeFilter, PulseDetector  # Añadir PulseDetector
+from src.utils.signal_processing import RealTimeFilter, PPGHeartRateCalculator  # Añadir PPGHeartRateCalculator
 
 # Configuración constantes
 SAMPLE_RATE = 125  # Hz (tasa efectiva: 250 SPS ÷ 2 canales)
@@ -88,7 +88,7 @@ class SensorMonitor(QWidget):
         )
         
         # Añadir detector de pulsos y variables para BPM
-        self.pulse_detector = PulseDetector(sample_rate=SAMPLE_RATE)
+        self.pulse_detector = PPGHeartRateCalculator(sample_rate=SAMPLE_RATE)
         self.current_heart_rate = 0
         self.bpm_values = deque(initial_values, maxlen=self.display_size)
         self.bpm_datos = []  # Para almacenar BPM para CSV
@@ -597,7 +597,7 @@ class SensorMonitor(QWidget):
         self.ppg_filter.reset()
         
         # Crear una nueva instancia:
-        self.pulse_detector = PulseDetector(sample_rate=SAMPLE_RATE)
+        self.pulse_detector = PPGHeartRateCalculator(sample_rate=SAMPLE_RATE)
         self.current_heart_rate = 0
         
         # Clear and reset data buffers
