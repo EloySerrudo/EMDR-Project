@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Importaciones del proyecto
 from src.models.devices import Devices, KNOWN_SLAVES
-from src.utils.signal_processing import RealTimeFilter, PPGHeartRateCalculator
+from src.utils.signal_processing import OnlinePPGFilter, PPGHeartRateCalculator
 
 # Configuración de constantes
 SAMPLE_RATE = 125  # Hz
@@ -78,7 +78,7 @@ class PulseTestWindow(QMainWindow):
         # Procesamiento de señales
         self.lowcut_freq = 0.2  # Hz
         self.highcut_freq = 10.0  # Hz
-        self.ppg_filter = RealTimeFilter(
+        self.ppg_filter = OnlinePPGFilter(
             filter_type='bandpass', 
             fs=SAMPLE_RATE, 
             lowcut=self.lowcut_freq, 

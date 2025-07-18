@@ -8,7 +8,7 @@ import numpy as np
 from scipy import signal
 from collections import deque
 
-class RealTimeFilter:
+class OnlinePPGFilter:
     """Clase para implementar filtros en tiempo real."""
     
     def __init__(self, filter_type='bandpass', fs=125, lowcut=0.5, highcut=5.0, order=4):
