@@ -9,7 +9,10 @@ import pandas as pd
 from datetime import datetime
 
 # PyQtGraph y PySide6 imports
-from PySide6.QtWidgets import QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, 
+    QLabel, QPushButton, QFrame, QMessageBox
+)
 from PySide6.QtCore import QTimer, Qt, Signal, QObject
 import pyqtgraph as pg
 
@@ -20,7 +23,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.models.devices import Devices, KNOWN_SLAVES
 
 # Importación del filtro en tiempo real
-from src.utils.signal_processing import RealTimeFilter, PPGHeartRateCalculator  # Añadir PPGHeartRateCalculator
+from src.utils.signal_processing import OnlinePPGFilter, OnlineEOGFilter, PPGHeartRateCalculator
 
 # Configuración constantes
 SAMPLE_RATE = 125  # Hz (tasa efectiva: 250 SPS ÷ 2 canales)
@@ -67,28 +70,34 @@ class SensorMonitor(QWidget):
         self.ppg_values = deque(initial_values, maxlen=self.display_size)
         self.filtered_ppg_values = deque(initial_values, maxlen=self.display_size)
         
-        # For unlimited data storage (for saving to CSV)
-        self.idx = []
-        self.tiempos = []
-        
-        # Para EOG
-        self.eog_datos = []
-        self.eog_datos_filtrados = []
-        
-        # Para PPG
-        self.ppg_datos = []
-        self.ppg_datos_filtrados = []
+        # Datos para CSV
+        self.csv_data = {
+            'index': [],
+            'timestamp': [],
+            'eog_raw': [],
+            'ppg_raw': [],
+            'pulse_bpm': [],
+        }
         
         # Filtros para ambas señales
-        self.eog_filter = RealTimeFilter(
-            filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.1, highcut=20.0, order=6
+        self.eog_filter = OnlineEOGFilter(
+            fs=SAMPLE_RATE, 
+            hp_cutoff=0.05,     # Conserva movimientos oculares lentos
+            lp_cutoff=30.0,     # Banda útil para EOG
+            notch_freq=50,      # Elimina interferencia de 50Hz
+            notch_q=30,         # Factor de calidad del notch
+            fir_taps=101        # Filtro FIR con fase lineal
         )
-        self.ppg_filter = RealTimeFilter(
-            filter_type='bandpass', fs=SAMPLE_RATE, lowcut=0.5, highcut=8.0, order=4
+        self.ppg_filter = OnlinePPGFilter(
+            filter_type='bandpass', 
+            fs=SAMPLE_RATE, 
+            lowcut=0.2,     # 0.5 Hz 
+            highcut=10.0, 
+            order=4
         )
         
         # Añadir detector de pulsos y variables para BPM
-        self.pulse_detector = PPGHeartRateCalculator(sample_rate=SAMPLE_RATE)
+        self.bpm_calculator = PPGHeartRateCalculator(sample_rate=SAMPLE_RATE)
         self.current_heart_rate = 0
         self.bpm_values = deque(initial_values, maxlen=self.display_size)
         self.bpm_datos = []  # Para almacenar BPM para CSV
@@ -341,7 +350,7 @@ class SensorMonitor(QWidget):
         eog_plot = pg.PlotWidget()
         eog_plot.setFixedHeight(height)
         eog_plot.setLabel('bottom', '')
-        eog_plot.setYRange(-15000, 15000)
+        eog_plot.setYRange(-14000, 10000)
         eog_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
@@ -373,7 +382,7 @@ class SensorMonitor(QWidget):
         bpm_plot = pg.PlotWidget()
         bpm_plot.setFixedHeight(height)
         bpm_plot.setLabel('bottom', '')
-        bpm_plot.setYRange(40, 145)
+        bpm_plot.setYRange(50, 120)
         bpm_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
@@ -419,7 +428,7 @@ class SensorMonitor(QWidget):
         ppg_plot = pg.PlotWidget()
         ppg_plot.setFixedHeight(height)
         ppg_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
-        ppg_plot.setYRange(-40000, 40000)
+        ppg_plot.setYRange(-20000, 40000)
         ppg_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
         # Aplicar tema moderno
@@ -484,7 +493,7 @@ class SensorMonitor(QWidget):
             anchor=(0, 0),
             fill=pg.mkBrush(255, 255, 255, 200)
         )
-        self.bpm_text.setPos(-3.5, 145)
+        self.bpm_text.setPos(-3.5, 116)
         self.bpm_plot.addItem(self.bpm_text)
         
         # Leyenda para BPM con estilo moderno
@@ -591,13 +600,13 @@ class SensorMonitor(QWidget):
             print("Use el botón 'Escanear Dispositivos' para verificar conexiones.\n")
             return
         
-        self.last_packet_id = -1
         # Reset filter
         self.eog_filter.reset()
         self.ppg_filter.reset()
+        self.last_packet_id = -1
         
         # Crear una nueva instancia:
-        self.pulse_detector = PPGHeartRateCalculator(sample_rate=SAMPLE_RATE)
+        self.bpm_calculator = PPGHeartRateCalculator(sample_rate=SAMPLE_RATE)
         self.current_heart_rate = 0
         
         # Clear and reset data buffers
@@ -617,14 +626,14 @@ class SensorMonitor(QWidget):
         self.filtered_ppg_values.extend(initial_values)
         self.bpm_values.extend(initial_values)  # Inicializar buffer de BPM
         
-        # Clear lists for CSV data storage
-        self.idx = []
-        self.tiempos = []
-        self.eog_datos = []
-        self.eog_datos_filtrados = []
-        self.ppg_datos = []
-        self.ppg_datos_filtrados = []
-        self.bpm_datos = []  # Limpiar datos de BPM
+        # Limpiar datos previos
+        self.csv_data = {
+            'index': [],
+            'timestamp': [],
+            'eog_raw': [],
+            'ppg_raw': [],
+            'pulse_bpm': [],
+        }
         
         # Send command to ESP32 to start capture usando Devices
         Devices.start_sensor()
@@ -632,6 +641,9 @@ class SensorMonitor(QWidget):
         # Start capture
         self.running = True
         
+        # GUARDAR TIMESTAMP DE INICIO UNA SOLA VEZ
+        self.start_datetime = datetime.now()
+
         # Start reading thread
         self.reading_thread = threading.Thread(target=self._read_data)
         self.reading_thread.daemon = True
@@ -839,56 +851,46 @@ class SensorMonitor(QWidget):
                                 timestamp_ms = struct.unpack('<I', data_buffer[6:10])[0]
                                 timestamp_s = timestamp_ms / 1000.0  # Convert to seconds
                                 
-                                # PPG value (2 bytes) en data_buffer[10:12]
-                                ppg_value = struct.unpack('<h', data_buffer[10:12])[0]
+                                # PPG crudo (2 bytes) en data_buffer[10:12]
+                                ppg_raw = struct.unpack('<h', data_buffer[10:12])[0]
                                 
-                                # EOG value (2 bytes) en data_buffer[12:14]
-                                eog_value = struct.unpack('<h', data_buffer[12:14])[0]
+                                # EOG crudo (2 bytes) en data_buffer[12:14]
+                                eog_raw = struct.unpack('<h', data_buffer[12:14])[0]
                                 
                                 # Device ID (1 byte) is at position 14
                                 device_id = data_buffer[14]
                                 
                                 # Apply real-time filters
-                                filtered_ppg_value = self.ppg_filter.filter(ppg_value)
-                                filtered_eog_value = self.eog_filter.filter(eog_value)
+                                ppg_filtered = self.ppg_filter.filter(ppg_raw)
+                                eog_filtered = self.eog_filter.filter(eog_raw)
                                 
-                                # Detectar pulso y actualizar BPM
-                                pulse_detected, pulse_state = self.pulse_detector.add_sample(
-                                    filtered_ppg_value, timestamp_s
-                                )
+                                # Calcular BPM
+                                result = self.bpm_calculator.add_sample(ppg_filtered, timestamp_s)
                                 
-                                # Actualizar frecuencia cardíaca cuando hay un pulso
-                                if pulse_detected:
-                                    self.current_heart_rate = self.pulse_detector.get_heart_rate()
+                                # Actualizar BPM
+                                self.current_heart_rate = result['bpm'] if result['bpm'] is not None else 0
                                 
-                                # Add to deques for display
+                                # Actualizar buffers de visualización
                                 self.times.append(timestamp_s)
                                 
                                 # PPG data (para procesamiento y datos crudos)
-                                self.ppg_values.append(ppg_value)
-                                self.filtered_ppg_values.append(filtered_ppg_value)
+                                self.ppg_values.append(ppg_raw)
+                                self.filtered_ppg_values.append(ppg_filtered)
                                 
                                 # EOG data
-                                self.eog_values.append(eog_value)
-                                self.filtered_eog_values.append(filtered_eog_value)
+                                self.eog_values.append(eog_raw)
+                                self.filtered_eog_values.append(eog_filtered)
                                 
                                 # BPM data
-                                self.bpm_values.append(self.current_heart_rate)
+                                pulse_display_value = self.current_heart_rate if self.current_heart_rate else 0
+                                self.bpm_values.append(pulse_display_value)
                                 
-                                # Add to lists for CSV storage
-                                self.idx.append(packet_id)
-                                self.tiempos.append(timestamp_ms)
-                                
-                                # PPG data for storage
-                                self.ppg_datos.append(ppg_value)
-                                self.ppg_datos_filtrados.append(filtered_ppg_value)
-                                
-                                # EOG data for storage
-                                self.eog_datos.append(eog_value)
-                                self.eog_datos_filtrados.append(filtered_eog_value)
-                                
-                                # BPM data for storage
-                                self.bpm_datos.append(self.current_heart_rate)
+                                # Guardar datos para CSV
+                                self.csv_data['index'].append(packet_id)
+                                self.csv_data['timestamp'].append(timestamp_ms)
+                                self.csv_data['eog_raw'].append(eog_raw)
+                                self.csv_data['ppg_raw'].append(ppg_raw)
+                                self.csv_data['pulse_bpm'].append(pulse_display_value)
                             else:
                                 # Invalid header, discard initial byte and continue
                                 data_buffer = data_buffer[1:]
@@ -909,7 +911,7 @@ class SensorMonitor(QWidget):
                 time.sleep(0.1)  # Longer pause on error
 
     def update_plot(self):
-        """Update the plots with new data"""
+        """Actualizar las gráficas"""
         if len(self.times) > 0:
             # Convert deques to numpy arrays for plotting
             x_data = np.array(self.times)
@@ -952,10 +954,9 @@ class SensorMonitor(QWidget):
     def save_data_to_csv(self):
         """Save collected data to CSV file with modern dialog"""
         try:
-            if len(self.idx) == 0:
+            if not any(self.csv_data.values()) or len(self.csv_data['index']) == 0:
                 print("No hay datos para guardar")
                 # Mostrar mensaje con estilo moderno
-                from PySide6.QtWidgets import QMessageBox
                 msg = QMessageBox(self)
                 msg.setWindowTitle("Sin Datos")
                 msg.setText("No hay datos para guardar.")
@@ -989,17 +990,18 @@ class SensorMonitor(QWidget):
                 msg.exec()
                 return
                 
-            # Create DataFrame with data including BPM, PPG and EOG
-            data = {
-                'ID': self.idx,
-                'Timestamp_ms': self.tiempos,
-                'EOG_raw': self.eog_datos,
-                'EOG_filtrado': self.eog_datos_filtrados,
-                'PPG_raw': self.ppg_datos,
-                'PPG_filtrado': self.ppg_datos_filtrados,
-                'BPM': self.bpm_datos
-            }
-            df = pd.DataFrame(data)
+            # CONVERTIR TIMESTAMPS DIRECTAMENTE EN EL DICCIONARIO EXISTENTE
+            converted_timestamps = []
+            for timestamp_ms in self.csv_data['timestamp']:
+                absolute_timestamp = self.start_datetime + pd.Timedelta(milliseconds=timestamp_ms)
+                timestamp_formatted = absolute_timestamp.strftime("%H:%M:%S.%f")[:-3]  # HH:MM:SS.mmm
+                converted_timestamps.append(timestamp_formatted)
+            
+            # REEMPLAZAR TIMESTAMPS EN EL DICCIONARIO ORIGINAL
+            self.csv_data['timestamp'] = converted_timestamps
+            
+            # Crear DataFrame directamente con el diccionario modificado
+            df = pd.DataFrame(self.csv_data)
             
             # Create data directory if it doesn't exist
             data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
@@ -1012,14 +1014,13 @@ class SensorMonitor(QWidget):
             # Save data
             df.to_csv(filename, index=False)
             print(f"\nDatos guardados en: {filename}")
-            print(f"Total de muestras guardadas: {len(self.idx)}")
+            print(f"Total de muestras guardadas: {len(df)}")
             
             # Mostrar mensaje de éxito con estilo moderno
-            from PySide6.QtWidgets import QMessageBox
             msg = QMessageBox(self)
             msg.setWindowTitle("Datos Guardados")
             msg.setText("Los datos se han guardado exitosamente.")
-            msg.setInformativeText(f"Archivo: {os.path.basename(filename)}\nMuestras: {len(self.idx)}")
+            msg.setInformativeText(f"Archivo: {os.path.basename(filename)}\nMuestras: {len(df)}")
             msg.setIcon(QMessageBox.Information)
             msg.setStyleSheet("""
                 QMessageBox {
@@ -1051,7 +1052,6 @@ class SensorMonitor(QWidget):
         except Exception as e:
             print(f"Error al guardar datos: {e}")
             # Mostrar mensaje de error con estilo moderno
-            from PySide6.QtWidgets import QMessageBox
             msg = QMessageBox(self)
             msg.setWindowTitle("Error al Guardar")
             msg.setText("Ocurrió un error al guardar los datos.")
@@ -1103,7 +1103,7 @@ class SensorMonitor(QWidget):
             if self.reading_thread.is_alive():
                 print("Advertencia: Thread de lectura no terminó correctamente")
         
-        if self.is_standalone and len(self.idx) > 0:
+        if self.is_standalone and len(self.csv_data['index']) > 0:
             # Si es aplicación independiente, guardar datos si existen
             print("\nGuardando datos en CSV antes de salir...")
             self.save_data_to_csv()

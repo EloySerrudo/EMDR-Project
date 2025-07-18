@@ -2,6 +2,9 @@ import os
 import sys
 import time
 import winsound
+import numpy as np
+import pickle
+import zlib
 from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
@@ -1071,7 +1074,7 @@ class EMDRControlPanel(QMainWindow):
             # Crear nueva sesión en la base de datos
             session_id = DatabaseManager.add_session(
                 id_paciente=self.current_patient["id"],
-                notas=f"Sesión iniciada el {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                comentarios=f"Sesión iniciada el {time.strftime('%Y-%m-%d %H:%M:%S')}"
             )
             
             self.current_session = session_id
@@ -1102,34 +1105,38 @@ class EMDRControlPanel(QMainWindow):
                 self.sensor_monitor.stop_acquisition()
             
             # Preparar los datos para almacenamiento
-            if len(self.sensor_monitor.eog_datos_filtrados) > 0:
+            if len(self.sensor_monitor.csv_data['index']) > 0:
                 # Serializar datos usando numpy para eficiencia
-                import numpy as np
-                import pickle
-                import zlib
                 
                 # Comprimir EOG (señal filtrada)
-                eog_data = np.array(self.sensor_monitor.eog_datos_filtrados)
+                eog_data = np.array(self.sensor_monitor.csv_data['eog_raw'])
                 eog_bytes = pickle.dumps(eog_data)
                 eog_compressed = zlib.compress(eog_bytes)
                 
                 # Comprimir PPG (señal filtrada)
-                ppg_data = np.array(self.sensor_monitor.ppg_datos_filtrados)
+                ppg_data = np.array(self.sensor_monitor.csv_data['ppg_raw'])
                 ppg_bytes = pickle.dumps(ppg_data)
                 ppg_compressed = zlib.compress(ppg_bytes)
                 
                 # Comprimir BPM
-                bpm_data = np.array(self.sensor_monitor.bpm_datos)
+                bpm_data = np.array(self.sensor_monitor.csv_data['pulse_bpm'])
                 bpm_bytes = pickle.dumps(bpm_data)
                 bpm_compressed = zlib.compress(bpm_bytes)
                 self.sensor_monitor.save_data_to_csv()
+                
+                # Comprimir timestamp
+                timestamps = np.array(self.sensor_monitor.csv_data['timestamp'])
+                timestamps_bytes = pickle.dumps(timestamps)
+                timestamps_compressed = zlib.compress(timestamps_bytes)
+                
                 # Actualizar registro en la base de datos
                 DatabaseManager.update_session(
                     self.current_session,
+                    datos_ms=timestamps_compressed,
                     datos_eog=eog_compressed,
                     datos_ppg=ppg_compressed,
                     datos_bpm=bpm_compressed,
-                    notas=f"Sesión actualizada el {time.strftime('%Y-%m-%d %H:%M:%S')}. "
+                    comentarios=f"Sesión actualizada el {time.strftime('%Y-%m-%d %H:%M:%S')}. "
                           f"Datos almacenados: {len(eog_data)} muestras."
                 )
                 
@@ -1141,7 +1148,7 @@ class EMDRControlPanel(QMainWindow):
                 )
                 
                 # Opcionalmente, también guardar en CSV como respaldo
-                self.sensor_monitor.save_data_to_csv()
+                # self.sensor_monitor.save_data_to_csv()
             else:
                 QMessageBox.warning(
                     self, 
