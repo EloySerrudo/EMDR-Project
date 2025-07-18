@@ -13,11 +13,11 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QIcon, QPixmap
 
 # Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 # Importar la clase DatabaseManager
 from src.database.database_manager import DatabaseManager
-from src.views.session_viewer import SessionViewerWindow
+from views.therapist.session_viewer import SessionViewerWindow
 
 class PatientDetailsDialog(QDialog):
     """Diálogo para mostrar los detalles completos de un paciente"""
@@ -509,7 +509,7 @@ class PatientManagerWidget(QMainWindow):
         self.username = username
         
         self.setWindowTitle("EMDR Project - Gestión de Pacientes")
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
         self.resize(800, 600)
         self.patients_data = []
         
@@ -555,7 +555,7 @@ class PatientManagerWidget(QMainWindow):
         logo_label = QLabel()
         
         # Intentar cargar logo desde recursos
-        logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        logo_path = Path(__file__).parent.parent.parent / 'resources' / 'emdr_logo.png'
         if logo_path.exists():
             pixmap = QPixmap(str(logo_path))
             pixmap = pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)

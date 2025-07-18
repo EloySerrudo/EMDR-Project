@@ -11,7 +11,7 @@ import hashlib
 import qtawesome as qta
 
 # Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 # Importar la clase DatabaseManager
 from src.database.database_manager import DatabaseManager
@@ -31,7 +31,7 @@ class LoginWidget(QWidget):
         self.setWindowTitle("EMDR Project - Iniciar Sesión")
         self.setFixedSize(400, 650)
         self.setWindowFlag(Qt.MSWindowsFixedSizeDialogHint, True)
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
         
         # Layout principal
         main_layout = QVBoxLayout(self)
@@ -66,7 +66,7 @@ class LoginWidget(QWidget):
         logo_label = QLabel()
         
         # Intentar cargar logo desde recursos
-        logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        logo_path = Path(__file__).parent.parent.parent / 'resources' / 'emdr_logo.png'
         if logo_path.exists():
             pixmap = QPixmap(str(logo_path))
             pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)

@@ -717,7 +717,7 @@ class DatabaseManager:
         """
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, user, password, created_at FROM administradores WHERE user = ?",
+            "SELECT id, user, password FROM administradores WHERE user = ?",
             (username,)
         )
         
@@ -727,8 +727,7 @@ class DatabaseManager:
                 'id': row[0],
                 'user': row[1],
                 'nombre': row[1],  # Usar user como nombre por compatibilidad
-                'password': row[2],
-                'created_at': row[3]
+                'password': row[2]
             }
         return None
 

@@ -11,11 +11,11 @@ from pathlib import Path
 from datetime import datetime
 
 # Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 # Importaciones para componentes específicos
 from src.database.database_manager import DatabaseManager
-from src.views.admin_panel import AdminPanel
+from views.admin.admin_panel import AdminPanel
 from src.views.pulse_test_window import PulseTestWindow
 from src.views.eog_test_window import EOGTestWindow
 
@@ -57,7 +57,7 @@ class AdminDashboard(QMainWindow):
         """Configura las propiedades básicas de la ventana"""
         self.setWindowTitle("EMDR Project - Dashboard Administrativo")
         self.setFixedSize(600, 650)
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
         
         # Centrar ventana en pantalla
         self.center_on_screen()
@@ -109,7 +109,7 @@ class AdminDashboard(QMainWindow):
         logo_label = QLabel()
         
         # Intentar cargar logo desde recursos
-        logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        logo_path = Path(__file__).parent.parent.parent / 'resources' / 'emdr_logo.png'
         if logo_path.exists():
             pixmap = QPixmap(str(logo_path))
             pixmap = pixmap.scaled(260, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)

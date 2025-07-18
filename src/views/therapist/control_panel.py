@@ -17,7 +17,7 @@ import pyqtgraph as pg
 import qtawesome as qta
 
 # Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 # Importaciones para componentes específicos
 from src.models.devices import Devices, KNOWN_SLAVES
@@ -44,7 +44,7 @@ class EMDRControlPanel(QMainWindow):
         self.current_session = None
         
         self.setWindowTitle(f"EMDR Project - Dashboard Terapéutico")
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
         
         # Widget central
         central_widget = QWidget()
@@ -820,7 +820,7 @@ class EMDRControlPanel(QMainWindow):
         # logo_label = QLabel()
         # try:
         #     # Intentar cargar el logo
-        #     logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        #     logo_path = Path(__file__).parent.parent.parent / 'resources' / 'emdr_logo.png'
         #     if os.path.exists(logo_path):
         #         from PySide6.QtGui import QPixmap
         #         pixmap = QPixmap(logo_path)

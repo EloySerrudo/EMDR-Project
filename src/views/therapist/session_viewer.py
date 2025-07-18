@@ -15,7 +15,7 @@ from PySide6.QtGui import QFont, QIcon
 import pyqtgraph as pg
 
 # Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 from src.database.database_manager import DatabaseManager
 from src.analysis.session_analyzer import SessionAnalyzer
@@ -36,7 +36,7 @@ class SessionViewerWindow(QMainWindow):
         # Configurar ventana
         self.setWindowTitle("EMDR Project - Visor de Sesión")
         self.setGeometry(100, 100, 1400, 900)
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
         
         # Configurar UI
         self.setup_ui()

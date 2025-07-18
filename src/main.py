@@ -6,21 +6,17 @@ from PySide6.QtWidgets import QApplication
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Importaciones para componentes específicos
-from src.views.login import LoginWidget
-from src.database.db_connection import init_db
+from views.auth.login import LoginWidget
 # Añadir import para el dashboard de administrador
-from src.views.admin_dashboard import AdminDashboard
+from views.admin.admin_dashboard import AdminDashboard
 # Añadir import para el panel de control de EMDR
-from src.views.therapist_dashboard import TherapistDashboard
+from views.therapist.therapist_dashboard import TherapistDashboard
 
 # Modificar la función main() para manejar diferentes tipos de login
 def main():
     """Función principal que inicia la aplicación con autenticación"""
     # Inicializar la aplicación Qt
     app = QApplication(sys.argv)
-    
-    # Asegurar que la base de datos esté inicializada
-    init_db()
     
     # Variables para las ventanas principales
     login_window = None

@@ -11,12 +11,12 @@ from pathlib import Path
 from datetime import datetime  # Añadir esta importación
 
 # Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 # Importaciones para componentes específicos
 from src.database.database_manager import DatabaseManager
-from src.views.control_panel import EMDRControlPanel
-from src.views.patient_manager import PatientManagerWidget
+from views.therapist.control_panel import EMDRControlPanel
+from views.therapist.patient_manager import PatientManagerWidget
 
 
 class TherapistDashboard(QMainWindow):
@@ -56,7 +56,7 @@ class TherapistDashboard(QMainWindow):
         """Configura las propiedades básicas de la ventana"""
         self.setWindowTitle("EMDR Project - Dashboard Terapéutico")
         self.setFixedSize(600, 650)
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
         
         # Centrar ventana en pantalla
         self.center_on_screen()
@@ -108,7 +108,7 @@ class TherapistDashboard(QMainWindow):
         logo_label = QLabel()
         
         # Intentar cargar logo desde recursos
-        logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        logo_path = Path(__file__).parent.parent.parent / 'resources' / 'emdr_logo.png'
         if logo_path.exists():
             pixmap = QPixmap(str(logo_path))
             pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)

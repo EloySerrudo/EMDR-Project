@@ -12,7 +12,7 @@ from PySide6.QtGui import QIcon, QColor, QPixmap
 from pathlib import Path
 
 # Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 # Importar el gestor de base de datos
 from src.database.database_manager import DatabaseManager
@@ -335,7 +335,7 @@ class AdminPanel(QMainWindow):
         self.username = username
         
         self.setWindowTitle("EMDR Project - Panel de Administración")
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
         self.resize(1000, 700)
         
         # Centrar ventana en pantalla
@@ -391,7 +391,7 @@ class AdminPanel(QMainWindow):
         logo_label = QLabel()
         
         # Intentar cargar logo desde recursos
-        logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        logo_path = Path(__file__).parent.parent.parent / 'resources' / 'emdr_logo.png'
         if logo_path.exists():
             pixmap = QPixmap(str(logo_path))
             pixmap = pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
