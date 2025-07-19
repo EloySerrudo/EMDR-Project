@@ -3,9 +3,10 @@ import os
 import winsound
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QGridLayout, QMessageBox, QSizePolicy
+    QPushButton, QFrame, QGridLayout, QMessageBox, QSizePolicy, QDialog,
+    QLineEdit, QTextEdit, QDateEdit, QFormLayout, QDialogButtonBox
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QDate
 from PySide6.QtGui import QFont, QPixmap, QIcon
 from pathlib import Path
 from datetime import datetime  # Añadir esta importación
@@ -14,6 +15,7 @@ from datetime import datetime  # Añadir esta importación
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 # Importaciones para componentes específicos
+from views.therapist.add_patient_dialog import AddPatientDialog
 from src.database.database_manager import DatabaseManager
 from views.therapist.control_panel import EMDRControlPanel
 from views.therapist.patient_manager import PatientManagerWidget
@@ -265,7 +267,7 @@ class TherapistDashboard(QMainWindow):
         """)
         main_buttons_layout = QHBoxLayout(main_buttons_frame)
         main_buttons_layout.setContentsMargins(0, 0, 0, 0)
-        main_buttons_layout.setSpacing(100)
+        main_buttons_layout.setSpacing(30)  # Reducir espacio entre botones
         
         # Botón Control Panel
         self.control_panel_btn = QPushButton()
@@ -301,6 +303,41 @@ class TherapistDashboard(QMainWindow):
             }
         """)
         self.control_panel_btn.clicked.connect(self.open_control_panel)
+        
+        # Botón Añadir Paciente (NUEVO)
+        self.add_patient_btn = QPushButton()
+        self.add_patient_btn.setText("Añadir\nPaciente")
+        self.add_patient_btn.setFixedSize(150, 110)
+        self.add_patient_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #00A99D;
+                color: white;
+                border-radius: 10px;
+                font-size: 15px;
+                font-weight: bold;
+                border-top: 2px solid #00E6D6;
+                border-left: 2px solid #00D4C4;
+                border-right: 2px solid #006B61;
+                border-bottom: 2px solid #005A50;
+                padding: 3px;
+            }
+            QPushButton:hover {
+                background-color: #00C2B3;
+                border-top: 2px solid #00F5E5;
+                border-left: 2px solid #00E6D6;
+                border-right: 2px solid #007A70;
+                border-bottom: 2px solid #00695F;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border-top: 2px solid #005A50;
+                border-left: 2px solid #006B61;
+                border-right: 2px solid #00C2B3;
+                border-bottom: 2px solid #00D4C4;
+                padding: 5px 1px 1px 5px;
+            }
+        """)
+        self.add_patient_btn.clicked.connect(self.open_add_patient_dialog)
         
         # Botón Patient Manager
         self.patient_manager_btn = QPushButton()
@@ -340,6 +377,7 @@ class TherapistDashboard(QMainWindow):
         # Añadir botones con espaciado
         main_buttons_layout.addStretch()
         main_buttons_layout.addWidget(self.control_panel_btn)
+        main_buttons_layout.addWidget(self.add_patient_btn)
         main_buttons_layout.addWidget(self.patient_manager_btn)
         main_buttons_layout.addStretch()
         
@@ -463,6 +501,73 @@ class TherapistDashboard(QMainWindow):
                 color: #FFFFFF;
             }
         """)
+    
+    def open_add_patient_dialog(self):
+        """Abre el diálogo para añadir un nuevo paciente"""
+        try:
+            dialog = AddPatientDialog(self)
+            
+            if dialog.exec() == QDialog.Accepted:
+                # Obtener datos del formulario
+                patient_data = dialog.get_patient_data()
+                
+                # Intentar guardar en la base de datos
+                patient_id = DatabaseManager.add_patient(
+                    apellido_paterno=patient_data['apellido_paterno'],
+                    apellido_materno=patient_data['apellido_materno'],
+                    nombre=patient_data['nombre'],
+                    fecha_nacimiento=patient_data['fecha_nacimiento'],
+                    celular=patient_data['celular'],
+                    comentarios=patient_data['comentarios']
+                )
+                
+                if patient_id:
+                    # Reproducir sonido de éxito
+                    winsound.MessageBeep(winsound.MB_OK)
+                    
+                    # Mostrar mensaje de éxito
+                    success_msg = QMessageBox(self)
+                    success_msg.setWindowTitle("Éxito")
+                    success_msg.setText(f"¡Paciente registrado exitosamente!\n\nNombre: {patient_data['nombre']} {patient_data['apellido_paterno']}\nID: {patient_id}")
+                    success_msg.setIcon(QMessageBox.Information)
+                    
+                    # Aplicar estilo al mensaje
+                    success_msg.setStyleSheet("""
+                        QMessageBox {
+                            background-color: #323232;
+                            color: #FFFFFF;
+                            border: 2px solid #4CAF50;
+                        }
+                        QMessageBox QLabel {
+                            color: #FFFFFF;
+                            background: transparent;
+                            font-size: 14px;
+                        }
+                        QMessageBox QPushButton {
+                            background-color: #4CAF50;
+                            color: white;
+                            border: 2px solid #4CAF50;
+                            border-radius: 6px;
+                            padding: 8px 16px;
+                            font-weight: bold;
+                            min-width: 50px;
+                        }
+                        QMessageBox QPushButton:hover {
+                            background-color: #66BB6A;
+                            border: 2px solid #66BB6A;
+                        }
+                        QMessageBox QPushButton:pressed {
+                            background-color: #388E3C;
+                            border: 2px solid #388E3C;
+                        }
+                    """)
+                    
+                    success_msg.exec()
+                else:
+                    QMessageBox.critical(self, "Error", "No se pudo registrar el paciente.\nVerifique los datos e intente nuevamente.")
+                    
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al procesar el registro del paciente:\n{str(e)}")
     
     def open_control_panel(self):
         """Abre la ventana del panel de control EMDR"""
