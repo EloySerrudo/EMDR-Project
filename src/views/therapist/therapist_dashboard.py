@@ -15,10 +15,10 @@ from datetime import datetime  # Añadir esta importación
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 # Importaciones para componentes específicos
-from views.therapist.add_patient_dialog import AddPatientDialog
+from src.views.therapist.add_patient_dialog import AddPatientDialog
 from src.database.database_manager import DatabaseManager
-from views.therapist.control_panel import EMDRControlPanel
-from views.therapist.patient_manager import PatientManagerWidget
+from src.views.therapist.control_panel import EMDRControlPanel
+from src.views.therapist.patient_manager import PatientManagerWidget
 
 
 class TherapistDashboard(QMainWindow):
@@ -518,6 +518,7 @@ class TherapistDashboard(QMainWindow):
                     nombre=patient_data['nombre'],
                     fecha_nacimiento=patient_data['fecha_nacimiento'],
                     celular=patient_data['celular'],
+                    fecha_registro=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     comentarios=patient_data['comentarios']
                 )
                 
@@ -536,7 +537,7 @@ class TherapistDashboard(QMainWindow):
                         QMessageBox {
                             background-color: #323232;
                             color: #FFFFFF;
-                            border: 2px solid #4CAF50;
+                            border: none;
                         }
                         QMessageBox QLabel {
                             color: #FFFFFF;
@@ -544,21 +545,21 @@ class TherapistDashboard(QMainWindow):
                             font-size: 14px;
                         }
                         QMessageBox QPushButton {
-                            background-color: #4CAF50;
+                            background-color: #00A99D;
                             color: white;
-                            border: 2px solid #4CAF50;
+                            border: none;
                             border-radius: 6px;
                             padding: 8px 16px;
                             font-weight: bold;
                             min-width: 50px;
                         }
                         QMessageBox QPushButton:hover {
-                            background-color: #66BB6A;
-                            border: 2px solid #66BB6A;
+                            background-color: #00C2B3;
+                            border: 2px solid #00C2B3;
                         }
                         QMessageBox QPushButton:pressed {
-                            background-color: #388E3C;
-                            border: 2px solid #388E3C;
+                            background-color: #008C82;
+                            border: 2px solid #008C82;
                         }
                     """)
                     

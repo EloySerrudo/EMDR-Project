@@ -246,12 +246,14 @@ class SensorMonitor(QWidget):
         
         # Crear gráficas individuales
         self.eog_plot = self.create_eog_plot(display_time, height=GRAPH_HEIGHT)
-        self.bpm_plot = self.create_bpm_plot(display_time, height=GRAPH_HEIGHT)
-        self.ppg_plot = self.create_ppg_plot(display_time, height=GRAPH_HEIGHT + 25)
+        if self.is_standalone:
+            self.ppg_plot = self.create_ppg_plot(display_time, height=GRAPH_HEIGHT)
+        self.bpm_plot = self.create_bpm_plot(display_time, height=GRAPH_HEIGHT + 25)
         
         plots_layout.addWidget(self.eog_plot)
+        if self.is_standalone:
+            plots_layout.addWidget(self.ppg_plot)
         plots_layout.addWidget(self.bpm_plot)
-        plots_layout.addWidget(self.ppg_plot)
         # plots_layout.addStretch()
         
         # ===== CREAR CURVAS DE DATOS =====
@@ -381,7 +383,7 @@ class SensorMonitor(QWidget):
         """Crear y configurar la gráfica BPM con estilo moderno"""
         bpm_plot = pg.PlotWidget()
         bpm_plot.setFixedHeight(height)
-        bpm_plot.setLabel('bottom', '')
+        bpm_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
         bpm_plot.setYRange(50, 120)
         bpm_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
@@ -389,13 +391,20 @@ class SensorMonitor(QWidget):
         bpm_plot.setBackground('#FFFFFF')
         bpm_plot.showGrid(x=True, y=True, alpha=0.2)
         
-        # Configurar eje X con estilo moderno
+        # Configurar ejes con estilo moderno
         x_axis = bpm_plot.getAxis('bottom')
-        x_axis.setStyle(showValues=False)
         x_axis.setTickSpacing(major=1, minor=0.5)
         x_axis.setPen(pg.mkPen('#CCCCCC', width=1))
         x_axis.setTextPen(pg.mkPen('#424242'))
         
+        # ===== AÑADIR CONFIGURACIÓN PARA REDUCIR ESPACIADO DEL EJE X =====
+        x_axis.setStyle(
+            tickTextOffset=2,      # Reducir distancia entre ticks y valores numéricos
+            autoExpandTextSpace=False,  # No expandir automáticamente
+            tickTextHeight=10      # Reducir altura del área de texto
+        )
+        x_axis.setHeight(25)       # Reducir altura total del eje X (valor por defecto ~40)
+    
         # Configurar eje Y con espaciado personalizado
         self.configure_y_axis_spacing(bpm_plot, 'BPM', axis_width=60)
         
@@ -427,7 +436,7 @@ class SensorMonitor(QWidget):
         """Crear y configurar la gráfica PPG con estilo moderno"""
         ppg_plot = pg.PlotWidget()
         ppg_plot.setFixedHeight(height)
-        ppg_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
+        ppg_plot.setLabel('bottom', '')
         ppg_plot.setYRange(-20000, 40000)
         ppg_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
@@ -435,20 +444,13 @@ class SensorMonitor(QWidget):
         ppg_plot.setBackground('#FFFFFF')
         ppg_plot.showGrid(x=True, y=True, alpha=0.2)
         
-        # Configurar ejes con estilo moderno
+        # Configurar eje X con estilo moderno
         x_axis = ppg_plot.getAxis('bottom')
+        x_axis.setStyle(showValues=False)
         x_axis.setTickSpacing(major=1, minor=0.5)
         x_axis.setPen(pg.mkPen('#CCCCCC', width=1))
         x_axis.setTextPen(pg.mkPen('#424242'))
         
-        # ===== AÑADIR CONFIGURACIÓN PARA REDUCIR ESPACIADO DEL EJE X =====
-        x_axis.setStyle(
-            tickTextOffset=2,      # Reducir distancia entre ticks y valores numéricos
-            autoExpandTextSpace=False,  # No expandir automáticamente
-            tickTextHeight=10      # Reducir altura del área de texto
-        )
-        x_axis.setHeight(25)       # Reducir altura total del eje X (valor por defecto ~40)
-    
         # Configurar eje Y con espaciado personalizado
         self.configure_y_axis_spacing(ppg_plot, 'PPG (ADU)', axis_width=60)
         
@@ -467,7 +469,8 @@ class SensorMonitor(QWidget):
         # Curvas con colores del tema login y líneas optimizadas
         self.eog_curve = self.eog_plot.plot(pen=pg.mkPen('#2196F3', width=2))  # Azul principal
         self.bpm_curve = self.bpm_plot.plot(pen=pg.mkPen('#FF9800', width=2))  # Naranja para BPM
-        self.ppg_curve = self.ppg_plot.plot(pen=pg.mkPen('#00A99D', width=2))  # Verde tema principal
+        if self.is_standalone:
+            self.ppg_curve = self.ppg_plot.plot(pen=pg.mkPen('#00A99D', width=2))  # Verde tema principal
     
     def add_legends_and_extras(self, display_time):
         """Añadir leyendas y elementos adicionales con estilo moderno"""
@@ -512,20 +515,21 @@ class SensorMonitor(QWidget):
         bpm_legend.setGeometry(pg.QtCore.QRectF(0, 0, 137, 14))
         
         # Leyenda para PPG con estilo moderno
-        ppg_legend = pg.LegendItem(
-            offset=(75, 10), 
-            labelTextSize='9pt', 
-            spacing=0, 
-            rowSpacing=0, 
-            colSpacing=0
-        )
-        ppg_legend.setParentItem(self.ppg_plot.graphicsItem())
-        ppg_legend.addItem(self.ppg_curve, "Señal PPG")
-        ppg_legend.setBrush(pg.mkBrush(255, 255, 255, 200))
-        ppg_legend.layout.setContentsMargins(0, 0, 0, 0)
-        ppg_legend.layout.setSpacing(0)
-        # ppg_legend.setPen(pg.mkPen('#CCCCCC', width=1))
-        ppg_legend.setGeometry(pg.QtCore.QRectF(0, 0, 85, 14))
+        if self.is_standalone:
+            ppg_legend = pg.LegendItem(
+                offset=(75, 10), 
+                labelTextSize='9pt', 
+                spacing=0, 
+                rowSpacing=0, 
+                colSpacing=0
+            )
+            ppg_legend.setParentItem(self.ppg_plot.graphicsItem())
+            ppg_legend.addItem(self.ppg_curve, "Señal PPG")
+            ppg_legend.setBrush(pg.mkBrush(255, 255, 255, 200))
+            ppg_legend.layout.setContentsMargins(0, 0, 0, 0)
+            ppg_legend.layout.setSpacing(0)
+            # ppg_legend.setPen(pg.mkPen('#CCCCCC', width=1))
+            ppg_legend.setGeometry(pg.QtCore.QRectF(0, 0, 85, 14))
 
     def toggle_acquisition(self):
         """Toggle between start and stop acquisition"""
@@ -930,9 +934,10 @@ class SensorMonitor(QWidget):
                 normalized_x = x_data
                 
             # Update plot data con los tiempos normalizados
-            self.ppg_curve.setData(normalized_x, filtered_ppg_data)
-            self.bpm_curve.setData(normalized_x, bpm_data)
             self.eog_curve.setData(normalized_x, filtered_eog_data)
+            self.bpm_curve.setData(normalized_x, bpm_data)
+            if self.is_standalone:
+                self.ppg_curve.setData(normalized_x, filtered_ppg_data)
             
             # Actualizar el texto de BPM con estilo mejorado
             hr_str = f"BPM: {int(self.current_heart_rate)}" if self.current_heart_rate > 0 else "BPM: --"
@@ -947,9 +952,10 @@ class SensorMonitor(QWidget):
                     self.bpm_text.setColor((66, 66, 66))   # Gris para otros casos
         
         # Fijar siempre el rango X entre -5 y 0
-        self.ppg_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
-        self.bpm_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
         self.eog_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
+        self.bpm_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
+        if self.is_standalone:
+            self.ppg_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
 
     def save_data_to_csv(self):
         """Save collected data to CSV file with modern dialog"""

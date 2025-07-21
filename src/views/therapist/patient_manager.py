@@ -17,7 +17,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Importar la clase DatabaseManager
 from src.database.database_manager import DatabaseManager
-from views.therapist.session_viewer import SessionViewerWindow
+from src.views.therapist.new_session_dialog import NewSessionDialog
+from src.views.therapist.session_viewer import SessionViewerWindow
 
 class PatientDetailsDialog(QDialog):
     """Diálogo para mostrar los detalles completos de un paciente"""
@@ -31,7 +32,7 @@ class PatientDetailsDialog(QDialog):
         self.session_viewer_window = None
         
         self.setWindowTitle("Detalles del Paciente")
-        self.resize(600, 500)
+        self.resize(600, 600)
         self.setModal(True)
         
         self.load_patient_data()
@@ -52,7 +53,7 @@ class PatientDetailsDialog(QDialog):
         """Configura la interfaz del diálogo"""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(5)
         
         # Título con nombre del paciente
         if self.patient_data:
@@ -62,28 +63,12 @@ class PatientDetailsDialog(QDialog):
                     font-size: 18px; 
                     font-weight: bold; 
                     color: #00A99D; 
-                    padding: 10px;
+                    padding: 0 10px;
                     background: transparent;
                 }
             """)
             title.setAlignment(Qt.AlignCenter)
             layout.addWidget(title)
-        
-        # Crear área de scroll para el contenido
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.NoFrame)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                background: transparent;
-                border: none;
-            }
-        """)
-        
-        # Widget contenedor para el contenido
-        content_widget = QWidget()
-        content_layout = QVBoxLayout(content_widget)
-        content_layout.setSpacing(15)
         
         # === DATOS PERSONALES ===
         personal_group = QGroupBox("Datos Personales")
@@ -95,7 +80,7 @@ class PatientDetailsDialog(QDialog):
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
-                background-color: #424242;
+                background-color: transparent;
                 color: white;
             }
             QGroupBox::title {
@@ -117,7 +102,7 @@ class PatientDetailsDialog(QDialog):
             self.create_info_field(personal_layout, "Teléfono/Celular:", self.patient_data.get('celular', ''))
             self.create_info_field(personal_layout, "Fecha de registro:", self.patient_data.get('fecha_registro', ''))
         
-        content_layout.addWidget(personal_group)
+        layout.addWidget(personal_group)
         
         # === NOTAS CLÍNICAS ===
         notes_group = QGroupBox("Notas Clínicas")
@@ -129,7 +114,7 @@ class PatientDetailsDialog(QDialog):
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
-                background-color: #424242;
+                background-color: transparent;
                 color: white;
             }
             QGroupBox::title {
@@ -145,7 +130,7 @@ class PatientDetailsDialog(QDialog):
         # Campo de texto para las notas (solo lectura)
         self.notes_display = QTextEdit()
         self.notes_display.setReadOnly(True)
-        self.notes_display.setMaximumHeight(150)
+        self.notes_display.setMaximumHeight(50)
         self.notes_display.setStyleSheet("""
             QTextEdit {
                 background-color: #323232;
@@ -163,7 +148,7 @@ class PatientDetailsDialog(QDialog):
             self.notes_display.setPlainText("No hay notas registradas para este paciente.")
         
         notes_layout.addWidget(self.notes_display)
-        content_layout.addWidget(notes_group)
+        layout.addWidget(notes_group)
         
         # === HISTORIAL DE SESIONES ===
         sessions_group = QGroupBox("Historial de Sesiones")
@@ -175,7 +160,7 @@ class PatientDetailsDialog(QDialog):
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
-                background-color: #424242;
+                background-color: transparent;
                 color: white;
             }
             QGroupBox::title {
@@ -191,11 +176,7 @@ class PatientDetailsDialog(QDialog):
         # Cargar historial de sesiones
         self.load_session_history(sessions_layout)
         
-        content_layout.addWidget(sessions_group)
-        
-        # Configurar el scroll area
-        scroll_area.setWidget(content_widget)
-        layout.addWidget(scroll_area)
+        layout.addWidget(sessions_group)
         
         # === BOTONES DE ACCIÓN ===
         button_layout = QHBoxLayout()
@@ -274,6 +255,7 @@ class PatientDetailsDialog(QDialog):
         button_layout.addStretch()
         button_layout.addWidget(cancel_button)
         
+        layout.addStretch()
         layout.addLayout(button_layout)
         
         # Estilo global del diálogo
@@ -335,15 +317,15 @@ class PatientDetailsDialog(QDialog):
             else:
                 # Crear tabla para mostrar las sesiones
                 sessions_table = QTableWidget()
-                sessions_table.setColumnCount(5)  # Añadir columna para botón
-                sessions_table.setHorizontalHeaderLabels(["Fecha", "Duración", "Tipo", "Notas", "Acción"])
+                sessions_table.setColumnCount(5)
+                sessions_table.setHorizontalHeaderLabels(["Fecha", "Hora", "Duración", "Notas", "Acción"])
                 sessions_table.setRowCount(len(sessions))
                 
                 # Configurar tabla
                 sessions_table.setAlternatingRowColors(True)
                 sessions_table.setSelectionBehavior(QTableWidget.SelectRows)
                 sessions_table.verticalHeader().setVisible(False)
-                sessions_table.setMaximumHeight(200)
+                sessions_table.setMaximumHeight(104)
                 sessions_table.setStyleSheet("""
                     QTableWidget {
                         background-color: #323232;
@@ -372,12 +354,13 @@ class PatientDetailsDialog(QDialog):
                 
                 # Llenar tabla con datos de sesiones
                 for i, session in enumerate(sessions):
-                    sessions_table.setItem(i, 0, QTableWidgetItem(str(session.get('fecha', ''))))
-                    sessions_table.setItem(i, 1, QTableWidgetItem(str(session.get('duracion', 'N/A'))))
-                    sessions_table.setItem(i, 2, QTableWidgetItem(str(session.get('tipo', 'EMDR'))))
+                    fecha_hora = session.get('fecha', 'N/A N/A').split(' ')
+                    sessions_table.setItem(i, 0, QTableWidgetItem(fecha_hora[0]))
+                    sessions_table.setItem(i, 1, QTableWidgetItem(fecha_hora[1]))
+                    sessions_table.setItem(i, 2, QTableWidgetItem(str(session.get('duracion', 'N/A'))))
                     sessions_table.setItem(i, 3, QTableWidgetItem(str(session.get('comentarios', ''))))
                     
-                    # === NUEVO: BOTÓN PARA VER ANÁLISIS ===
+                    # === BOTÓN PARA VER ANÁLISIS ===
                     view_btn = QPushButton("Ver Análisis")
                     view_btn.setStyleSheet("""
                         QPushButton {
@@ -385,7 +368,6 @@ class PatientDetailsDialog(QDialog):
                             color: white;
                             border: none;
                             border-radius: 4px;
-                            padding: 4px 8px;
                             font-weight: bold;
                             font-size: 11px;
                         }
@@ -645,7 +627,7 @@ class PatientManagerWidget(QMainWindow):
         """)
         
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Escriba el nombre, apellido o ID del paciente...")
+        self.search_input.setPlaceholderText("Escriba el nombre, apellido o código de paciente...")
         self.search_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px;
@@ -695,7 +677,7 @@ class PatientManagerWidget(QMainWindow):
         self.patients_table = QTableWidget()
         self.patients_table.setColumnCount(6)
         self.patients_table.setHorizontalHeaderLabels([
-            "ID", "Nombre", "Apellido Paterno", "Apellido Materno", "Edad", "Teléfono"
+            "Código Paciente", "Nombre", "Apellido Paterno", "Apellido Materno", "Edad", "Teléfono"
         ])
         
         # Configurar tabla
@@ -779,9 +761,9 @@ class PatientManagerWidget(QMainWindow):
         self.details_button.clicked.connect(self.show_patient_details)
         self.details_button.setEnabled(False)
         
-        # Botón para refrescar
-        refresh_button = QPushButton("Actualizar Lista")
-        refresh_button.setStyleSheet("""
+        # Botón para crear nueva sesión
+        self.session_button = QPushButton("Nueva Sesión")
+        self.session_button.setStyleSheet("""
             QPushButton {
                 background-color: #00A99D;
                 color: white;
@@ -799,8 +781,43 @@ class PatientManagerWidget(QMainWindow):
                 background-color: #008C82;
                 border: 2px solid #008C82;
             }
+            QPushButton:disabled {
+                background-color: #555555;
+                border: 2px solid #555555;
+                color: #AAAAAA;
+            }
         """)
-        refresh_button.clicked.connect(self.load_patients)
+        self.session_button.clicked.connect(self.new_session)
+        self.session_button.setEnabled(False)
+        
+        # Botón para eliminar paciente
+        self.delete_button = QPushButton("Eliminar Paciente")
+        self.delete_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00A99D;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #00A99D;
+            }
+            QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+            QPushButton:disabled {
+                background-color: #555555;
+                border: 2px solid #555555;
+                color: #AAAAAA;
+            }
+        """)
+        self.delete_button.clicked.connect(self.delete_patient)
+        self.delete_button.setEnabled(False)
         
         # Botón para salir
         exit_btn = QPushButton("Salir")
@@ -851,7 +868,8 @@ class PatientManagerWidget(QMainWindow):
         back_btn.clicked.connect(self.return_to_dashboard)
 
         button_layout.addWidget(self.details_button)
-        button_layout.addWidget(refresh_button)
+        button_layout.addWidget(self.session_button)
+        button_layout.addWidget(self.delete_button)
         button_layout.addStretch()
         button_layout.addWidget(back_btn)
         button_layout.addWidget(exit_btn)
@@ -893,7 +911,6 @@ class PatientManagerWidget(QMainWindow):
         # Estilo global de la ventana
         self.setStyleSheet("""
             QMainWindow {
-                font-family: 'Segoe UI', Arial, sans-serif;
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                           stop: 0 #323232,
                                           stop: 0.3 #2c2c2c,
@@ -901,6 +918,7 @@ class PatientManagerWidget(QMainWindow):
                                           stop: 0.8 #1a1a1a,
                                           stop: 1 #000000);
                 color: #FFFFFF;
+                font-family: 'Segoe UI', Arial, sans-serif;
             }
         """)
     
@@ -939,6 +957,7 @@ class PatientManagerWidget(QMainWindow):
         # Resetear selección
         self.patients_table.clearSelection()
         self.details_button.setEnabled(False)
+        self.session_button.setEnabled(False)
     
     def filter_patients(self):
         """Filtra los pacientes según el texto de búsqueda"""
@@ -970,7 +989,10 @@ class PatientManagerWidget(QMainWindow):
     def on_selection_changed(self):
         """Maneja el cambio de selección en la tabla"""
         selected_rows = self.patients_table.selectionModel().selectedRows()
-        self.details_button.setEnabled(len(selected_rows) > 0)
+        has_selection = len(selected_rows) > 0
+        self.details_button.setEnabled(has_selection)
+        self.session_button.setEnabled(has_selection)
+        self.delete_button.setEnabled(has_selection)
     
     def show_patient_details(self):
         """Muestra los detalles del paciente seleccionado"""
@@ -985,7 +1007,7 @@ class PatientManagerWidget(QMainWindow):
         patient_id_item = self.patients_table.item(row_index, 0)
         
         if not patient_id_item:
-            QMessageBox.warning(self, "Error", "No se pudo obtener el ID del paciente")
+            QMessageBox.warning(self, "Error", "No se pudo obtener el código de paciente")
             return
         
         try:
@@ -996,10 +1018,221 @@ class PatientManagerWidget(QMainWindow):
             details_dialog.exec()
             
         except ValueError:
-            QMessageBox.warning(self, "Error", "ID de paciente inválido")
+            QMessageBox.warning(self, "Error", "Código de paciente inválido")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al mostrar detalles: {str(e)}")
 
+    def new_session(self):
+        """Abre el diálogo para crear una nueva sesión"""
+        selected_rows = self.patients_table.selectionModel().selectedRows()
+        
+        if not selected_rows:
+            QMessageBox.warning(self, "Advertencia", "Por favor, seleccione un paciente de la lista")
+            return
+        
+        # Obtener los datos del paciente seleccionado
+        row_index = selected_rows[0].row()
+        patient_id_item = self.patients_table.item(row_index, 0)
+        
+        if not patient_id_item:
+            QMessageBox.warning(self, "Error", "No se pudo obtener el código de paciente")
+            return
+        
+        try:
+            patient_id = int(patient_id_item.text())
+            
+            # Obtener datos completos del paciente
+            patient_data = DatabaseManager.get_patient(patient_id)
+            if not patient_data:
+                QMessageBox.warning(self, "Error", "No se encontraron datos del paciente")
+                return
+            
+            # Abrir diálogo de nueva sesión
+            new_session_dialog = NewSessionDialog(patient_data, self)
+            new_session_dialog.exec()
+            
+        except ValueError:
+            QMessageBox.warning(self, "Error",  "Código de paciente inválido")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al crear nueva sesión: {str(e)}")
+    
+    def delete_patient(self):
+        """Elimina el paciente seleccionado y todas sus sesiones relacionadas"""
+        selected_rows = self.patients_table.selectionModel().selectedRows()
+        
+        if not selected_rows:
+            QMessageBox.warning(self, "Advertencia", "Por favor, seleccione un paciente de la lista")
+            return
+        
+        # Obtener los datos del paciente seleccionado
+        row_index = selected_rows[0].row()
+        patient_id_item = self.patients_table.item(row_index, 0)
+        patient_name_item = self.patients_table.item(row_index, 1)
+        patient_lastname_item = self.patients_table.item(row_index, 2)
+        
+        if not patient_id_item:
+            QMessageBox.warning(self, "Error", "No se pudo obtener el código de paciente")
+            return
+        
+        try:
+            patient_id = int(patient_id_item.text())
+            patient_name = patient_name_item.text() if patient_name_item else "N/A"
+            patient_lastname = patient_lastname_item.text() if patient_lastname_item else "N/A"
+            full_name = f"{patient_name} {patient_lastname}"
+            
+            # Verificar si el paciente tiene sesiones
+            sessions = DatabaseManager.get_sessions_for_patient(patient_id)
+            session_count = len(sessions) if sessions else 0
+            
+            # Verificar si el paciente tiene diagnósticos
+            diagnoses = DatabaseManager.get_diagnoses_for_patient(patient_id, include_resolved=True)
+            diagnosis_count = len(diagnoses) if diagnoses else 0
+            
+            # Crear mensaje de confirmación detallado
+            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Confirmar Eliminación")
+            msg_box.setIcon(QMessageBox.Warning)
+            
+            # Construir mensaje informativo
+            warning_text = f"¿Está seguro de que desea eliminar al paciente:\n\n"
+            warning_text += f"• Nombre: {full_name}\n"
+            warning_text += f"• ID: {patient_id}\n\n"
+            
+            if session_count > 0:
+                warning_text += f"⚠️  Este paciente tiene {session_count} sesión(es) registrada(s)\n"
+            
+            if diagnosis_count > 0:
+                warning_text += f"⚠️  Este paciente tiene {diagnosis_count} diagnóstico(s) registrado(s)\n"
+            
+            if session_count > 0 or diagnosis_count > 0:
+                warning_text += "\n🗑️  TODA la información relacionada será eliminada PERMANENTEMENTE:\n"
+                if session_count > 0:
+                    warning_text += f"   • {session_count} sesión(es) con datos fisiológicos\n"
+                if diagnosis_count > 0:
+                    warning_text += f"   • {diagnosis_count} diagnóstico(s) clínico(s)\n"
+                warning_text += "\n❌  Esta acción NO se puede deshacer."
+            else:
+                warning_text += "\n❌  Esta acción NO se puede deshacer."
+            
+            msg_box.setText(warning_text)
+            
+            # Crear botones personalizados
+            delete_button = msg_box.addButton("Eliminar Definitivamente", QMessageBox.DestructiveRole)
+            cancel_button = msg_box.addButton("Cancelar", QMessageBox.RejectRole)
+            msg_box.setDefaultButton(cancel_button)
+            
+            # Aplicar estilo personalizado
+            msg_box.setStyleSheet("""
+                QMessageBox {
+                    background-color: #323232;
+                    color: #FFFFFF;
+                    border: 2px solid #FF6B6B;
+                    border-radius: 8px;
+                }
+                QMessageBox QLabel {
+                    color: #FFFFFF;
+                    background: transparent;
+                    font-size: 13px;
+                    padding: 10px;
+                }
+                QMessageBox QPushButton {
+                    color: white;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    min-width: 80px;
+                    margin: 2px;
+                }
+                QMessageBox QPushButton[text="Eliminar Definitivamente"] {
+                    background-color: #FF6B6B;
+                    border: 2px solid #FF6B6B;
+                }
+                QMessageBox QPushButton[text="Eliminar Definitivamente"]:hover {
+                    background-color: #FF8E8E;
+                    border: 2px solid #FF8E8E;
+                }
+                QMessageBox QPushButton[text="Eliminar Definitivamente"]:pressed {
+                    background-color: #E55555;
+                    border: 2px solid #E55555;
+                }
+                QMessageBox QPushButton[text="Cancelar"] {
+                    background-color: #6c757d;
+                    border: 2px solid #6c757d;
+                }
+                QMessageBox QPushButton[text="Cancelar"]:hover {
+                    background-color: #5a6268;
+                    border: 2px solid #5a6268;
+                }
+                QMessageBox QPushButton[text="Cancelar"]:pressed {
+                    background-color: #545b62;
+                    border: 2px solid #545b62;
+                }
+            """)
+            
+            # Ejecutar diálogo
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == delete_button:
+                try:
+                    # Mostrar indicador de progreso
+                    self.status_label.setText("Eliminando paciente...")
+                    QApplication.processEvents()
+                    
+                    # Primero eliminar sesiones (por restricciones de clave foránea)
+                    if session_count > 0:
+                        for session in sessions:
+                            DatabaseManager.delete_session(session['id'])
+                    
+                    # Luego eliminar diagnósticos
+                    if diagnosis_count > 0:
+                        for diagnosis in diagnoses:
+                            DatabaseManager.delete_diagnosis(diagnosis['id'])
+                    
+                    # Finalmente eliminar el paciente
+                    if DatabaseManager.delete_patient(patient_id):
+                        # Recargar la lista de pacientes
+                        self.load_patients()
+                        
+                        # Mostrar mensaje de éxito
+                        QMessageBox.information(
+                            self,
+                            "Eliminación Exitosa",
+                            f"El paciente {full_name} y toda su información relacionada "
+                            f"han sido eliminados exitosamente.\n\n"
+                            f"Elementos eliminados:\n"
+                            f"• 1 registro de paciente\n" +
+                            (f"• {session_count} sesión(es)\n" if session_count > 0 else "") +
+                            (f"• {diagnosis_count} diagnóstico(s)" if diagnosis_count > 0 else "")
+                        )
+                    else:
+                        QMessageBox.critical(
+                            self,
+                            "Error",
+                            "No se pudo eliminar el paciente. Verifique que no tenga "
+                            "información relacionada o contacte al administrador."
+                        )
+                        
+                except Exception as e:
+                    QMessageBox.critical(
+                        self,
+                        "Error",
+                        f"Error durante la eliminación:\n{str(e)}\n\n"
+                        "La operación ha sido cancelada para preservar la integridad de los datos."
+                    )
+                    # Recargar datos por seguridad
+                    self.load_patients()
+                finally:
+                    # Restaurar estado normal
+                    count = len(self.patients_data)
+                    self.status_label.setText(f"Se encontraron {count} paciente(s) registrado(s)")
+            
+        except ValueError:
+            QMessageBox.warning(self, "Error",  "Código de paciente inválido")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al eliminar paciente: {str(e)}")
+    
     def return_to_dashboard(self):
         """Regresa al dashboard del terapeuta"""
         winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
@@ -1127,7 +1360,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     # Crear ventana principal
-    patient_manager = PatientManagerWidget("Dr. Juan Pérez")
+    patient_manager = PatientManagerWidget("Lic. Juan Pérez")
     patient_manager.show()
     
     sys.exit(app.exec())

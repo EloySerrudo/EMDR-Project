@@ -14,7 +14,7 @@ class AddPatientDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Añadir Nuevo Paciente")
-        self.setFixedSize(450, 500)
+        self.setFixedSize(450, 600)
         self.setModal(True)
         
         self.setup_ui()
@@ -27,16 +27,16 @@ class AddPatientDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         
         # Título del diálogo
-        title_label = QLabel("📋 Registro de Nuevo Paciente")
+        title_label = QLabel("Registro de Nuevo Paciente")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("""
             QLabel {
                 font-size: 18px;
                 font-weight: bold;
-                color: #4CAF50;
+                color: #00A99D;
                 margin-bottom: 10px;
                 padding: 10px;
-                background-color: rgba(76, 175, 80, 0.1);
+                background-color: rgba(0, 169, 157, 0.1);
                 border-radius: 8px;
             }
         """)
@@ -78,7 +78,17 @@ class AddPatientDialog(QDialog):
         
         layout.addLayout(form_layout)
         
-        # Nota informativa
+        # Nota informativa con icono
+        info_frame = QFrame()
+        info_layout = QHBoxLayout(info_frame)
+        info_layout.setContentsMargins(5, 5, 5, 5)
+        info_layout.setSpacing(5)
+        
+        # Icono de información
+        info_icon = qta.icon('fa5s.info-circle', color='#FF9800')
+        info_icon_label = QLabel()
+        info_icon_label.setPixmap(info_icon.pixmap(16, 16))
+        
         info_label = QLabel("* Campos obligatorios")
         info_label.setStyleSheet("""
             QLabel {
@@ -88,7 +98,19 @@ class AddPatientDialog(QDialog):
                 margin-top: 5px;
             }
         """)
-        layout.addWidget(info_label)
+        
+        info_layout.addWidget(info_icon_label)
+        info_layout.addWidget(info_label)
+        info_layout.addStretch()
+        
+        info_frame.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: none;
+            }
+        """)
+        
+        layout.addWidget(info_frame)
         
         # Botones
         button_box = QDialogButtonBox(
@@ -111,12 +133,16 @@ class AddPatientDialog(QDialog):
         self.setStyleSheet("""
             QDialog {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                          stop: 0 #424242,
-                                          stop: 1 #2c2c2c);
+                                          stop: 0 #323232,
+                                          stop: 0.3 #2c2c2c,
+                                          stop: 0.6 #252525,
+                                          stop: 0.8 #1a1a1a,
+                                          stop: 1 #000000);
                 color: #FFFFFF;
             }
             
             QLabel {
+                background: transparent;
                 color: #FFFFFF;
                 font-size: 14px;
                 font-weight: bold;
@@ -132,7 +158,7 @@ class AddPatientDialog(QDialog):
             }
             
             QLineEdit:focus, QDateEdit:focus, QTextEdit:focus {
-                border: 2px solid #4CAF50;
+                border: 2px solid #00A99D;
                 background-color: #5a5a5a;
             }
             
@@ -156,8 +182,38 @@ class AddPatientDialog(QDialog):
                 height: 0px;
             }
             
+            /* === ESTILOS PARA EL CALENDARIO DESPLEGABLE === */
+            /* Días del mes */
+            QCalendarWidget QTableView::item {
+                background-color: #424242;
+                color: #FFFFFF;
+                border: none;
+                padding: 4px;
+            }
+            
+            /* Día seleccionado */
+            QCalendarWidget QTableView::item:selected {
+                background-color: #00A99D;
+                color: #FFFFFF;
+                font-weight: bold;
+            }
+            
+            /* Día al pasar el mouse */
+            QCalendarWidget QTableView::item:hover {
+                background-color: #525252;
+                color: #FFFFFF;
+            }
+            
+            /* Días de otros meses (grises) */
+            QCalendarWidget QTableView::item:disabled {
+                background-color: #2a2a2a;
+                color: #888888;
+            }
+            
+            /* === FIN DE ESTILOS DEL CALENDARIO === */
+            
             QDialogButtonBox QPushButton {
-                background-color: #4CAF50;
+                background-color: #00A99D;
                 color: white;
                 border: none;
                 border-radius: 6px;
@@ -168,11 +224,11 @@ class AddPatientDialog(QDialog):
             }
             
             QDialogButtonBox QPushButton:hover {
-                background-color: #66BB6A;
+                background-color: #00C2B3;
             }
             
             QDialogButtonBox QPushButton:pressed {
-                background-color: #388E3C;
+                background-color: #008C82;
             }
             
             QDialogButtonBox QPushButton[text="Cancelar"] {

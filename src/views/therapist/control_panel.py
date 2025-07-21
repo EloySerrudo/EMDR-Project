@@ -37,11 +37,13 @@ class EMDRControlPanel(QMainWindow):
     # Señal emitida cuando la ventana se cierra
     window_closed = Signal()  # Nueva señal personalizada
     
-    def __init__(self, username=None):
+    def __init__(self, therapist_name=None, patient_name=None, patient_id=None, current_session=None, session_datetime=None):
         super().__init__()
-        self.username = username
-        self.current_patient = None
-        self.current_session = None
+        self.therapist_name = therapist_name
+        self.patient_name = patient_name
+        self.patient_id = patient_id
+        self.current_session = current_session
+        self.session_datetime = session_datetime
         
         self.setWindowTitle(f"EMDR Project - Dashboard Terapéutico")
         self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
@@ -56,7 +58,7 @@ class EMDRControlPanel(QMainWindow):
         main_layout.setSpacing(3)
         
         # ===== 1. BARRA SUPERIOR CON INFORMACIÓN CONTEXTUAL =====
-        self.header_widget = self.create_header_bar(username)
+        self.header_widget = self.create_header_bar()
         main_layout.addWidget(self.header_widget)
         
         # ===== 2. BARRA DE ESTADO DE DISPOSITIVOS =====
@@ -255,189 +257,10 @@ class EMDRControlPanel(QMainWindow):
         right_header.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(right_header)
 
-        # Panel para selección de visualización con estilo mejorado
-        view_selector_frame = QFrame()
-        view_selector_frame.setStyleSheet("""
-            QFrame {
-                background-color: #424242;
-                border-radius: 8px;
-                padding: 5px;
-                margin: 0px;
-                border: 1px solid #555555;
-            }
-        """)
-        view_selector_layout = QHBoxLayout(view_selector_frame)
-        view_selector_layout.setContentsMargins(10, 5, 10, 5)
-
-        # Label para visualización
-        viz_label = QLabel("Visualización:")
-        viz_label.setStyleSheet("""
-            QLabel {
-                color: #FFFFFF;
-                font-weight: 600;
-                font-size: 12px;
-                background: transparent;
-                border: none;
-            }
-        """)
-        view_selector_layout.addWidget(viz_label)
-
-        self.view_selector = QComboBox()
-        self.view_selector.addItems(["Señales en tiempo real", "Historial de sesión", "Estadísticas"])
-        self.view_selector.setStyleSheet("""
-            QComboBox {
-                background-color: #424242;
-                color: white;
-                border: 2px solid #555555;
-                border-radius: 6px;
-                padding: 4px 12px;
-                min-width: 140px;
-                font-size: 12px;
-                font-weight: 500;
-            }
-            QComboBox:focus {
-                border: 2px solid #00A99D;
-                background-color: #383838;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 25px;
-                border-left: 1px solid #555555;
-                border-top-right-radius: 6px;
-                border-bottom-right-radius: 6px;
-                background-color: #333333;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border: none;
-                width: 12px;
-                height: 12px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #424242;
-                color: white;
-                selection-background-color: #00A99D;
-                border: 1px solid #555555;
-                outline: none;
-            }
-            QComboBox QAbstractItemView::item {
-                height: 25px;
-                padding: 4px;
-                border: none;
-            }
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #00A99D;
-            }
-        """)
-        view_selector_layout.addWidget(self.view_selector)
-        view_selector_layout.addStretch()
-        right_layout.addWidget(view_selector_frame)
-
-        # Stack widget para diferentes vistas
-        self.view_stack = QStackedWidget()
-        self.view_stack.setStyleSheet("""
-            QStackedWidget {
-                background-color: transparent;
-                border: none;
-            }
-        """)
-
-        # Vista 1: Monitor de sensores en tiempo real
+        # Monitor de sensores en tiempo real
         self.sensor_monitor = SensorMonitor()
         self.sensor_monitor.main_layout.setContentsMargins(0, 0, 0, 0)  # Eliminar márgenes del layout interno
-        self.view_stack.addWidget(self.sensor_monitor)
-
-        # Vista 2: Historial de sesión (placeholder mejorado)
-        self.history_view = QWidget()
-        self.history_view.setStyleSheet("""
-            QWidget {
-                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
-                                       stop: 0 #F8F9FA,
-                                       stop: 1 #E9ECEF);
-                border-radius: 8px;
-            }
-        """)
-        history_layout = QVBoxLayout(self.history_view)
-        history_layout.setContentsMargins(20, 20, 20, 20)
-
-        history_title = QLabel("HISTORIAL DE SESIÓN")
-        history_title.setStyleSheet("""
-            QLabel {
-                background-color: #424242;
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                padding: 10px;
-                border-radius: 8px;
-                border: 1px solid #555555;
-            }
-        """)
-        history_title.setAlignment(Qt.AlignCenter)
-        history_layout.addWidget(history_title)
-
-        history_placeholder = QLabel("Funcionalidad en desarrollo...")
-        history_placeholder.setStyleSheet("""
-            QLabel {
-                color: #666666;
-                font-size: 14px;
-                font-style: italic;
-                background: transparent;
-            }
-        """)
-        history_placeholder.setAlignment(Qt.AlignCenter)
-        history_layout.addWidget(history_placeholder)
-        history_layout.addStretch()
-
-        self.view_stack.addWidget(self.history_view)
-
-        # Vista 3: Estadísticas (placeholder mejorado)
-        self.stats_view = QWidget()
-        self.stats_view.setStyleSheet("""
-            QWidget {
-                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
-                                       stop: 0 #F8F9FA,
-                                       stop: 1 #E9ECEF);
-                border-radius: 8px;
-            }
-        """)
-        stats_layout = QVBoxLayout(self.stats_view)
-        stats_layout.setContentsMargins(20, 20, 20, 20)
-
-        stats_title = QLabel("ESTADÍSTICAS")
-        stats_title.setStyleSheet("""
-            QLabel {
-                background-color: #424242;
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                padding: 10px;
-                border-radius: 8px;
-                border: 1px solid #555555;
-            }
-        """)
-        stats_title.setAlignment(Qt.AlignCenter)
-        stats_layout.addWidget(stats_title)
-
-        stats_placeholder = QLabel("Funcionalidad en desarrollo...")
-        stats_placeholder.setStyleSheet("""
-            QLabel {
-                color: #666666;
-                font-size: 14px;
-                font-style: italic;
-                background: transparent;
-            }
-        """)
-        stats_placeholder.setAlignment(Qt.AlignCenter)
-        stats_layout.addWidget(stats_placeholder)
-        stats_layout.addStretch()
-
-        self.view_stack.addWidget(self.stats_view)
-
-        right_layout.addWidget(self.view_stack)
-        
-        # Conectar el selector de vistas al stack widget
-        self.view_selector.currentIndexChanged.connect(self.view_stack.setCurrentIndex)
+        right_layout.addWidget(self.sensor_monitor)
         
         # ===== 6. AÑADIR PANELES AL SPLITTER =====
         self.splitter.addWidget(self.left_panel)
@@ -459,54 +282,9 @@ class EMDRControlPanel(QMainWindow):
         footer_layout = QHBoxLayout(footer_frame)
         footer_layout.setContentsMargins(12, 0, 12, 0)
 
-        # Información de sesión con estilo mejorado
-        self.session_info = QLabel("Sesión: No iniciada")
-        self.session_info.setStyleSheet("""
-            QLabel {
-                color: #CCCCCC;
-                font-size: 13px;
-                font-weight: 600;
-                background: transparent;
-                background-color: rgba(244, 67, 54, 0.1);
-                border: 1px solid rgba(244, 67, 54, 0.3);
-                padding: 2px 8px;
-            }
-        """)
-        footer_layout.addWidget(self.session_info)
-
         footer_layout.addStretch()
 
         # Botones de acción con estilo moderno inspirado en login
-        new_session_btn = QPushButton("Nueva Sesión")
-        new_session_btn.clicked.connect(self.start_new_session)
-        new_session_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #66BB6A,
-                                       stop: 1 #4CAF50);
-                color: white;
-                border: 2px solid #4CAF50;
-                border-radius: 8px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: bold;
-                min-width: 120px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #81C784,
-                                       stop: 1 #66BB6A);
-                border: 2px solid #66BB6A;
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #4CAF50,
-                                       stop: 1 #388E3C);
-                border: 2px solid #388E3C;
-            }
-        """)
-        footer_layout.addWidget(new_session_btn)
-
         save_btn = QPushButton("Guardar Datos")
         save_btn.setFixedSize(134, 36)
         save_btn.clicked.connect(self.save_session_data)
@@ -635,9 +413,6 @@ class EMDRControlPanel(QMainWindow):
         # Mantener registro de dispositivos conectados
         self.connected_devices = []
         
-        # Cargar pacientes por defecto
-        self.load_patients()
-
         # Manager de limpieza
         self.cleanup_manager = CleanupManager()
         
@@ -787,7 +562,7 @@ class EMDRControlPanel(QMainWindow):
             icon = qta.icon(icon_name, color=icon_color)
             box.icon_label.setPixmap(icon.pixmap(20, 20))
 
-    def create_header_bar(self, username):
+    def create_header_bar(self):
         """Crea la barra superior con información contextual"""
         header_frame = QFrame()
         header_frame.setFrameShape(QFrame.StyledPanel)
@@ -877,9 +652,10 @@ class EMDRControlPanel(QMainWindow):
         header_layout.addWidget(title_label)
         
         header_layout.addStretch()
+        header_layout.addSpacing(20)
         
         # Información del terapeuta
-        therapist_label = QLabel(f"Terapeuta: {username}")
+        therapist_label = QLabel(f"Terapeuta: {self.therapist_name}")
         therapist_label.setStyleSheet("""
             QLabel {
                 color: #003454;
@@ -891,11 +667,8 @@ class EMDRControlPanel(QMainWindow):
         """)
         header_layout.addWidget(therapist_label)
         
-        # Espaciado
-        header_layout.addSpacing(20)
-        
-        # Selector de paciente
-        patient_label = QLabel("Paciente:")
+        # Información del paciente
+        patient_label = QLabel(f"Paciente: {self.patient_name}")
         patient_label.setStyleSheet("""
             QLabel {
                 color: #003454;
@@ -905,191 +678,21 @@ class EMDRControlPanel(QMainWindow):
             }
         """)
         header_layout.addWidget(patient_label)
-
-        self.patient_selector = QComboBox()
-
-        # Configurar íconos para las flechas del dropdown
-        self.combo_arrow_down = qta.icon('fa6s.chevron-down', color='#FFFFFF')
-        self.combo_arrow_up = qta.icon('fa6s.chevron-up', color='#FFFFFF')
-
-        self.patient_selector.setStyleSheet("""
-            QComboBox {
-                padding: 8px 12px 8px 12px;
-                border: 2px solid #555555;
-                border-radius: 6px;
-                font-size: 13px;
-                min-width: 160px;
-                background-color: #424242;
-                color: white;
-                font-weight: 500;
-            }
-            QComboBox:focus {
-                border: 2px solid #00A99D;
-                background-color: #383838;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 30px;
-                border-left: 1px solid #555555;
-                border-top-right-radius: 6px;
-                border-bottom-right-radius: 6px;
-                background-color: #333333;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border: none;
-                width: 16px;
-                height: 16px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #424242;
-                color: white;
-                selection-background-color: #00A99D;
-                border: 1px solid #555555;
-                outline: none;
-            }
-            QComboBox QAbstractItemView::item {
-                height: 30px;
-                padding: 5px;
-                border: none;
-            }
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #00A99D;
-            }
-        """)
-
-        # Crear un contenedor para el ComboBox y la flecha personalizada
-        patient_combo_container = QFrame()
-        patient_combo_container.setStyleSheet("""
-            QFrame { 
-                border: none; 
-                background: transparent; 
-                padding: 0px; 
-            }
-        """)
-        patient_combo_layout = QHBoxLayout(patient_combo_container)
-        patient_combo_layout.setContentsMargins(0, 0, 0, 0)
-        patient_combo_layout.setSpacing(0)
-
-        patient_combo_layout.addWidget(self.patient_selector)
-
-        # Crear el ícono de flecha personalizado
-        self.patient_dropdown_arrow_label = QLabel()
-        self.patient_dropdown_arrow_label.setPixmap(self.combo_arrow_down.pixmap(16, 16))
-        self.patient_dropdown_arrow_label.setStyleSheet("""
+        
+        # Información de sesión con estilo mejorado
+        session_info = QLabel(f"Sesión N°{self.current_session}")
+        session_info.setStyleSheet("""
             QLabel {
+                color: #003454;
+                font-weight: 600;
                 background: transparent;
-                border: none;
-                padding: 0px;
+                border-radius: 12px;
             }
         """)
-
-        # Posicionar el ícono de flecha sobre el combo box
-        self.patient_dropdown_arrow_label.setParent(self.patient_selector)
-        self.patient_dropdown_arrow_label.move(self.patient_selector.width() - 25, 
-                                          (self.patient_selector.height() - 16) // 2)
-
-        # Sobrescribir métodos para manejar el cambio de ícono
-        original_show_popup = self.patient_selector.showPopup
-        original_hide_popup = self.patient_selector.hidePopup
-        original_resize_event = self.patient_selector.resizeEvent
-
-        def patient_combo_show_popup():
-            """Cambia el ícono cuando se despliega el combo"""
-            self.patient_dropdown_arrow_label.setPixmap(self.combo_arrow_up.pixmap(16, 16))
-            original_show_popup()
-
-        def patient_combo_hide_popup():
-            """Cambia el ícono cuando se colapsa el combo"""
-            self.patient_dropdown_arrow_label.setPixmap(self.combo_arrow_down.pixmap(16, 16))
-            original_hide_popup()
-
-        def patient_combo_resize_event(event):
-            """Reposiciona la flecha cuando el combo se redimensiona"""
-            original_resize_event(event)
-            self.patient_dropdown_arrow_label.move(self.patient_selector.width() - 25, 
-                                              (self.patient_selector.height() - 16) // 2)
-
-        # Asignar los métodos sobrescritos
-        self.patient_selector.showPopup = patient_combo_show_popup
-        self.patient_selector.hidePopup = patient_combo_hide_popup
-        self.patient_selector.resizeEvent = patient_combo_resize_event
-
-        # Conectar el evento de cambio
-        self.patient_selector.currentIndexChanged.connect(self.change_patient)
-
-        # Añadir el contenedor al layout
-        header_layout.addWidget(patient_combo_container)
+        
+        header_layout.addWidget(session_info)
         
         return header_frame
-    
-    def load_patients(self):
-        """Carga la lista de pacientes desde la base de datos"""
-        try:
-            patients = DatabaseManager.get_all_patients()
-            self.patient_selector.clear()
-            self.patient_selector.addItem("-- Seleccione paciente --", None)
-            
-            for patient in patients:
-                self.patient_selector.addItem(f"{patient['nombre']} ({patient['edad']} años)", patient['id'])
-                
-        except Exception as e:
-            print(f"Error al cargar pacientes: {e}")
-            QMessageBox.warning(self, "Error", f"No se pudo cargar la lista de pacientes: {str(e)}")
-    
-    def change_patient(self):
-        """Cambia el paciente actual y carga sus datos"""
-        patient_id = self.patient_selector.currentData()
-        if patient_id is None:
-            self.current_patient = None
-            self.session_info.setText("Sesión: No iniciada")
-            return
-            
-        try:
-            self.current_patient = DatabaseManager.get_patient(patient_id)
-            if self.current_patient:
-                # Cargar sesiones previas
-                sessions = DatabaseManager.get_sessions_for_patient(patient_id)
-                
-                # Actualizar interfaz con info del paciente
-                self.session_info.setText(f"Paciente: {self.current_patient['nombre']} - Sin sesión activa")
-                
-                # Si queremos hacer más, como cargar historial, sería aquí
-                
-            else:
-                self.current_patient = None
-                
-        except Exception as e:
-            print(f"Error al cambiar de paciente: {e}")
-            QMessageBox.warning(self, "Error", f"No se pudo cargar la información del paciente: {str(e)}")
-    
-    def start_new_session(self):
-        """Inicia una nueva sesión para el paciente actual"""
-        if not self.current_patient:
-            QMessageBox.warning(self, "Advertencia", "Debe seleccionar un paciente antes de iniciar una sesión.")
-            return
-            
-        try:
-            # Crear nueva sesión en la base de datos
-            session_id = DatabaseManager.add_session(
-                id_paciente=self.current_patient["id"],
-                comentarios=f"Sesión iniciada el {time.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-            
-            self.current_session = session_id
-            self.session_info.setText(f"Paciente: {self.current_patient['nombre']} - Sesión #{session_id} activa")
-            
-            # Si el monitor está en ejecución, detenerlo primero
-            if self.sensor_monitor.running:
-                self.sensor_monitor.stop_acquisition()
-            
-            QMessageBox.information(self, "Sesión iniciada", 
-                                  f"Se ha iniciado una nueva sesión para {self.current_patient['nombre']}.")
-                                  
-        except Exception as e:
-            print(f"Error al iniciar nueva sesión: {e}")
-            QMessageBox.critical(self, "Error", f"No se pudo iniciar una nueva sesión: {str(e)}")
     
     def save_session_data(self):
         """Guarda los datos de la sesión actual"""
@@ -1293,277 +896,6 @@ class EMDRControlPanel(QMainWindow):
         """Callback cuando falla la limpieza"""
         print(f"Error en limpieza: {error_msg}")
 
-    def add_new_patient(self):
-        """Muestra un diálogo para añadir un nuevo paciente"""
-        # Crear el diálogo
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Añadir Nuevo Paciente")
-        dialog.setMinimumWidth(450)
-        dialog.setModal(True)
-        dialog.setStyleSheet("""
-            QDialog {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #F8F9FA,
-                                       stop: 1 #E9ECEF);
-                border-radius: 10px;
-            }
-            QLabel {
-                color: #424242;
-                font-family: 'Segoe UI', Arial, sans-serif;
-            }
-            QLineEdit, QTextEdit {
-                background-color: #FFFFFF;
-                border: 2px solid #CCCCCC;
-                border-radius: 6px;
-                padding: 8px;
-                font-size: 12px;
-                color: #424242;
-            }
-            QLineEdit:focus, QTextEdit:focus {
-                border: 2px solid #00A99D;
-                background-color: #FAFAFA;
-            }
-        """)
-        
-        # Layout principal
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-        
-        # Título con estilo del login
-        title_label = QLabel("DATOS DEL PACIENTE")
-        title_label.setStyleSheet("""
-            QLabel {
-                background: qconicalgradient(cx: 0.5, cy: 0.5, angle: 0,
-                                       stop: 0 rgba(120, 255, 180, 0.9),
-                                       stop: 0.4 rgba(0, 169, 157, 0.85),
-                                       stop: 1 rgba(120, 255, 180, 0.9));
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                padding: 12px;
-                border-radius: 8px;
-                border: 1px solid rgba(0, 140, 130, 0.6);
-            }
-        """)
-        title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
-        
-        # Frame para el formulario
-        form_frame = QFrame()
-        form_frame.setStyleSheet("""
-            QFrame {
-                background-color: #FFFFFF;
-                border: 2px solid #CCCCCC;
-                border-radius: 10px;
-                padding: 15px;
-            }
-        """)
-        form_layout = QFormLayout(form_frame)
-        form_layout.setSpacing(12)
-        form_layout.setLabelAlignment(Qt.AlignRight)
-        
-        # Campos del formulario
-        nombre_edit = QLineEdit()
-        nombre_edit.setPlaceholderText("Ingrese el nombre")
-        
-        apellido_paterno_edit = QLineEdit()
-        apellido_paterno_edit.setPlaceholderText("Ingrese el apellido paterno")
-        
-        apellido_materno_edit = QLineEdit()
-        apellido_materno_edit.setPlaceholderText("Ingrese el apellido materno")
-        
-        edad_edit = QLineEdit()
-        edad_edit.setPlaceholderText("Edad (opcional)")
-        # Solo permitir números enteros
-        edad_edit.setValidator(QIntValidator(0, 120))
-        
-        celular_edit = QLineEdit()
-        celular_edit.setPlaceholderText("Número de contacto")
-        
-        notas_edit = QTextEdit()
-        notas_edit.setPlaceholderText("Notas adicionales (opcional)")
-        notas_edit.setMaximumHeight(80)
-        
-        # Añadir campos al formulario con labels estilizados
-        label_style = """
-            QLabel {
-                color: #424242;
-                font-weight: 600;
-                font-size: 13px;
-            }
-        """
-        
-        nombre_label = QLabel("Nombre:")
-        nombre_label.setStyleSheet(label_style)
-        form_layout.addRow(nombre_label, nombre_edit)
-        
-        apellido_p_label = QLabel("Apellido paterno:")
-        apellido_p_label.setStyleSheet(label_style)
-        form_layout.addRow(apellido_p_label, apellido_paterno_edit)
-        
-        apellido_m_label = QLabel("Apellido materno:")
-        apellido_m_label.setStyleSheet(label_style)
-        form_layout.addRow(apellido_m_label, apellido_materno_edit)
-        
-        edad_label = QLabel("Edad:")
-        edad_label.setStyleSheet(label_style)
-        form_layout.addRow(edad_label, edad_edit)
-        
-        celular_label = QLabel("Celular:")
-        celular_label.setStyleSheet(label_style)
-        form_layout.addRow(celular_label, celular_edit)
-        
-        notas_label = QLabel("Notas:")
-        notas_label.setStyleSheet(label_style)
-        form_layout.addRow(notas_label, notas_edit)
-        
-        layout.addWidget(form_frame)
-        
-        # Botones de acción con estilo moderno
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        
-        cancel_btn = QPushButton("Cancelar")
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #EF5350,
-                                       stop: 1 #F44336);
-                color: white;
-                border: 2px solid #F44336;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-size: 12px;
-                font-weight: bold;
-                min-width: 100px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #E57373,
-                                       stop: 1 #EF5350);
-                border: 2px solid #EF5350;
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #F44336,
-                                       stop: 1 #D32F2F);
-                border: 2px solid #D32F2F;
-            }
-        """)
-        cancel_btn.clicked.connect(dialog.reject)
-        
-        save_btn = QPushButton("Guardar")
-        save_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #66BB6A,
-                                       stop: 1 #4CAF50);
-                color: white;
-                border: 2px solid #4CAF50;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-size: 12px;
-                font-weight: bold;
-                min-width: 100px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #81C784,
-                                       stop: 1 #66BB6A);
-                border: 2px solid #66BB6A;
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                       stop: 0 #4CAF50,
-                                       stop: 1 #388E3C);
-                border: 2px solid #388E3C;
-            }
-        """)
-        save_btn.clicked.connect(lambda: self.save_new_patient(
-            dialog,
-            nombre_edit.text(),
-            apellido_paterno_edit.text(),
-            apellido_materno_edit.text(),
-            edad_edit.text(),
-            celular_edit.text(),
-            notas_edit.toPlainText()
-        ))
-        
-        button_layout.addWidget(cancel_btn)
-        button_layout.addWidget(save_btn)
-        
-        layout.addLayout(button_layout)
-        
-        # Mostrar diálogo
-        dialog.exec()
-
-    def save_new_patient(self, dialog, nombre, apellido_paterno, apellido_materno, edad, celular, notas):
-        """Guarda el nuevo paciente en la base de datos"""
-        # Validar campos obligatorios
-        if not nombre or not apellido_paterno or not celular:
-            QMessageBox.warning(
-                dialog,
-                "Datos incompletos",
-                "Los campos Nombre, Apellido paterno y Celular son obligatorios."
-            )
-            return
-    
-        # Convertir edad a entero (si está presente)
-        edad_int = None
-        if edad:
-            try:
-                edad_int = int(edad)
-            except ValueError:
-                QMessageBox.warning(
-                    dialog,
-                    "Dato inválido",
-                    "La edad debe ser un número entero."
-                )
-                return
-    
-        # Guardar en la base de datos
-        try:
-            patient_id = DatabaseManager.add_patient(
-                apellido_paterno=apellido_paterno,
-                apellido_materno=apellido_materno,
-                nombre=nombre,
-                edad=edad_int,
-                celular=celular,
-                notas=notas
-            )
-            
-            if patient_id:
-                # Actualizar la lista de pacientes
-                self.load_patients()
-                
-                # Seleccionar el paciente recién creado
-                index = -1
-                for i in range(self.patient_selector.count()):
-                    if self.patient_selector.itemData(i) == patient_id:
-                        index = i
-                        break
-                        
-                if index >= 0:
-                    self.patient_selector.setCurrentIndex(index)
-                    
-                # Mostrar mensaje de éxito
-                QMessageBox.information(
-                    self,
-                    "Paciente registrado",
-                    f"El paciente {nombre} {apellido_paterno} ha sido registrado correctamente."
-                )
-                
-                # Cerrar el diálogo
-                dialog.accept()
-                
-        except Exception as e:
-            QMessageBox.critical(
-                dialog,
-                "Error de registro",
-                f"No se pudo registrar el paciente: {str(e)}"
-            )
-
     def return_to_dashboard(self):
         """Regresa al dashboard del terapeuta"""
         winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
@@ -1712,10 +1044,12 @@ class EMDRControlPanel(QMainWindow):
     
 # Para pruebas independientes
 if __name__ == "__main__":
+    from datetime import datetime
+    
     app = QApplication([])
     
-    # Crear dashboard de prueba (necesita un username válido en la BD)
-    control_panel = EMDRControlPanel("Lic. Margarita Valdivia")  # Usar el usuario de ejemplo
+    # Crear dashboard de prueba (necesita un therapist_name válido)
+    control_panel = EMDRControlPanel("Lic. Margarita Valdivia", "Juan Pérez González", 1, 1, datetime.now())  # Usar datos de ejemplo
     # control_panel.setGeometry(0, 0, 1364, 688) # Este ajuste da como resultado una ventana real de 1366 x 722
     
     control_panel.show()
