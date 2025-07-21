@@ -137,19 +137,30 @@ class DatabaseManager:
         nombre: str,
         fecha_nacimiento: str,
         celular: str,
-        comentarios: str = "", 
+        fecha_registro: str,
+        comentarios: str = "",
         conn=None
     ) -> int:
         """
         Añade un nuevo paciente a la base de datos
-        Retorna: ID del paciente creado
+        Args:
+            apellido_paterno: Apellido paterno del paciente
+            apellido_materno: Apellido materno del paciente
+            nombre: Nombre(s) del paciente
+            fecha_nacimiento: Fecha de nacimiento en formato YYYY-MM-DD
+            celular: Número de celular del paciente
+            fecha_registro: Fecha de registro en formato YYYY-MM-DD HH:MM:SS
+            comentarios: Comentarios adicionales (opcional)
+        Returns:
+            int: ID del paciente creado
         """
+        print("fecha =",fecha_registro)
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO pacientes 
-               (apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, comentarios) 
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, comentarios)
+               (apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, fecha_registro, comentarios) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, fecha_registro, comentarios)
         )
         conn.commit()
         return cursor.lastrowid
@@ -509,7 +520,7 @@ class DatabaseManager:
         
         return [
             {
-                "id": s[0], 
+                "id": s[0],
                 "fecha": s[1], 
                 "comentarios": s[2],
                 # No incluimos datos de sensores pues son BLOBs que pueden ser grandes
