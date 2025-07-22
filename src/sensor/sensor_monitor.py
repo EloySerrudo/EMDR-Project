@@ -7,6 +7,7 @@ import os
 from collections import deque
 import pandas as pd
 from datetime import datetime
+from scipy import signal
 
 # PyQtGraph y PySide6 imports
 from PySide6.QtWidgets import (
@@ -103,6 +104,9 @@ class SensorMonitor(QWidget):
         self.bpm_datos = []  # Para almacenar BPM para CSV
         self.last_packet_id = -1  # Para detectar paquetes duplicados
         
+        # Variables para control del LED de pulsaciones
+        self.led_is_active = False
+        
         # Slave device tracking
         self.slave_status = {slave_id: False for slave_id in KNOWN_SLAVES}
         self.required_devices_connected = False
@@ -154,6 +158,37 @@ class SensorMonitor(QWidget):
             header_layout.addWidget(title_label)
             
             header_layout.addStretch()
+            
+            # Botón de escaneo de dispositivos
+            scan_btn = QPushButton("Escanear")
+            scan_btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #9C27B0,
+                                            stop: 1 #7B1FA2);
+                    color: white;
+                    border: 2px solid #7B1FA2;
+                    border-radius: 8px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    min-width: 100px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #AB47BC,
+                                            stop: 1 #9C27B0);
+                    border: 2px solid #9C27B0;
+                }
+                QPushButton:pressed {
+                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #7B1FA2,
+                                            stop: 1 #6A1B9A);
+                    border: 2px solid #6A1B9A;
+                }
+            """)
+            scan_btn.clicked.connect(self.check_slave_connections)
+            header_layout.addWidget(scan_btn)
             
             # Botón de control de adquisición con estilo moderno
             self.btn_start_stop = QPushButton("Iniciar Adquisición")
@@ -224,6 +259,75 @@ class SensorMonitor(QWidget):
             
             self.main_layout.addWidget(header_frame)
         
+        # ===== ÁREA DE PULSACIONES =====
+        pulse_monitor_frame = QFrame()
+        pulse_monitor_frame.setFrameShape(QFrame.StyledPanel)
+        pulse_monitor_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                                        stop: 0 rgba(255, 152, 0, 0.1),
+                                        stop: 0.5 rgba(255, 193, 7, 0.15),
+                                        stop: 1 rgba(255, 152, 0, 0.1));
+                border-radius: 8px;
+                border: 1px solid rgba(255, 152, 0, 0.3);
+                padding: 8px;
+                margin: 2px;
+            }
+        """)
+        pulse_monitor_frame.setFixedHeight(50)
+        
+        pulse_layout = QHBoxLayout(pulse_monitor_frame)
+        pulse_layout.setContentsMargins(15, 8, 15, 8)
+        
+        # Texto "Pulsaciones"
+        pulse_label = QLabel("Pulsaciones")
+        pulse_label.setStyleSheet("""
+            QLabel {
+                color: #FF6F00;
+                font-size: 14px;
+                font-weight: bold;
+                background: transparent;
+                padding: 4px;
+            }
+        """)
+        pulse_layout.addWidget(pulse_label)
+        
+        # LED simulado para pulsaciones
+        self.pulse_led = QLabel()
+        self.pulse_led.setFixedSize(20, 20)
+        self.pulse_led.setStyleSheet("""
+            QLabel {
+                background-color: #4CAF50;
+                border: 2px solid #2E7D32;
+                border-radius: 10px;
+                margin: 2px;
+            }
+        """)
+        pulse_layout.addWidget(self.pulse_led)
+        
+        # Espaciador para empujar el texto de BPM a la derecha
+        pulse_layout.addStretch()
+        
+        # Texto de pulsaciones por minuto
+        self.pulse_rate_label = QLabel("Pulsaciones / min: --")
+        self.pulse_rate_label.setStyleSheet("""
+            QLabel {
+                color: #FF6F00;
+                font-size: 14px;
+                font-weight: bold;
+                background: transparent;
+                padding: 4px;
+            }
+        """)
+        pulse_layout.addWidget(self.pulse_rate_label)
+        
+        self.main_layout.addWidget(pulse_monitor_frame)
+        
+        # Variables para control del LED
+        self.led_timer = QTimer()
+        self.led_timer.timeout.connect(self.reset_led)
+        self.led_is_active = False
+        
         # ===== ÁREA DE GRÁFICAS =====
         # Frame contenedor para las gráficas con estilo moderno
         plots_frame = QFrame()
@@ -245,15 +349,15 @@ class SensorMonitor(QWidget):
         GRAPH_HEIGHT = 130  # Altura uniforme para todas las gráficas
         
         # Crear gráficas individuales
-        self.eog_plot = self.create_eog_plot(display_time, height=GRAPH_HEIGHT)
         if self.is_standalone:
             self.ppg_plot = self.create_ppg_plot(display_time, height=GRAPH_HEIGHT)
-        self.bpm_plot = self.create_bpm_plot(display_time, height=GRAPH_HEIGHT + 25)
+        self.bpm_plot = self.create_bpm_plot(display_time, height=GRAPH_HEIGHT)
+        self.eog_plot = self.create_eog_plot(display_time, height=GRAPH_HEIGHT + 25)
         
-        plots_layout.addWidget(self.eog_plot)
         if self.is_standalone:
             plots_layout.addWidget(self.ppg_plot)
         plots_layout.addWidget(self.bpm_plot)
+        plots_layout.addWidget(self.eog_plot)
         # plots_layout.addStretch()
         
         # ===== CREAR CURVAS DE DATOS =====
@@ -351,7 +455,7 @@ class SensorMonitor(QWidget):
         """Crear y configurar la gráfica EOG con estilo moderno"""
         eog_plot = pg.PlotWidget()
         eog_plot.setFixedHeight(height)
-        eog_plot.setLabel('bottom', '')
+        eog_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
         eog_plot.setYRange(-14000, 10000)
         eog_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
@@ -359,13 +463,20 @@ class SensorMonitor(QWidget):
         eog_plot.setBackground('#FFFFFF')
         eog_plot.showGrid(x=True, y=True, alpha=0.2)
         
-        # Configurar eje X con estilo moderno
+        # Configurar ejes con estilo moderno
         x_axis = eog_plot.getAxis('bottom')
-        x_axis.setStyle(showValues=False)
         x_axis.setTickSpacing(major=1, minor=0.5)
         x_axis.setPen(pg.mkPen('#CCCCCC', width=1))
         x_axis.setTextPen(pg.mkPen('#424242'))
         
+        # ===== AÑADIR CONFIGURACIÓN PARA REDUCIR ESPACIADO DEL EJE X =====
+        x_axis.setStyle(
+            tickTextOffset=2,      # Reducir distancia entre ticks y valores numéricos
+            autoExpandTextSpace=False,  # No expandir automáticamente
+            tickTextHeight=10      # Reducir altura del área de texto
+        )
+        x_axis.setHeight(25)       # Reducir altura total del eje X (valor por defecto ~40)
+    
         # Configurar eje Y con espaciado personalizado
         self.configure_y_axis_spacing(eog_plot, 'EOG (µV)', axis_width=60)
         
@@ -383,7 +494,7 @@ class SensorMonitor(QWidget):
         """Crear y configurar la gráfica BPM con estilo moderno"""
         bpm_plot = pg.PlotWidget()
         bpm_plot.setFixedHeight(height)
-        bpm_plot.setLabel('bottom', 'Tiempo (s)', size='10pt', color='#424242')
+        bpm_plot.setLabel('bottom', '')
         bpm_plot.setYRange(50, 120)
         bpm_plot.setXRange(-display_time, 0, padding=GRAPH_PADDING)
         
@@ -391,20 +502,13 @@ class SensorMonitor(QWidget):
         bpm_plot.setBackground('#FFFFFF')
         bpm_plot.showGrid(x=True, y=True, alpha=0.2)
         
-        # Configurar ejes con estilo moderno
+        # Configurar eje X con estilo moderno
         x_axis = bpm_plot.getAxis('bottom')
+        x_axis.setStyle(showValues=False)
         x_axis.setTickSpacing(major=1, minor=0.5)
         x_axis.setPen(pg.mkPen('#CCCCCC', width=1))
         x_axis.setTextPen(pg.mkPen('#424242'))
         
-        # ===== AÑADIR CONFIGURACIÓN PARA REDUCIR ESPACIADO DEL EJE X =====
-        x_axis.setStyle(
-            tickTextOffset=2,      # Reducir distancia entre ticks y valores numéricos
-            autoExpandTextSpace=False,  # No expandir automáticamente
-            tickTextHeight=10      # Reducir altura del área de texto
-        )
-        x_axis.setHeight(25)       # Reducir altura total del eje X (valor por defecto ~40)
-    
         # Configurar eje Y con espaciado personalizado
         self.configure_y_axis_spacing(bpm_plot, 'BPM', axis_width=60)
         
@@ -612,6 +716,9 @@ class SensorMonitor(QWidget):
         # Crear una nueva instancia:
         self.bpm_calculator = PPGHeartRateCalculator(sample_rate=SAMPLE_RATE)
         self.current_heart_rate = 0
+        
+        # Reset LED estado
+        self.led_is_active = False
         
         # Clear and reset data buffers
         self.times.clear()
@@ -950,6 +1057,12 @@ class SensorMonitor(QWidget):
                     self.bpm_text.setColor((255, 152, 0))  # Naranja para elevado
                 else:
                     self.bpm_text.setColor((66, 66, 66))   # Gris para otros casos
+            
+            # Detectar picos para activar LED y actualizar display de pulsaciones
+            if self.running and len(filtered_ppg_data) > 0:
+                current_time = time.time()
+                self.detect_pulse_peaks(self.filtered_ppg_values, current_time)
+                self.update_pulse_rate_display(self.current_heart_rate)
         
         # Fijar siempre el rango X entre -5 y 0
         self.eog_plot.setXRange(-DISPLAY_TIME, 0, padding=GRAPH_PADDING)
@@ -1115,6 +1228,80 @@ class SensorMonitor(QWidget):
             self.save_data_to_csv()
         
         print("Limpieza de SensorMonitor completada")
+    
+    def reset_led(self):
+        """Resetear el LED a su estado normal"""
+        self.pulse_led.setStyleSheet("""
+            QLabel {
+                background-color: #66BB6A;
+                border: 2px solid #2E7D32;
+                border-radius: 10px;
+                margin: 2px;
+            }
+        """)
+        self.led_is_active = False
+        self.led_timer.stop()
+    
+    def activate_pulse_led(self):
+        """Activar el LED cuando se detecta una pulsación"""
+        if not self.led_is_active:
+            self.pulse_led.setStyleSheet("""
+                QLabel {
+                    background-color: #FF5722;
+                    border: 2px solid #D32F2F;
+                    border-radius: 10px;
+                    margin: 2px;
+                    box-shadow: 0 0 10px rgba(255, 87, 34, 0.8);
+                }
+            """)
+            self.led_is_active = True
+            self.led_timer.start(200)  # LED activo por 200ms
+    
+    def detect_pulse_peaks(self, filtered_ppg_data, timestamp):
+        """Detectar picos en la señal PPG filtrada y activar LED"""
+        if len(filtered_ppg_data) < 3:
+            return
+        
+        # Usar una ventana pequeña para detección en tiempo real
+        window_size = min(len(filtered_ppg_data), int(2 * SAMPLE_RATE))  # 2 segundos
+        recent_data = list(filtered_ppg_data)[-window_size:]
+        
+        if len(recent_data) < SAMPLE_RATE:  # Necesitamos al menos 1 segundo
+            return
+        
+        try:
+            # Normalizar datos
+            data_array = np.array(recent_data)
+            data_norm = (data_array - np.mean(data_array)) / (np.std(data_array) + 1e-10)
+            
+            # Parámetros para detección de picos
+            min_distance = int(SAMPLE_RATE * 60 / 180)  # Máximo 180 BPM
+            min_height = 0.5  # Altura mínima normalizada
+            
+            # Detectar picos
+            peaks, properties = signal.find_peaks(
+                data_norm,
+                height=min_height,
+                distance=min_distance,
+                prominence=0.3
+            )
+            
+            # Si hay picos en los últimos 100ms, activar LED
+            recent_threshold = len(recent_data) - int(0.1 * SAMPLE_RATE)  # Últimos 100ms
+            recent_peaks = peaks[peaks > recent_threshold]
+            
+            if len(recent_peaks) > 0:
+                self.activate_pulse_led()
+                
+        except Exception as e:
+            print(f"Error en detección de picos: {e}")
+    
+    def update_pulse_rate_display(self, bpm_value):
+        """Actualizar el display de pulsaciones por minuto"""
+        if bpm_value is not None and bpm_value > 0:
+            self.pulse_rate_label.setText(f"Pulsaciones / min: {int(bpm_value)}")
+        else:
+            self.pulse_rate_label.setText("Pulsaciones / min: --")
     
     def is_busy(self) -> bool:
         """Verificar si está ocupado"""
