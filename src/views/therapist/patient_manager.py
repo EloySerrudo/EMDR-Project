@@ -489,6 +489,7 @@ class PatientManagerWidget(QMainWindow):
     def __init__(self, username=None):
         super().__init__()
         self.username = username
+        self.control_panel = None  # Inicializar referencia del control panel
         
         self.setWindowTitle("EMDR Project - Gestión de Pacientes")
         self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
@@ -1048,13 +1049,50 @@ class PatientManagerWidget(QMainWindow):
                 return
             
             # Abrir diálogo de nueva sesión
-            new_session_dialog = NewSessionDialog(patient_data, self)
+            new_session_dialog = NewSessionDialog(patient_data, self, self.username)
+            # Conectar la señal del diálogo para abrir el control panel
+            new_session_dialog.open_control_panel.connect(self.open_control_panel)
             new_session_dialog.exec()
             
         except ValueError:
             QMessageBox.warning(self, "Error",  "Código de paciente inválido")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al crear nueva sesión: {str(e)}")
+    
+    def open_control_panel(self, therapist_name, patient_name, patient_id, current_session, session_datetime, session_type):
+        """Abre la ventana de control panel con los datos de la sesión"""
+        try:
+            # Importar aquí para evitar importaciones circulares
+            from src.views.therapist.control_panel import EMDRControlPanel
+            
+            # Crear ventana de control panel
+            self.control_panel = EMDRControlPanel(
+                therapist_name=therapist_name,
+                patient_name=patient_name,
+                patient_id=patient_id,
+                current_session=current_session,
+                session_datetime=session_datetime,
+                session_type=session_type
+            )
+            
+            # Conectar señal para cuando se cierre el control panel
+            self.control_panel.window_closed.connect(self.on_control_panel_closed)
+            
+            # Mostrar control panel
+            self.control_panel.show()
+            
+            # Ocultar esta ventana
+            self.hide()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"No se pudo abrir el control panel: {str(e)}")
+    
+    def on_control_panel_closed(self):
+        """Maneja el cierre de la ventana de control panel"""
+        # Mostrar nuevamente esta ventana
+        self.show()
+        # Limpiar referencia
+        self.control_panel = None
     
     def delete_patient(self):
         """Elimina el paciente seleccionado y todas sus sesiones relacionadas"""

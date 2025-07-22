@@ -1421,8 +1421,8 @@ class EMDRControllerWidget(QWidget):
 
         # Añadir las pestañas al TabWidget con iconos sofisticados
         headphone_icon = qta.icon('fa5s.headphones', color='white')
-        light_icon = qta.icon('fa6s.eye', color='white')
-        buzzer_icon = qta.icon('fa6s.hand', color='white')
+        light_icon = qta.icon('fa5s.eye', color='white')
+        buzzer_icon = qta.icon('mdi6.hand-wave', color='white')
 
         self.tab_widget.addTab(headphone_scroll, headphone_icon, "Estimulación Auditiva")
         self.tab_widget.addTab(lightbar_scroll, light_icon, "Estimulación Visual")

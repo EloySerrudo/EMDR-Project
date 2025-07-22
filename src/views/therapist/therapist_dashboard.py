@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 # Importaciones para componentes específicos
 from src.views.therapist.add_patient_dialog import AddPatientDialog
 from src.database.database_manager import DatabaseManager
-from src.views.therapist.control_panel import EMDRControlPanel
 from src.views.therapist.patient_manager import PatientManagerWidget
 
 
@@ -31,7 +30,6 @@ class TherapistDashboard(QMainWindow):
         super().__init__()
         self.username = username
         self.therapist_data = None
-        self.control_panel_window = None
         self.patient_manager_window = None
         
         # Cargar datos del terapeuta
@@ -269,41 +267,6 @@ class TherapistDashboard(QMainWindow):
         main_buttons_layout.setContentsMargins(0, 0, 0, 0)
         main_buttons_layout.setSpacing(30)  # Reducir espacio entre botones
         
-        # Botón Control Panel
-        self.control_panel_btn = QPushButton()
-        self.control_panel_btn.setText("Panel de Control\nEMDR")
-        self.control_panel_btn.setFixedSize(150, 110)
-        self.control_panel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #00A99D;
-                color: white;
-                border-radius: 10px;
-                font-size: 15px;
-                font-weight: bold;
-                border-top: 2px solid #00E6D6;
-                border-left: 2px solid #00D4C4;
-                border-right: 2px solid #006B61;
-                border-bottom: 2px solid #005A50;
-                padding: 3px;
-            }
-            QPushButton:hover {
-                background-color: #00C2B3;
-                border-top: 2px solid #00F5E5;
-                border-left: 2px solid #00E6D6;
-                border-right: 2px solid #007A70;
-                border-bottom: 2px solid #00695F;
-            }
-            QPushButton:pressed {
-                background-color: #008C82;
-                border-top: 2px solid #005A50;
-                border-left: 2px solid #006B61;
-                border-right: 2px solid #00C2B3;
-                border-bottom: 2px solid #00D4C4;
-                padding: 5px 1px 1px 5px;
-            }
-        """)
-        self.control_panel_btn.clicked.connect(self.open_control_panel)
-        
         # Botón Añadir Paciente (NUEVO)
         self.add_patient_btn = QPushButton()
         self.add_patient_btn.setText("Añadir\nPaciente")
@@ -376,7 +339,6 @@ class TherapistDashboard(QMainWindow):
         
         # Añadir botones con espaciado
         main_buttons_layout.addStretch()
-        main_buttons_layout.addWidget(self.control_panel_btn)
         main_buttons_layout.addWidget(self.add_patient_btn)
         main_buttons_layout.addWidget(self.patient_manager_btn)
         main_buttons_layout.addStretch()
@@ -570,27 +532,6 @@ class TherapistDashboard(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al procesar el registro del paciente:\n{str(e)}")
     
-    def open_control_panel(self):
-        """Abre la ventana del panel de control EMDR"""
-        try:
-            # Cerrar ventana anterior si existe
-            if self.control_panel_window:
-                self.control_panel_window.close()
-            
-            # Crear nueva ventana del panel de control
-            self.control_panel_window = EMDRControlPanel(self.nombre_completo)
-            
-            # Conectar señal personalizada para mostrar el dashboard cuando se cierre
-            self.control_panel_window.window_closed.connect(self.show_dashboard_on_return)
-            
-            self.control_panel_window.showMaximized()
-            
-            # Ocultar el dashboard
-            self.hide()
-            
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"No se pudo abrir el panel de control: {str(e)}")
-    
     def open_patient_manager(self):
         """Abre la ventana del gestor de pacientes"""
         try:
@@ -670,8 +611,6 @@ class TherapistDashboard(QMainWindow):
         
         if msg_box.clickedButton() == yes_button:
             # Cerrar ventanas abiertas
-            if self.control_panel_window:
-                self.control_panel_window.close()
             if self.patient_manager_window:
                 self.patient_manager_window.close()
             
@@ -733,8 +672,6 @@ class TherapistDashboard(QMainWindow):
         
         if msg_box.clickedButton() == yes_button:
             # Cerrar todas las ventanas
-            if self.control_panel_window:
-                self.control_panel_window.close()
             if self.patient_manager_window:
                 self.patient_manager_window.close()
             
@@ -744,8 +681,6 @@ class TherapistDashboard(QMainWindow):
     def closeEvent(self, event):
         """Maneja el evento de cierre de la ventana"""
         # Cuando se cierre el dashboard, también cerrar ventanas hijas
-        if self.control_panel_window:
-            self.control_panel_window.close()
         if self.patient_manager_window:
             self.patient_manager_window.close()
         

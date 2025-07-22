@@ -3,14 +3,19 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QMessageBox, QDialog, QGroupBox, QRadioButton, QButtonGroup
 )
+from PySide6.QtCore import Signal
 
 
 class NewSessionDialog(QDialog):
     """Diálogo para crear una nueva sesión"""
     
-    def __init__(self, patient_data, parent=None):
+    # Señal para solicitar abrir control panel
+    open_control_panel = Signal(str, str, int, int, object, str)  # therapist_name, patient_name, patient_id, session_number, session_datetime, session_type
+    
+    def __init__(self, patient_data, parent=None, therapist_username=None):
         super().__init__(parent)
         self.patient_data = patient_data
+        self.therapist_username = therapist_username
         self.session_datetime = datetime.now()  # Capturar fecha y hora con precisión de milisegundos
         
         self.setWindowTitle("Nueva Sesión")
@@ -387,22 +392,37 @@ class NewSessionDialog(QDialog):
     def create_session(self):
         """Crea la nueva sesión"""
         try:
+            # Importar aquí para evitar importaciones circulares
+            from src.database.database_manager import DatabaseManager
+            
             session_type = self.get_selected_session_type()
             
-            # Aquí puedes agregar la lógica para crear la sesión en la base de datos
-            # Por ahora solo mostraremos un mensaje de confirmación
+            # Contar sesiones existentes del paciente para calcular current_session
+            patient_id = self.patient_data.get('id')
+            existing_sessions = DatabaseManager.get_sessions_for_patient(patient_id)
+            current_session = len(existing_sessions) + 1
             
-            QMessageBox.information(
-                self,
-                "Sesión Creada",
-                f"Nueva sesión creada exitosamente:\n\n"
-                f"Paciente: {self.patient_data.get('nombre', '')} {self.patient_data.get('apellido_paterno', '')}\n"
-                f"Fecha: {self.session_datetime.strftime('%d/%m/%Y')}\n"
-                f"Hora: {self.session_datetime.strftime('%H:%M')}\n"
-                f"Tipo: {session_type}\n\n"
-                f"Timestamp completo: {self.session_datetime.isoformat()}"
+            # Preparar datos del terapeuta
+            therapist_data = DatabaseManager.get_therapist_by_username(self.therapist_username)
+            if therapist_data:
+                therapist_name = f"Lic. {therapist_data['nombre']} {therapist_data['apellido_paterno']}"
+            else:
+                therapist_name = self.therapist_username  # Fallback
+            
+            # Preparar datos del paciente
+            patient_name = f"{self.patient_data.get('nombre', '')} {self.patient_data.get('apellido_paterno', '')}"
+            
+            # Emitir señal para abrir control panel
+            self.open_control_panel.emit(
+                therapist_name,
+                patient_name,
+                patient_id,
+                current_session,
+                self.session_datetime,
+                session_type
             )
             
+            # Cerrar el diálogo
             self.accept()
             
         except Exception as e:

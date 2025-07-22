@@ -37,14 +37,21 @@ class EMDRControlPanel(QMainWindow):
     # Señal emitida cuando la ventana se cierra
     window_closed = Signal()  # Nueva señal personalizada
     
-    def __init__(self, therapist_name=None, patient_name=None, patient_id=None, current_session=None, session_datetime=None):
+    def __init__(self, therapist_name=None, patient_name=None, patient_id=None, current_session=None, session_datetime=None, session_type=None):
         super().__init__()
         self.therapist_name = therapist_name
         self.patient_name = patient_name
         self.patient_id = patient_id
         self.current_session = current_session
         self.session_datetime = session_datetime
+        self.session_type = session_type
         
+        # Impresion de información para debugging
+        print(f"ID del paciente: {self.patient_id}")
+        print(f"Sesión actual: N°{self.current_session}")
+        print(f"Fecha y hora de la sesión: {self.session_datetime.strftime('%d/%m/%Y - %H:%M:%S.%f')}")
+        print(f"Tipo de sesión: {self.session_type}")
+
         self.setWindowTitle(f"EMDR Project - Dashboard Terapéutico")
         self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
         
@@ -261,6 +268,175 @@ class EMDRControlPanel(QMainWindow):
         self.sensor_monitor = SensorMonitor()
         self.sensor_monitor.main_layout.setContentsMargins(0, 0, 0, 0)  # Eliminar márgenes del layout interno
         right_layout.addWidget(self.sensor_monitor)
+        
+        # ===== NUEVA SECCIÓN: EVALUACIÓN CLÍNICA =====
+        clinical_evaluation_frame = QFrame()
+        clinical_evaluation_frame.setFrameShape(QFrame.StyledPanel)
+        clinical_evaluation_frame.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: 2px solid #555555;
+                border-radius: 8px;
+                margin-top: 8px;
+            }
+        """)
+        
+        clinical_layout = QVBoxLayout(clinical_evaluation_frame)
+        clinical_layout.setContentsMargins(8, 8, 8, 8)
+        clinical_layout.setSpacing(8)
+        
+        # Título de la sección
+        clinical_header = QLabel("EVALUACIÓN CLÍNICA")
+        clinical_header.setStyleSheet("""
+            QLabel {
+                background: qconicalgradient(cx: 0.5, cy: 0.5, angle: 0,
+                                       stop: 0 rgba(120, 255, 180, 0.3),
+                                       stop: 0.5 rgba(0, 169, 157, 0.4),
+                                       stop: 1 rgba(120, 255, 180, 0.3));
+                color: #FFFFFF;
+                font-size: 14px; 
+                font-weight: bold; 
+                padding: 6px;
+                border-radius: 6px;
+                border: 1px solid rgba(0, 140, 130, 0.6);
+            }
+        """)
+        clinical_header.setAlignment(Qt.AlignCenter)
+        clinical_layout.addWidget(clinical_header)
+        
+        # Container para los campos en grid 2x2
+        fields_container = QFrame()
+        fields_container.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: 1px solid #555555;
+                border-radius: 0px;
+                color: #FFFFFF;
+                font-size: 13px;
+            }
+        """)
+        fields_layout = QHBoxLayout(fields_container)
+        fields_layout.setContentsMargins(0, 0, 0, 0)
+        fields_layout.setSpacing(8)
+        
+        # Estilo común para labels
+        # label_style = """
+        #     QLabel {
+        #         font-weight: bold;
+        #         margin-top: 0px;
+        #     }
+        # """
+        
+        # Estilo común para text boxes
+        textbox_style = """
+            QLineEdit {
+                background-color: #323232;
+                border: 2px solid #555555;
+                border-radius: 4px;
+                padding: 0 2 2 2px;
+                font-size: 13px;
+                color: #FFFFFF;
+                min-height: 14px;
+                max-height: 14px;
+                min-width: 40px;
+                max-width: 40px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #00A99D;
+            }
+            QLineEdit::placeholder {
+                color: #AAAAAA;
+            }
+        """
+        
+        # SUD Inicial
+        sud_inicial_layout = QHBoxLayout()
+        sud_inicial_layout.setContentsMargins(0, 0, 0, 0)
+        sud_inicial_layout.setSpacing(0)
+        sud_inicial_label = QLabel("SUD Inicial:")
+        sud_inicial_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                margin-top: 0px;
+                min-width: 77px;
+                max-width: 77px;
+            }
+        """)
+        self.sud_inicial_input = QLineEdit()
+        self.sud_inicial_input.setPlaceholderText("0-10")
+        self.sud_inicial_input.setStyleSheet(textbox_style)
+        self.sud_inicial_input.setMaxLength(2)
+        sud_inicial_layout.addWidget(sud_inicial_label)
+        sud_inicial_layout.addWidget(self.sud_inicial_input)
+
+        # SUD Intermedio
+        sud_intermedio_layout = QHBoxLayout()
+        sud_intermedio_layout.setContentsMargins(0, 0, 0, 0)
+        sud_intermedio_layout.setSpacing(0)
+        sud_intermedio_label = QLabel("SUD Intermedio:")
+        sud_intermedio_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                margin-top: 0px;
+                min-width: 108px;
+                max-width: 108px;
+            }
+        """)
+        self.sud_intermedio_input = QLineEdit()
+        self.sud_intermedio_input.setPlaceholderText("0-10")
+        self.sud_intermedio_input.setStyleSheet(textbox_style)
+        self.sud_intermedio_input.setMaxLength(2)
+        sud_intermedio_layout.addWidget(sud_intermedio_label)
+        sud_intermedio_layout.addWidget(self.sud_intermedio_input)
+
+        # SUD Final
+        sud_final_layout = QHBoxLayout()
+        sud_final_layout.setContentsMargins(0, 0, 0, 0)
+        sud_final_layout.setSpacing(0)
+        sud_final_label = QLabel("SUD Final:")
+        sud_final_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                margin-top: 0px;
+                min-width: 70px;
+                max-width: 70px;
+            }
+        """)
+        self.sud_final_input = QLineEdit()
+        self.sud_final_input.setPlaceholderText("0-10")
+        self.sud_final_input.setStyleSheet(textbox_style)
+        self.sud_final_input.setMaxLength(2)
+        sud_final_layout.addWidget(sud_final_label)
+        sud_final_layout.addWidget(self.sud_final_input)
+
+        # VOC
+        voc_layout = QHBoxLayout()
+        voc_layout.setContentsMargins(0, 0, 0, 0)
+        voc_layout.setSpacing(0)
+        voc_label = QLabel("VOC:")
+        voc_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                margin-top: 0px;
+                min-width: 36px;
+                max-width: 36px;
+            }
+        """)
+        self.voc_input = QLineEdit()
+        self.voc_input.setPlaceholderText("1-7")
+        self.voc_input.setStyleSheet(textbox_style)
+        self.voc_input.setMaxLength(1)
+        voc_layout.addWidget(voc_label)
+        voc_layout.addWidget(self.voc_input)
+
+        fields_layout.addLayout(sud_inicial_layout)
+        fields_layout.addLayout(sud_intermedio_layout)
+        fields_layout.addLayout(sud_final_layout)
+        fields_layout.addLayout(voc_layout)
+        clinical_layout.addWidget(fields_container)
+        
+        # Agregar la sección al layout principal del panel derecho
+        right_layout.addWidget(clinical_evaluation_frame)
         
         # ===== 6. AÑADIR PANELES AL SPLITTER =====
         self.splitter.addWidget(self.left_panel)
@@ -692,6 +868,20 @@ class EMDRControlPanel(QMainWindow):
         
         header_layout.addWidget(session_info)
         
+        # Información del tipo de sesión
+        if self.session_type:
+            session_type_info = QLabel(f"Tipo: {self.session_type}")
+            session_type_info.setStyleSheet("""
+                QLabel {
+                    color: #003454;
+                    font-weight: 600;
+                    background: transparent;
+                    border-radius: 12px;
+                    font-size: 12px;
+                }
+            """)
+            header_layout.addWidget(session_type_info)
+        
         return header_frame
     
     def save_session_data(self):
@@ -902,7 +1092,7 @@ class EMDRControlPanel(QMainWindow):
         
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Regresar")
-        msg_box.setText("¿Está seguro de que desea regresar al Control de Usuario?")
+        msg_box.setText("¿Está seguro de que desea regresar al Gestor de Pacientes?")
         msg_box.setIcon(QMessageBox.Question)
         
         # Crear botones personalizados
@@ -1049,7 +1239,7 @@ if __name__ == "__main__":
     app = QApplication([])
     
     # Crear dashboard de prueba (necesita un therapist_name válido)
-    control_panel = EMDRControlPanel("Lic. Margarita Valdivia", "Juan Pérez González", 1, 1, datetime.now())  # Usar datos de ejemplo
+    control_panel = EMDRControlPanel("Lic. Margarita Valdivia", "Juan Pérez González", 1, 1, datetime.now(), "Instalación de creencia positiva")  # Usar datos de ejemplo
     # control_panel.setGeometry(0, 0, 1364, 688) # Este ajuste da como resultado una ventana real de 1366 x 722
     
     control_panel.show()

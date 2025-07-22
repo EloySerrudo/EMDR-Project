@@ -1,0 +1,14 @@
+# Crear y configurar nuevo entorno
+conda create --solver=libmamba -n emdr-2 python=3.9
+conda activate emdr-2
+cd "D:\Documentos\Projects\Python\EMDR-Project"
+pip install -r requirements.txt
+
+# Verificar instalación
+pip list | findstr "pyside6 pyinstaller numpy"
+
+# Probar aplicación
+python src/main.py
+
+# Crear ejecutable
+pyinstaller --clean emdr_therapy.spec

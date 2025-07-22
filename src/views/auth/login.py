@@ -158,10 +158,10 @@ class LoginWidget(QWidget):
         self.user_type_combo.addItems(["Terapeuta", "Administrador"])
 
         # Configurar íconos para el combo box usando setItemIcon
-        self.combo_arrow_down = qta.icon('fa6s.chevron-down', color='#FFFFFF')
-        self.combo_arrow_up = qta.icon('fa6s.chevron-up', color='#FFFFFF')
-        self.user_icon = qta.icon('fa6s.user', color='#FFFFFF')
-        self.admin_icon = qta.icon('fa6s.user-shield', color='#FFFFFF')
+        self.combo_arrow_down = qta.icon('fa5s.chevron-down', color='#FFFFFF')
+        self.combo_arrow_up = qta.icon('fa5s.chevron-up', color='#FFFFFF')
+        self.user_icon = qta.icon('fa5s.user', color='#FFFFFF')
+        self.admin_icon = qta.icon('fa5s.user-shield', color='#FFFFFF')
 
         # Establecer íconos para cada elemento del combo
         self.user_type_combo.setItemIcon(0, self.user_icon)  # Terapeuta
@@ -327,9 +327,9 @@ class LoginWidget(QWidget):
         self.toggle_password_button.setToolTip("Mantener presionado para ver contraseña")
         
         # Configurar ícono inicial (ojo cerrado/tachado)
-        self.eye_closed_icon = qta.icon('fa6s.eye-slash', color='#FFFFFF')
-        self.eye_open_icon = qta.icon('fa6s.eye', color='#FFFFFF')
-        
+        self.eye_closed_icon = qta.icon('fa5s.eye-slash', color='#FFFFFF')
+        self.eye_open_icon = qta.icon('fa5s.eye', color='#FFFFFF')
+
         # Establecer ícono inicial (cerrado)
         self.toggle_password_button.setIcon(self.eye_closed_icon)
         

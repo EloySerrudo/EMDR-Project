@@ -7,16 +7,20 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 # Importaciones para componentes específicos
 from views.auth.login import LoginWidget
-# Añadir import para el dashboard de administrador
 from views.admin.admin_dashboard import AdminDashboard
-# Añadir import para el panel de control de EMDR
 from views.therapist.therapist_dashboard import TherapistDashboard
 
-# Modificar la función main() para manejar diferentes tipos de login
+# Importar e inicializar la base de datos
+from src.database.db_connection import init_db
+
 def main():
     """Función principal que inicia la aplicación con autenticación"""
     # Inicializar la aplicación Qt
     app = QApplication(sys.argv)
+    
+    # Inicializar base de datos al arrancar
+    print("🔧 Inicializando base de datos...")
+    init_db()
     
     # Variables para las ventanas principales
     login_window = None
