@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QTimer, Qt, Signal, QObject
 import pyqtgraph as pg
+import qtawesome as qta
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -265,62 +266,116 @@ class SensorMonitor(QWidget):
         pulse_monitor_frame.setStyleSheet("""
             QFrame {
                 background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-                                        stop: 0 rgba(255, 152, 0, 0.1),
-                                        stop: 0.5 rgba(255, 193, 7, 0.15),
-                                        stop: 1 rgba(255, 152, 0, 0.1));
-                border-radius: 8px;
-                border: 1px solid rgba(255, 152, 0, 0.3);
-                padding: 8px;
-                margin: 2px;
+                                          stop: 0 rgba(0, 169, 157, 0.2),
+                                          stop: 0.5 rgba(0, 200, 170, 0.25),
+                                          stop: 1 rgba(0, 169, 157, 0.2));
+                border-radius: 12px;
+                border: 2px solid rgba(0, 200, 170, 0.4);
+                padding: 0px;
+                margin: 0px;
             }
         """)
         pulse_monitor_frame.setFixedHeight(50)
         
         pulse_layout = QHBoxLayout(pulse_monitor_frame)
-        pulse_layout.setContentsMargins(15, 8, 15, 8)
+        pulse_layout.setContentsMargins(15, 2, 15, 2)
+        pulse_layout.setSpacing(15)
+        
+        # ===== SECCIÓN IZQUIERDA: ESTADO DE PULSACIONES =====
+        left_section = QHBoxLayout()
+        left_section.setSpacing(0)
         
         # Texto "Pulsaciones"
-        pulse_label = QLabel("Pulsaciones")
+        pulse_label = QLabel("Pulsaciones:")
         pulse_label.setStyleSheet("""
             QLabel {
-                color: #FF6F00;
+                color: #FFFFFF;
                 font-size: 14px;
                 font-weight: bold;
                 background: transparent;
-                padding: 4px;
+                min-height: 16px;
+                max-height: 16px;
+                border: none;
             }
         """)
-        pulse_layout.addWidget(pulse_label)
+        left_section.addWidget(pulse_label)
         
-        # LED simulado para pulsaciones
+        # LED en forma de corazón simulado para pulsaciones
         self.pulse_led = QLabel()
-        self.pulse_led.setFixedSize(20, 20)
+        self.pulse_led.setFixedSize(42, 42)
+        self.pulse_led.setPixmap(qta.icon('fa5s.heart', color="#00C8AA00").pixmap(40, 40))
         self.pulse_led.setStyleSheet("""
             QLabel {
-                background-color: #4CAF50;
-                border: 2px solid #2E7D32;
-                border-radius: 10px;
-                margin: 2px;
+                background: transparent;
+                border-radius: 0px;
+                border: none;
+                padding: 0px;
             }
         """)
-        pulse_layout.addWidget(self.pulse_led)
+        self.pulse_led.setAlignment(Qt.AlignCenter)
+        left_section.addWidget(self.pulse_led)
         
-        # Espaciador para empujar el texto de BPM a la derecha
-        pulse_layout.addStretch()
+        # ===== SEPARADOR VISUAL =====
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("""
+            QFrame {
+                color: rgba(255, 255, 255, 0.3);
+                background-color: rgba(255, 255, 255, 0.3);
+                border: none;
+                max-width: 2px;
+                min-height: 40px;
+                margin: 0px 10px;
+            }
+        """)
         
-        # Texto de pulsaciones por minuto
-        self.pulse_rate_label = QLabel("Pulsaciones / min: --")
-        self.pulse_rate_label.setStyleSheet("""
+        # ===== SECCIÓN DERECHA: FRECUENCIA CARDÍACA =====
+        right_section = QHBoxLayout()
+        right_section.setSpacing(4)
+        
+        # Label estático para "Pulsaciones / min:"
+        pulse_rate_static_label = QLabel("Pulsaciones / min:")
+        pulse_rate_static_label.setStyleSheet("""
             QLabel {
-                color: #FF6F00;
+                color: #FFFFFF;
                 font-size: 14px;
                 font-weight: bold;
                 background: transparent;
-                padding: 4px;
+                min-height: 16px;
+                max-height: 16px;
+                border: none;
             }
         """)
-        pulse_layout.addWidget(self.pulse_rate_label)
+        right_section.addWidget(pulse_rate_static_label)
         
+        # Label dinámico para el valor de BPM
+        self.pulse_rate_value_label = QLabel("--")
+        self.pulse_rate_value_label.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-weight: bold;
+                font-size: 20px;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 rgba(33, 150, 243, 0.3),
+                                          stop: 0.5 rgba(63, 169, 245, 0.4),
+                                          stop: 1 rgba(33, 150, 243, 0.3));
+                border: 2px solid rgba(63, 169, 245, 0.5);
+                border-radius: 8px;
+                padding: 4px 12px;
+                min-width: 45px;
+                max-width: 70px;
+            }
+        """)
+        self.pulse_rate_value_label.setAlignment(Qt.AlignCenter)
+        right_section.addWidget(self.pulse_rate_value_label)
+        
+        pulse_layout.addStretch()
+        pulse_layout.addLayout(left_section)
+        pulse_layout.addWidget(separator)
+        pulse_layout.addLayout(right_section)
+        pulse_layout.addStretch()
+
         self.main_layout.addWidget(pulse_monitor_frame)
         
         # Variables para control del LED
@@ -1222,38 +1277,18 @@ class SensorMonitor(QWidget):
             if self.reading_thread.is_alive():
                 print("Advertencia: Thread de lectura no terminó correctamente")
         
-        if self.is_standalone and len(self.csv_data['index']) > 0:
-            # Si es aplicación independiente, guardar datos si existen
-            print("\nGuardando datos en CSV antes de salir...")
-            self.save_data_to_csv()
-        
         print("Limpieza de SensorMonitor completada")
     
     def reset_led(self):
         """Resetear el LED a su estado normal"""
-        self.pulse_led.setStyleSheet("""
-            QLabel {
-                background-color: #66BB6A;
-                border: 2px solid #2E7D32;
-                border-radius: 10px;
-                margin: 2px;
-            }
-        """)
+        self.pulse_led.setPixmap(qta.icon('fa5s.heart', color='#00C8AA00').pixmap(38, 38))
         self.led_is_active = False
         self.led_timer.stop()
     
     def activate_pulse_led(self):
         """Activar el LED cuando se detecta una pulsación"""
         if not self.led_is_active:
-            self.pulse_led.setStyleSheet("""
-                QLabel {
-                    background-color: #FF5722;
-                    border: 2px solid #D32F2F;
-                    border-radius: 10px;
-                    margin: 2px;
-                    box-shadow: 0 0 10px rgba(255, 87, 34, 0.8);
-                }
-            """)
+            self.pulse_led.setPixmap(qta.icon('fa5s.heart', color="#D30E0E").pixmap(38, 38))
             self.led_is_active = True
             self.led_timer.start(200)  # LED activo por 200ms
     
@@ -1299,9 +1334,9 @@ class SensorMonitor(QWidget):
     def update_pulse_rate_display(self, bpm_value):
         """Actualizar el display de pulsaciones por minuto"""
         if bpm_value is not None and bpm_value > 0:
-            self.pulse_rate_label.setText(f"Pulsaciones / min: {int(bpm_value)}")
+            self.pulse_rate_value_label.setText(f"{int(bpm_value)}")
         else:
-            self.pulse_rate_label.setText("Pulsaciones / min: --")
+            self.pulse_rate_value_label.setText("--")
     
     def is_busy(self) -> bool:
         """Verificar si está ocupado"""
