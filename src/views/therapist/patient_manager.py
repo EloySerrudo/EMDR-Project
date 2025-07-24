@@ -173,11 +173,11 @@ class PatientDetailsDialog(QDialog):
             }
         """)
         
-        sessions_layout = QVBoxLayout(sessions_group)
+        self.sessions_layout = QVBoxLayout(sessions_group)
         
         # Cargar historial de sesiones
-        self.load_session_history(sessions_layout)
-        
+        self.load_session_history()
+
         layout.addWidget(sessions_group)
         
         # === BOTONES DE ACCIÓN ===
@@ -207,8 +207,8 @@ class PatientDetailsDialog(QDialog):
         edit_button.clicked.connect(self.edit_patient)
 
         # Botón para borrar sesión
-        delete_session_button = QPushButton("Borrar Sesión")
-        delete_session_button.setStyleSheet("""
+        self.delete_session_button = QPushButton("Borrar Sesión")
+        self.delete_session_button.setStyleSheet("""
             QPushButton {
                 background-color: #00A99D;
                 color: white;
@@ -226,8 +226,14 @@ class PatientDetailsDialog(QDialog):
                 background-color: #008C82;
                 border: 2px solid #008C82;
             }
+            QPushButton:disabled {
+                background-color: #555555;
+                border: 2px solid #555555;
+                color: #AAAAAA;
+            }
         """)
-        delete_session_button.clicked.connect(self.delete_session)
+        self.delete_session_button.clicked.connect(self.delete_session)
+        self.delete_session_button.setEnabled(False)
 
         # Botón para cerrar
         cancel_button = QPushButton("Cancelar")
@@ -253,7 +259,7 @@ class PatientDetailsDialog(QDialog):
         cancel_button.clicked.connect(self.accept)
         
         button_layout.addWidget(edit_button)
-        button_layout.addWidget(delete_session_button)
+        button_layout.addWidget(self.delete_session_button)
         button_layout.addStretch()
         button_layout.addWidget(cancel_button)
         
@@ -300,7 +306,7 @@ class PatientDetailsDialog(QDialog):
         value_label.setWordWrap(True)
         layout.addRow(label, value_label)
     
-    def load_session_history(self, layout):
+    def load_session_history(self):
         """Carga el historial de sesiones del paciente"""
         try:
             self.sessions_data = DatabaseManager.get_sessions_for_patient(self.patient_id)
@@ -315,20 +321,20 @@ class PatientDetailsDialog(QDialog):
                         background: transparent;
                     }
                 """)
-                layout.addWidget(no_sessions_label)
+                self.sessions_layout.addWidget(no_sessions_label)
             else:
                 # Crear tabla para mostrar las sesiones
-                sessions_table = QTableWidget()
-                sessions_table.setColumnCount(5)
-                sessions_table.setHorizontalHeaderLabels(["Fecha", "Hora", "Objetivo", "Comentarios", "Acción"])
-                sessions_table.setRowCount(len(self.sessions_data))
+                self.sessions_table = QTableWidget()
+                self.sessions_table.setColumnCount(5)
+                self.sessions_table.setHorizontalHeaderLabels(["Fecha", "Hora", "Objetivo", "Comentarios", "Acción"])
+                self.sessions_table.setRowCount(len(self.sessions_data))
 
                 # Configurar tabla
-                sessions_table.setAlternatingRowColors(True)
-                sessions_table.setSelectionBehavior(QTableWidget.SelectRows)
-                sessions_table.verticalHeader().setVisible(False)
-                sessions_table.setMaximumHeight(104)
-                sessions_table.setStyleSheet("""
+                self.sessions_table.setAlternatingRowColors(True)
+                self.sessions_table.setSelectionBehavior(QTableWidget.SelectRows)
+                self.sessions_table.verticalHeader().setVisible(False)
+                self.sessions_table.setMaximumHeight(104)
+                self.sessions_table.setStyleSheet("""
                     QTableWidget {
                         background-color: #323232;
                         alternate-background-color: #2a2a2a;
@@ -357,10 +363,10 @@ class PatientDetailsDialog(QDialog):
                 # Llenar tabla con datos de sesiones
                 for i, session in enumerate(self.sessions_data):
                     fecha, hora = self.format_datetime_string(session.get('fecha'))
-                    sessions_table.setItem(i, 0, QTableWidgetItem(fecha))
-                    sessions_table.setItem(i, 1, QTableWidgetItem(hora))
-                    sessions_table.setItem(i, 2, QTableWidgetItem(session.get('objetivo')))
-                    sessions_table.setItem(i, 3, QTableWidgetItem(session.get('comentarios')))
+                    self.sessions_table.setItem(i, 0, QTableWidgetItem(fecha))
+                    self.sessions_table.setItem(i, 1, QTableWidgetItem(hora))
+                    self.sessions_table.setItem(i, 2, QTableWidgetItem(session.get('objetivo')))
+                    self.sessions_table.setItem(i, 3, QTableWidgetItem(session.get('comentarios')))
 
                     # === BOTÓN PARA VER ANÁLISIS ===
                     view_btn = QPushButton("Ver Análisis")
@@ -385,17 +391,21 @@ class PatientDetailsDialog(QDialog):
                     session_id = session.get('id')
                     view_btn.clicked.connect(partial(self.view_session_analysis, session_id))
 
-                    sessions_table.setCellWidget(i, 4, view_btn)
+                    self.sessions_table.setCellWidget(i, 4, view_btn)
                 
                 # Ajustar columnas
-                sessions_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-                sessions_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-                sessions_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-                sessions_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-                sessions_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
-                
-                layout.addWidget(sessions_table)
-                
+                header = self.sessions_table.horizontalHeader()
+                header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+                header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+                header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+                header.setSectionResizeMode(3, QHeaderView.Stretch)
+                header.setSectionResizeMode(4, QHeaderView.Stretch)
+
+                self.sessions_layout.addWidget(self.sessions_table)
+
+                # Conectar selección de tabla
+                self.sessions_table.selectionModel().selectionChanged.connect(self.on_selection_changed)
+        
         except Exception as e:
             error_label = QLabel(f"Error al cargar sesiones: {str(e)}")
             error_label.setStyleSheet("""
@@ -405,7 +415,7 @@ class PatientDetailsDialog(QDialog):
                     background: transparent;
                 }
             """)
-            layout.addWidget(error_label)
+            self.sessions_layout.addWidget(error_label)
     
     # === NUEVO MÉTODO: VER ANÁLISIS DE SESIÓN ===
     def view_session_analysis(self, session_id: int):
@@ -482,6 +492,12 @@ class PatientDetailsDialog(QDialog):
         except:
             return 'N/A', 'N/A'
     
+    def on_selection_changed(self):
+        """Maneja el cambio de selección en la tabla"""
+        selected_rows = self.sessions_table.selectionModel().selectedRows()
+        has_selection = len(selected_rows) > 0
+        self.delete_session_button.setEnabled(has_selection)
+    
     def on_session_viewer_closed(self):
         """Maneja el cierre de la ventana del visor"""
         self.session_viewer_window = None
@@ -492,9 +508,17 @@ class PatientDetailsDialog(QDialog):
                                "La función de editar paciente estará disponible pronto.")
     
     def delete_session(self):
-        """Inicia una nueva sesión para el paciente"""
-        QMessageBox.information(self, "Función en desarrollo", 
-                               "La función de nueva sesión estará disponible pronto.")
+        """Elimina las sesión seleccionada."""
+        selected_rows = self.sessions_table.selectionModel().selectedRows()
+        
+        if not selected_rows:
+            QMessageBox.warning(self, "Advertencia", "Por favor, seleccione una sesión de la lista")
+            return
+        
+        # Obtener los datos de la sesión seleccionada
+        row_index = selected_rows[0].row()
+        session_id = self.sessions_data[row_index]['id']
+        print(f"Intentando eliminar sesión con ID: {session_id}") # Esta línea es para depuración, se borrará después
 
 
 class PatientManagerWidget(QMainWindow):
