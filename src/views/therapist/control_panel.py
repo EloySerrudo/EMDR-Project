@@ -1,3 +1,4 @@
+from cProfile import label
 import os
 import sys
 import time
@@ -12,7 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton, QStackedWidget, QDialog, QFormLayout, QLineEdit, QTextEdit
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QObject, QSize
-from PySide6.QtGui import QFont, QIcon, QIntValidator, QPixmap  # Añadir QPixmap
+from PySide6.QtGui import QFont, QIcon, QIntValidator, QPixmap
 import pyqtgraph as pg
 import qtawesome as qta
 
@@ -270,20 +271,6 @@ class EMDRControlPanel(QMainWindow):
         right_layout.addWidget(self.sensor_monitor)
         
         # ===== NUEVA SECCIÓN: EVALUACIÓN CLÍNICA =====
-        clinical_evaluation_frame = QFrame()
-        clinical_evaluation_frame.setFrameShape(QFrame.StyledPanel)
-        clinical_evaluation_frame.setStyleSheet("""
-            QFrame {
-                background: transparent;
-                border: 2px solid #555555;
-                border-radius: 8px;
-                margin-top: 8px;
-            }
-        """)
-        
-        clinical_layout = QVBoxLayout(clinical_evaluation_frame)
-        clinical_layout.setContentsMargins(8, 8, 8, 8)
-        clinical_layout.setSpacing(8)
         
         # Título de la sección
         clinical_header = QLabel("EVALUACIÓN CLÍNICA")
@@ -302,7 +289,7 @@ class EMDRControlPanel(QMainWindow):
             }
         """)
         clinical_header.setAlignment(Qt.AlignCenter)
-        clinical_layout.addWidget(clinical_header)
+        right_layout.addWidget(clinical_header)
         
         # Container para los campos en grid 2x2
         fields_container = QFrame()
@@ -349,6 +336,9 @@ class EMDRControlPanel(QMainWindow):
             }
         """
         
+        # Configurar validador para valores entre 0 y 10
+        sud_validator = QIntValidator(0, 10)
+        
         # SUD Inicial
         sud_inicial_layout = QHBoxLayout()
         sud_inicial_layout.setContentsMargins(0, 0, 0, 0)
@@ -366,6 +356,7 @@ class EMDRControlPanel(QMainWindow):
         self.sud_inicial_input.setPlaceholderText("0-10")
         self.sud_inicial_input.setStyleSheet(textbox_style)
         self.sud_inicial_input.setMaxLength(2)
+        self.sud_inicial_input.setValidator(sud_validator)
         sud_inicial_layout.addWidget(sud_inicial_label)
         sud_inicial_layout.addWidget(self.sud_inicial_input)
 
@@ -386,6 +377,7 @@ class EMDRControlPanel(QMainWindow):
         self.sud_intermedio_input.setPlaceholderText("0-10")
         self.sud_intermedio_input.setStyleSheet(textbox_style)
         self.sud_intermedio_input.setMaxLength(2)
+        self.sud_intermedio_input.setValidator(sud_validator)
         sud_intermedio_layout.addWidget(sud_intermedio_label)
         sud_intermedio_layout.addWidget(self.sud_intermedio_input)
 
@@ -406,6 +398,7 @@ class EMDRControlPanel(QMainWindow):
         self.sud_final_input.setPlaceholderText("0-10")
         self.sud_final_input.setStyleSheet(textbox_style)
         self.sud_final_input.setMaxLength(2)
+        self.sud_final_input.setValidator(sud_validator)
         sud_final_layout.addWidget(sud_final_label)
         sud_final_layout.addWidget(self.sud_final_input)
 
@@ -426,6 +419,7 @@ class EMDRControlPanel(QMainWindow):
         self.voc_input.setPlaceholderText("1-7")
         self.voc_input.setStyleSheet(textbox_style)
         self.voc_input.setMaxLength(1)
+        self.voc_input.setValidator(QIntValidator(1, 7))
         voc_layout.addWidget(voc_label)
         voc_layout.addWidget(self.voc_input)
 
@@ -433,10 +427,71 @@ class EMDRControlPanel(QMainWindow):
         fields_layout.addLayout(sud_intermedio_layout)
         fields_layout.addLayout(sud_final_layout)
         fields_layout.addLayout(voc_layout)
-        clinical_layout.addWidget(fields_container)
         
         # Agregar la sección al layout principal del panel derecho
-        right_layout.addWidget(clinical_evaluation_frame)
+        right_layout.addWidget(fields_container)
+        
+        # ===== SECCIÓN DE COMENTARIOS =====
+        comments_container = QFrame()
+        comments_container.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: 1px solid #555555;
+                border-radius: 0px;
+                color: #FFFFFF;
+                font-size: 13px;
+                margin-top: 0px;
+            }
+        """)
+        comments_layout = QVBoxLayout(comments_container)
+        comments_layout.setContentsMargins(8, 0, 8, 0)
+        comments_layout.setSpacing(4)
+        
+        # Label de comentarios
+        comments_label = QLabel("Comentarios:")
+        comments_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                color: #FFFFFF;
+                background: transparent;
+                border: none;
+                padding: 0px;
+                margin: 0px;
+            }
+        """)
+        comments_layout.addWidget(comments_label)
+        
+        # TextEdit para comentarios (2 líneas de altura)
+        self.comments_text = QTextEdit()
+        self.comments_text.setPlaceholderText("Escriba aquí observaciones sobre la sesión...")
+        self.comments_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #323232;
+                border: 2px solid #555555;
+                border-radius: 4px;
+                padding: 6px;
+                font-size: 13px;
+                color: #FFFFFF;
+                min-height: 45px;
+                max-height: 45px;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            QTextEdit:focus {
+                border: 2px solid #00A99D;
+            }
+            QTextEdit::placeholder {
+                color: #AAAAAA;
+            }
+        """)
+        # Configurar para que solo permita 2 líneas visibles
+        self.comments_text.setMaximumHeight(49)  # Altura fija para 2 líneas
+        self.comments_text.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.comments_text.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        comments_layout.addWidget(self.comments_text)
+        
+        # Agregar contenedor de comentarios al layout principal
+        right_layout.addWidget(comments_container)
         
         # ===== 6. AÑADIR PANELES AL SPLITTER =====
         self.splitter.addWidget(self.left_panel)
@@ -898,8 +953,24 @@ class EMDRControlPanel(QMainWindow):
                 self.sensor_monitor.stop_acquisition()
             
             # Preparar los datos para almacenamiento
+            sud_inicial = int(text) if (text := self.sud_inicial_input.text().strip()) else None
+            sud_intermedio = int(text) if (text := self.sud_intermedio_input.text().strip()) else None
+            sud_final = int(text) if (text := self.sud_final_input.text().strip()) else None
+            voc = int(text) if (text := self.voc_input.text().strip()) else None    # walrus operator (:=)
+            timestamps_compressed = None
+            eog_compressed = None
+            ppg_compressed = None
+            bpm_compressed = None
+            comentarios = text if (text := self.comments_text.toPlainText().strip()) else 'Sin comentarios'
+
+            # Preparar los datos de las señales
             if len(self.sensor_monitor.csv_data['index']) > 0:
                 # Serializar datos usando numpy para eficiencia
+                
+                # Comprimir timestamp
+                timestamps = np.array(self.sensor_monitor.csv_data['timestamp'])
+                timestamps_bytes = pickle.dumps(timestamps)
+                timestamps_compressed = zlib.compress(timestamps_bytes)
                 
                 # Comprimir EOG (señal filtrada)
                 eog_data = np.array(self.sensor_monitor.csv_data['eog_raw'])
@@ -915,43 +986,154 @@ class EMDRControlPanel(QMainWindow):
                 bpm_data = np.array(self.sensor_monitor.csv_data['pulse_bpm'])
                 bpm_bytes = pickle.dumps(bpm_data)
                 bpm_compressed = zlib.compress(bpm_bytes)
-                self.sensor_monitor.save_data_to_csv()
                 
-                # Comprimir timestamp
-                timestamps = np.array(self.sensor_monitor.csv_data['timestamp'])
-                timestamps_bytes = pickle.dumps(timestamps)
-                timestamps_compressed = zlib.compress(timestamps_bytes)
+                # Mensaje de datos guardados
+                mensaje = "¡Datos guardados correctamente! " + \
+                          f"Se han guardado {self.milliseconds_to_time(timestamps[-1])} en la sesión N°{self.current_session}."
+            
+            else:
+                mensaje = "¡Datos guardados correctamente! " + \
+                          f"Sin datos fisiológicos en la sesión N°{self.current_session}."
+
+            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setWindowTitle(f"Guardar Datos")
+            msg_box.setText(f"¿Quiere guardar los datos de la sesión?")
+            msg_box.setIcon(QMessageBox.Question)
+            
+            # Crear botones personalizados
+            yes_button = msg_box.addButton("Sí", QMessageBox.YesRole)
+            no_button = msg_box.addButton("No", QMessageBox.NoRole)
+            msg_box.setDefaultButton(no_button)
+            
+            # Aplicar estilo personalizado
+            msg_box.setStyleSheet("""
+                QMessageBox {
+                    background-color: #323232;
+                    color: #FFFFFF;
+                    border-top: none;
+                    border-left: 2px solid #555555;
+                    border-right: 2px solid #555555;
+                    border-bottom: 2px solid #555555;
+                }
+                QMessageBox QLabel {
+                    color: #FFFFFF;
+                    background: transparent;
+                    font-size: 14px;
+                }
+                QMessageBox QPushButton {
+                    background-color: #00A99D;
+                    color: white;
+                    border: 2px solid #00A99D;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    min-width: 50px;
+                }
+                QMessageBox QPushButton:hover {
+                    background-color: #00C2B3;
+                    border: 2px solid #00C2B3;
+                }
+                QMessageBox QPushButton:pressed {
+                    background-color: #008C82;
+                    border: 2px solid #008C82;
+                }
+            """)
+            
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == yes_button:
                 
-                # Actualizar registro en la base de datos
-                DatabaseManager.update_session(
-                    self.current_session,
+                # Validar campos SUD y VOC
+                for nombre, valor in {"SUD Inicial": sud_inicial, "SUD Intermedio": sud_intermedio, "SUD Final": sud_final, "VOC": voc}.items():
+                    if valor is None:
+                        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            
+                        msg_box = QMessageBox(self)
+                        msg_box.setIcon(QMessageBox.Warning)
+                        msg_box.setWindowTitle(f"{nombre} faltante")
+                        msg_box.setText(f"Valor de {nombre} faltante. ¿Quieres continuar sin guardarlo?")
+                        msg_box.setIcon(QMessageBox.Question)
+                        
+                        # Crear botones personalizados
+                        yes_button = msg_box.addButton("Sí", QMessageBox.YesRole)
+                        no_button = msg_box.addButton("No", QMessageBox.NoRole)
+                        msg_box.setDefaultButton(no_button)
+                        
+                        # Aplicar estilo personalizado
+                        msg_box.setStyleSheet("""
+                            QMessageBox {
+                                background-color: #323232;
+                                color: #FFFFFF;
+                                border-top: none;
+                                border-left: 2px solid #555555;
+                                border-right: 2px solid #555555;
+                                border-bottom: 2px solid #555555;
+                            }
+                            QMessageBox QLabel {
+                                color: #FFFFFF;
+                                background: transparent;
+                                font-size: 14px;
+                            }
+                            QMessageBox QPushButton {
+                                background-color: #00A99D;
+                                color: white;
+                                border: 2px solid #00A99D;
+                                border-radius: 6px;
+                                padding: 8px 16px;
+                                font-weight: bold;
+                                min-width: 50px;
+                            }
+                            QMessageBox QPushButton:hover {
+                                background-color: #00C2B3;
+                                border: 2px solid #00C2B3;
+                            }
+                            QMessageBox QPushButton:pressed {
+                                background-color: #008C82;
+                                border: 2px solid #008C82;
+                            }
+                        """)
+                        
+                        msg_box.exec()
+                        
+                        if msg_box.clickedButton() == no_button:
+                            return
+
+                # Guardar datos de sesión en la base de datos
+                DatabaseManager.add_session(
+                    id_paciente=self.patient_id,
+                    fecha=self.session_datetime.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
+                    objetivo=self.session_type,
+                    sud_inicial=sud_inicial,
+                    sud_intermedio=sud_intermedio,
+                    sud_final=sud_final,
+                    voc=voc,
                     datos_ms=timestamps_compressed,
                     datos_eog=eog_compressed,
                     datos_ppg=ppg_compressed,
                     datos_bpm=bpm_compressed,
-                    comentarios=f"Sesión actualizada el {time.strftime('%Y-%m-%d %H:%M:%S')}. "
-                          f"Datos almacenados: {len(eog_data)} muestras."
+                    comentarios=comentarios
                 )
-                
-                # Mensaje de éxito
                 QMessageBox.information(
-                    self, 
-                    "Datos guardados", 
-                    f"Se han guardado {len(eog_data)} muestras de datos en la sesión #{self.current_session}."
+                    self,
+                    "Datos guardados",
+                    mensaje
                 )
                 
                 # Opcionalmente, también guardar en CSV como respaldo
                 # self.sensor_monitor.save_data_to_csv()
-            else:
-                QMessageBox.warning(
-                    self, 
-                    "Sin datos", 
-                    "No hay datos de sensores para guardar en esta sesión."
-                )
-            
-            # Reiniciar adquisición si estaba corriendo
-            if was_running:
-                self.sensor_monitor.start_acquisition()
+                
+                try:
+                    # Emitir señal antes de cerrar
+                    self.window_closed.emit()
+                    
+                    # Cerrar la ventana actual
+                    self.close()
+                    
+                except Exception as e:
+                    QMessageBox.critical(self, "Error", f"No se pudo regresar al dashboard: {str(e)}")
                 
         except Exception as e:
             print(f"Error al guardar datos de sesión: {e}")
@@ -1077,6 +1259,26 @@ class EMDRControlPanel(QMainWindow):
         if not master_connected or not "Sensor" in found_devices:
             if self.sensor_monitor.running:
                 self.sensor_monitor.stop_acquisition()
+
+    def milliseconds_to_time(self, milliseconds):
+        """
+        Convierte milisegundos a formato MM:SS
+        
+        Args:
+            milliseconds (int): Cantidad de milisegundos
+        
+        Returns:
+            str: Formato "MM:SS"
+        """
+        # Redondear a segundos completos
+        segundos_totales = round(milliseconds / 1000)
+        
+        # Calcular minutos y segundos
+        minutos = segundos_totales // 60
+        segundos = segundos_totales % 60
+        
+        # Formatear con ceros a la izquierda
+        return f"{minutos} minutos y {segundos} segundos"
 
     def on_cleanup_completed(self):
         """Callback cuando se completa la limpieza"""
@@ -1231,7 +1433,6 @@ class EMDRControlPanel(QMainWindow):
                 sys.exit(0)
 
 
-    
 # Para pruebas independientes
 if __name__ == "__main__":
     from datetime import datetime

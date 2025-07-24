@@ -1,6 +1,7 @@
 import sys
 import os
 import winsound
+from datetime import datetime
 from pathlib import Path
 from functools import partial
 from PySide6.QtWidgets import (
@@ -27,6 +28,7 @@ class PatientDetailsDialog(QDialog):
         super().__init__(parent)
         self.patient_id = patient_id
         self.patient_data = None
+        self.sessions_data = None
         
         # Añadir referencia para la ventana del visor
         self.session_viewer_window = None
@@ -203,10 +205,10 @@ class PatientDetailsDialog(QDialog):
             }
         """)
         edit_button.clicked.connect(self.edit_patient)
-        
-        # Botón para nueva sesión
-        new_session_button = QPushButton("Nueva Sesión")
-        new_session_button.setStyleSheet("""
+
+        # Botón para borrar sesión
+        delete_session_button = QPushButton("Borrar Sesión")
+        delete_session_button.setStyleSheet("""
             QPushButton {
                 background-color: #00A99D;
                 color: white;
@@ -225,8 +227,8 @@ class PatientDetailsDialog(QDialog):
                 border: 2px solid #008C82;
             }
         """)
-        new_session_button.clicked.connect(self.new_session)
-        
+        delete_session_button.clicked.connect(self.delete_session)
+
         # Botón para cerrar
         cancel_button = QPushButton("Cancelar")
         cancel_button.setStyleSheet("""
@@ -251,7 +253,7 @@ class PatientDetailsDialog(QDialog):
         cancel_button.clicked.connect(self.accept)
         
         button_layout.addWidget(edit_button)
-        button_layout.addWidget(new_session_button)
+        button_layout.addWidget(delete_session_button)
         button_layout.addStretch()
         button_layout.addWidget(cancel_button)
         
@@ -301,9 +303,9 @@ class PatientDetailsDialog(QDialog):
     def load_session_history(self, layout):
         """Carga el historial de sesiones del paciente"""
         try:
-            sessions = DatabaseManager.get_sessions_for_patient(self.patient_id)
-            
-            if not sessions:
+            self.sessions_data = DatabaseManager.get_sessions_for_patient(self.patient_id)
+
+            if not self.sessions_data:
                 no_sessions_label = QLabel("No hay sesiones registradas para este paciente.")
                 no_sessions_label.setStyleSheet("""
                     QLabel {
@@ -318,9 +320,9 @@ class PatientDetailsDialog(QDialog):
                 # Crear tabla para mostrar las sesiones
                 sessions_table = QTableWidget()
                 sessions_table.setColumnCount(5)
-                sessions_table.setHorizontalHeaderLabels(["Fecha", "Hora", "Duración", "Notas", "Acción"])
-                sessions_table.setRowCount(len(sessions))
-                
+                sessions_table.setHorizontalHeaderLabels(["Fecha", "Hora", "Objetivo", "Comentarios", "Acción"])
+                sessions_table.setRowCount(len(self.sessions_data))
+
                 # Configurar tabla
                 sessions_table.setAlternatingRowColors(True)
                 sessions_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -353,13 +355,13 @@ class PatientDetailsDialog(QDialog):
                 """)
                 
                 # Llenar tabla con datos de sesiones
-                for i, session in enumerate(sessions):
-                    fecha_hora = session.get('fecha', 'N/A N/A').split(' ')
-                    sessions_table.setItem(i, 0, QTableWidgetItem(fecha_hora[0]))
-                    sessions_table.setItem(i, 1, QTableWidgetItem(fecha_hora[1]))
-                    sessions_table.setItem(i, 2, QTableWidgetItem(str(session.get('duracion', 'N/A'))))
-                    sessions_table.setItem(i, 3, QTableWidgetItem(str(session.get('comentarios', ''))))
-                    
+                for i, session in enumerate(self.sessions_data):
+                    fecha, hora = self.format_datetime_string(session.get('fecha'))
+                    sessions_table.setItem(i, 0, QTableWidgetItem(fecha))
+                    sessions_table.setItem(i, 1, QTableWidgetItem(hora))
+                    sessions_table.setItem(i, 2, QTableWidgetItem(session.get('objetivo')))
+                    sessions_table.setItem(i, 3, QTableWidgetItem(session.get('comentarios')))
+
                     # === BOTÓN PARA VER ANÁLISIS ===
                     view_btn = QPushButton("Ver Análisis")
                     view_btn.setStyleSheet("""
@@ -462,6 +464,24 @@ class PatientDetailsDialog(QDialog):
         except Exception as e:
             print(f"Error filtrando sesiones para paciente: {e}")
     
+    def format_datetime_string(self, datetime_str):
+        """
+        Convierte una cadena datetime a formato separado
+        Args:
+            datetime_str: String en formato "YYYY-MM-DD HH:MM:SS.fff"
+        Returns:
+            tuple: (date_str, time_str) en formatos "DD/MM/YYYY", "HH:MM"
+        """
+        try:
+            fecha_parte, hora_parte = datetime_str.split(' ')
+            year, month, day = fecha_parte.split('-')
+            date = f"{day}/{month}/{year}"
+            hour, minute = hora_parte.split(':')[:2]
+            time = f"{hour}:{minute}"
+            return date, time
+        except:
+            return 'N/A', 'N/A'
+    
     def on_session_viewer_closed(self):
         """Maneja el cierre de la ventana del visor"""
         self.session_viewer_window = None
@@ -471,7 +491,7 @@ class PatientDetailsDialog(QDialog):
         QMessageBox.information(self, "Función en desarrollo", 
                                "La función de editar paciente estará disponible pronto.")
     
-    def new_session(self):
+    def delete_session(self):
         """Inicia una nueva sesión para el paciente"""
         QMessageBox.information(self, "Función en desarrollo", 
                                "La función de nueva sesión estará disponible pronto.")
@@ -676,9 +696,9 @@ class PatientManagerWidget(QMainWindow):
         
         # === TABLA DE PACIENTES ===
         self.patients_table = QTableWidget()
-        self.patients_table.setColumnCount(6)
+        self.patients_table.setColumnCount(7)
         self.patients_table.setHorizontalHeaderLabels([
-            "Código Paciente", "Nombre", "Apellido Paterno", "Apellido Materno", "Edad", "Teléfono"
+            "Código Paciente", "Apellido Paterno", "Apellido Materno", "Nombre", "Edad", "Teléfono", "Sesiones"
         ])
         
         # Configurar tabla
@@ -717,12 +737,13 @@ class PatientManagerWidget(QMainWindow):
         
         # Ajustar columnas
         header = self.patients_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # ID
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Nombre
-        header.setSectionResizeMode(2, QHeaderView.Stretch)  # Apellido Paterno
-        header.setSectionResizeMode(3, QHeaderView.Stretch)  # Apellido Materno
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Código Paciente
+        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Apellido Paterno
+        header.setSectionResizeMode(2, QHeaderView.Stretch)  # Apellido Materno
+        header.setSectionResizeMode(3, QHeaderView.Stretch)  # Nombre
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Edad
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Teléfono
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Sesiones
         
         # Doble clic para ver detalles
         self.patients_table.doubleClicked.connect(self.show_patient_details)
@@ -948,12 +969,33 @@ class PatientManagerWidget(QMainWindow):
         self.patients_table.setRowCount(len(patients))
         
         for i, patient in enumerate(patients):
+            # Código Paciente
             self.patients_table.setItem(i, 0, QTableWidgetItem(str(patient.get('id', ''))))
-            self.patients_table.setItem(i, 1, QTableWidgetItem(patient.get('nombre', '')))
-            self.patients_table.setItem(i, 2, QTableWidgetItem(patient.get('apellido_paterno', '')))
-            self.patients_table.setItem(i, 3, QTableWidgetItem(patient.get('apellido_materno', '')))
+            # Apellido Paterno
+            self.patients_table.setItem(i, 1, QTableWidgetItem(patient.get('apellido_paterno', '')))
+            # Apellido Materno
+            self.patients_table.setItem(i, 2, QTableWidgetItem(patient.get('apellido_materno', '')))
+            # Nombre
+            self.patients_table.setItem(i, 3, QTableWidgetItem(patient.get('nombre', '')))
+            # Edad
             self.patients_table.setItem(i, 4, QTableWidgetItem(str(patient.get('edad', ''))))
+            # Teléfono
             self.patients_table.setItem(i, 5, QTableWidgetItem(patient.get('celular', '')))
+            
+            # Sesiones - obtener número de sesiones para este paciente
+            try:
+                patient_id = patient.get('id')
+                if patient_id:
+                    sessions = DatabaseManager.get_sessions_for_patient(patient_id)
+                    session_count = len(sessions) if sessions else 0
+                else:
+                    session_count = 0
+                
+                self.patients_table.setItem(i, 6, QTableWidgetItem(str(session_count)))
+                
+            except Exception as e:
+                print(f"Error obteniendo sesiones para paciente {patient.get('id', 'N/A')}: {e}")
+                self.patients_table.setItem(i, 6, QTableWidgetItem("0"))
         
         # Resetear selección
         self.patients_table.clearSelection()

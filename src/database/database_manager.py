@@ -512,7 +512,7 @@ class DatabaseManager:
         """Obtiene todas las sesiones de un paciente específico"""
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, fecha, comentarios FROM sesiones " +
+            "SELECT id, fecha, objetivo, comentarios FROM sesiones " +
             "WHERE id_paciente = ? ORDER BY fecha DESC",
             (patient_id,)
         )
@@ -521,8 +521,9 @@ class DatabaseManager:
         return [
             {
                 "id": s[0],
-                "fecha": s[1], 
-                "comentarios": s[2],
+                "fecha": s[1],
+                "objetivo": s[2],
+                "comentarios": s[3]
                 # No incluimos datos de sensores pues son BLOBs que pueden ser grandes
             }
             for s in sessions
@@ -579,13 +580,18 @@ class DatabaseManager:
     @staticmethod
     @secure_connection
     def add_session(
-        id_paciente: int, 
+        id_paciente: int,
+        fecha: str = None,
+        objetivo: Optional[str] = None,
+        sud_inicial: Optional[int] = None,
+        sud_intermedio: Optional[int] = None,
+        sud_final: Optional[int] = None,
+        voc: Optional[int] = None,
         datos_ms: Optional[bytes] = None,
         datos_eog: Optional[bytes] = None,
         datos_ppg: Optional[bytes] = None,
         datos_bpm: Optional[bytes] = None,
-        comentarios: str = "",
-        fecha: Optional[str] = None,
+        comentarios: Optional[str] = None,
         conn=None
     ) -> int:
         """
@@ -599,15 +605,17 @@ class DatabaseManager:
         
         if not patient:
             raise ValueError(f"El paciente con ID {id_paciente} no existe")
-        
+
         # Si no se proporciona fecha, usar la actual
         if not fecha:
             fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
         cursor.execute(
-            "INSERT INTO sesiones (id_paciente, fecha, datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (id_paciente, fecha, datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios)
+            "INSERT INTO sesiones (id_paciente, fecha, objetivo, sud_inicial, sud_interm, sud_final, \
+                                   voc, datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (id_paciente, fecha, objetivo, sud_inicial, sud_intermedio, sud_final, 
+             voc, datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios)
         )
         conn.commit()
         return cursor.lastrowid
