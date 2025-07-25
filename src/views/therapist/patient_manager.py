@@ -1,7 +1,6 @@
 import sys
 import os
 import winsound
-from datetime import datetime
 from pathlib import Path
 from functools import partial
 from PySide6.QtWidgets import (
@@ -27,6 +26,7 @@ class PatientDetailsDialog(QDialog):
     def __init__(self, patient_id, parent=None):
         super().__init__(parent)
         self.patient_id = patient_id
+        self.parent = parent
         self.patient_data = None
         self.sessions_data = None
         
@@ -508,17 +508,195 @@ class PatientDetailsDialog(QDialog):
                                "La función de editar paciente estará disponible pronto.")
     
     def delete_session(self):
-        """Elimina las sesión seleccionada."""
+        """Elimina la sesión seleccionada del paciente"""
         selected_rows = self.sessions_table.selectionModel().selectedRows()
         
         if not selected_rows:
-            QMessageBox.warning(self, "Advertencia", "Por favor, seleccione una sesión de la lista")
+            QMessageBox.warning(self, "Advertencia", "Por favor, seleccione una sesión de la tabla para eliminar.")
             return
         
-        # Obtener los datos de la sesión seleccionada
-        row_index = selected_rows[0].row()
-        session_id = self.sessions_data[row_index]['id']
-        print(f"Intentando eliminar sesión con ID: {session_id}") # Esta línea es para depuración, se borrará después
+        try:
+            # Obtener los datos de la sesión seleccionada
+            row_index = selected_rows[0].row()
+            selected_session = self.sessions_data[row_index]
+            session_id = selected_session.get('id')
+            session_date = selected_session.get('fecha', 'N/A')
+            session_comments = selected_session.get('comentarios', 'Sin comentarios')
+            
+            if not session_id:
+                QMessageBox.warning(self, "Error", "No se pudo obtener el ID de la sesión.")
+                return
+            
+            # Reproducir sonido de advertencia
+            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            
+            # Crear mensaje de confirmación detallado
+            fecha_formatted, hora_formatted = self.format_datetime_string(session_date)
+            
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Confirmar Eliminación de Sesión")
+            msg_box.setIcon(QMessageBox.Warning)
+            
+            warning_text = f"¿Está seguro de que desea eliminar la siguiente sesión?\n\n"
+            warning_text += f"• Paciente: {self.patient_data.get('nombre', '')} {self.patient_data.get('apellido_paterno', '')}.\n"
+            warning_text += f"• Sesión N°: {len(self.sessions_data) - row_index}.\n"
+            warning_text += f"• Fecha: {fecha_formatted}.\n"
+            warning_text += f"• Hora: {hora_formatted}.\n"
+            warning_text += f"• Comentarios: {session_comments[:50]}{'...' if len(session_comments) > 50 else ''}.\n\n"
+            warning_text += "⚠️  TODOS los datos fisiológicos registrados (si existen) en esta sesión serán eliminados PERMANENTEMENTE:\n"
+            warning_text += "   • Datos de frecuencia cardiaca.\n"
+            warning_text += "   • Datos de movimientos oculares.\n\n"
+            warning_text += "❌  Esta acción NO se puede deshacer."
+            
+            msg_box.setText(warning_text)
+            
+            # Crear botones personalizados
+            delete_button = msg_box.addButton("Eliminar Sesión", QMessageBox.DestructiveRole)
+            cancel_button = msg_box.addButton("Cancelar", QMessageBox.RejectRole)
+            msg_box.setDefaultButton(cancel_button)
+            
+            # Aplicar estilo personalizado
+            msg_box.setStyleSheet("""
+                QMessageBox {
+                    background-color: #323232;
+                    color: #FFFFFF;
+                    border: 2px solid #FF6B6B;
+                    border-radius: 8px;
+                }
+                QMessageBox QLabel {
+                    color: #FFFFFF;
+                    background: transparent;
+                    font-size: 13px;
+                    padding: 10px;
+                }
+                QMessageBox QPushButton {
+                    color: white;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    min-width: 80px;
+                    margin: 2px;
+                }
+                QMessageBox QPushButton[text="Eliminar Sesión"] {
+                    background-color: #FF6B6B;
+                    border: 2px solid #FF6B6B;
+                }
+                QMessageBox QPushButton[text="Eliminar Sesión"]:hover {
+                    background-color: #FF8E8E;
+                    border: 2px solid #FF8E8E;
+                }
+                QMessageBox QPushButton[text="Eliminar Sesión"]:pressed {
+                    background-color: #E55555;
+                    border: 2px solid #E55555;
+                }
+                QMessageBox QPushButton[text="Cancelar"] {
+                    background-color: #6c757d;
+                    border: 2px solid #6c757d;
+                }
+                QMessageBox QPushButton[text="Cancelar"]:hover {
+                    background-color: #5a6268;
+                    border: 2px solid #5a6268;
+                }
+                QMessageBox QPushButton[text="Cancelar"]:pressed {
+                    background-color: #545b62;
+                    border: 2px solid #545b62;
+                }
+            """)
+            
+            # Ejecutar diálogo
+            msg_box.exec()
+            
+            if msg_box.clickedButton() == delete_button:
+                try:
+                    # Eliminar la sesión de la base de datos
+                    if DatabaseManager.delete_session(session_id):
+                        # Reproducir sonido de éxito
+                        winsound.MessageBeep(winsound.MB_OK)
+                        
+                        # Mostrar mensaje de éxito
+                        success_msg = QMessageBox(self)
+                        success_msg.setWindowTitle("Eliminación Exitosa")
+                        success_msg.setIcon(QMessageBox.Information)
+                        success_msg.setText(
+                            f"La sesión del {fecha_formatted} a las {hora_formatted} "
+                            f"ha sido eliminada exitosamente.\n\n"
+                            f"Todos los datos fisiológicos asociados también fueron eliminados."
+                        )
+                        
+                        # Aplicar estilo al mensaje de éxito
+                        success_msg.setStyleSheet("""
+                            QMessageBox {
+                                background-color: #323232;
+                                color: #FFFFFF;
+                                border: 2px solid #00A99D;
+                            }
+                            QMessageBox QLabel {
+                                color: #FFFFFF;
+                                background: transparent;
+                                font-size: 14px;
+                            }
+                            QMessageBox QPushButton {
+                                background-color: #00A99D;
+                                color: white;
+                                border: 2px solid #00A99D;
+                                border-radius: 6px;
+                                padding: 8px 16px;
+                                font-weight: bold;
+                                min-width: 50px;
+                            }
+                            QMessageBox QPushButton:hover {
+                                background-color: #00C2B3;
+                                border: 2px solid #00C2B3;
+                            }
+                            QMessageBox QPushButton:pressed {
+                                background-color: #008C82;
+                                border: 2px solid #008C82;
+                            }
+                        """)
+                        
+                        success_msg.exec()
+                        
+                        # Recargar el historial de sesiones
+                        self.refresh_session_history()
+                        
+                        self.parent.load_patients()
+                        
+                    else:
+                        QMessageBox.critical(
+                            self,
+                            "Error",
+                            "No se pudo eliminar la sesión. Verifique que la sesión "
+                            "exista o contacte al administrador."
+                        )
+                        
+                except Exception as e:
+                    QMessageBox.critical(
+                        self,
+                        "Error",
+                        f"Error durante la eliminación de la sesión:\n{str(e)}\n\n"
+                        "La operación ha sido cancelada para preservar la integridad de los datos."
+                    )
+                    
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al eliminar sesión: {str(e)}")
+
+    def refresh_session_history(self):
+        """Recarga el historial de sesiones en el diálogo"""
+        try:
+            # Limpiar el layout actual del historial de sesiones
+            if hasattr(self, 'sessions_layout'):
+                # Eliminar todos los widgets del layout
+                while self.sessions_layout.count():
+                    child = self.sessions_layout.takeAt(0)
+                    if child.widget():
+                        child.widget().deleteLater()
+                
+                # Recargar el historial de sesiones
+                self.load_session_history()
+            self.delete_session_button.setEnabled(False)
+                
+        except Exception as e:
+            print(f"Error al refrescar historial de sesiones: {e}")
 
 
 class PatientManagerWidget(QMainWindow):
@@ -1138,7 +1316,8 @@ class PatientManagerWidget(QMainWindow):
                 patient_id=patient_id,
                 current_session=current_session,
                 session_datetime=session_datetime,
-                session_type=session_type
+                session_type=session_type,
+                parent=self
             )
             
             # Conectar señal para cuando se cierre el control panel

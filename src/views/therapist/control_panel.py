@@ -38,7 +38,7 @@ class EMDRControlPanel(QMainWindow):
     # Señal emitida cuando la ventana se cierra
     window_closed = Signal()  # Nueva señal personalizada
     
-    def __init__(self, therapist_name=None, patient_name=None, patient_id=None, current_session=None, session_datetime=None, session_type=None):
+    def __init__(self, therapist_name=None, patient_name=None, patient_id=None, current_session=None, session_datetime=None, session_type=None, parent=None):
         super().__init__()
         self.therapist_name = therapist_name
         self.patient_name = patient_name
@@ -46,7 +46,8 @@ class EMDRControlPanel(QMainWindow):
         self.current_session = current_session
         self.session_datetime = session_datetime
         self.session_type = session_type
-        
+        self.parent = parent
+
         # Impresion de información para debugging
         print(f"ID del paciente: {self.patient_id}")
         print(f"Sesión actual: N°{self.current_session}")
@@ -1126,6 +1127,15 @@ class EMDRControlPanel(QMainWindow):
                 # self.sensor_monitor.save_data_to_csv()
                 
                 try:
+                    # Actualizar la tabla de pacientes en el patient_manager si existe
+                    if self.parent:
+                        try:
+                            # Actualizar la tabla de pacientes para reflejar las nuevas sesiones
+                            self.parent.load_patients()
+                            print("Tabla de pacientes actualizada exitosamente")
+                        except Exception as e:
+                            print(f"Error al actualizar tabla de pacientes: {e}")
+                    
                     # Emitir señal antes de cerrar
                     self.window_closed.emit()
                     
