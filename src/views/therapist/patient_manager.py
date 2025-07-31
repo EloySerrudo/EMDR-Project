@@ -1324,7 +1324,7 @@ class PatientManagerWidget(QMainWindow):
             self.control_panel.window_closed.connect(self.on_control_panel_closed)
             
             # Mostrar control panel
-            self.control_panel.show()
+            self.control_panel.showMaximized()
             
             # Ocultar esta ventana
             self.hide()
