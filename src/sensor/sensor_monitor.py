@@ -285,35 +285,35 @@ class SensorMonitor(QWidget):
         left_section = QHBoxLayout()
         left_section.setSpacing(0)
         
-        # Texto "Pulsaciones"
-        pulse_label = QLabel("Pulsaciones:")
-        pulse_label.setStyleSheet("""
-            QLabel {
-                color: #FFFFFF;
-                font-size: 14px;
-                font-weight: bold;
-                background: transparent;
-                min-height: 16px;
-                max-height: 16px;
-                border: none;
-            }
-        """)
-        left_section.addWidget(pulse_label)
+        # # Texto "Pulsaciones"
+        # pulse_label = QLabel("Pulsaciones:")
+        # pulse_label.setStyleSheet("""
+        #     QLabel {
+        #         color: #FFFFFF;
+        #         font-size: 14px;
+        #         font-weight: bold;
+        #         background: transparent;
+        #         min-height: 16px;
+        #         max-height: 16px;
+        #         border: none;
+        #     }
+        # """)
+        # left_section.addWidget(pulse_label)
         
-        # LED en forma de corazón simulado para pulsaciones
-        self.pulse_led = QLabel()
-        self.pulse_led.setFixedSize(42, 42)
-        self.pulse_led.setPixmap(qta.icon('fa5s.heart', color="#00C8AA00").pixmap(40, 40))
-        self.pulse_led.setStyleSheet("""
-            QLabel {
-                background: transparent;
-                border-radius: 0px;
-                border: none;
-                padding: 0px;
-            }
-        """)
-        self.pulse_led.setAlignment(Qt.AlignCenter)
-        left_section.addWidget(self.pulse_led)
+        # # LED en forma de corazón simulado para pulsaciones
+        # self.pulse_led = QLabel()
+        # self.pulse_led.setFixedSize(42, 42)
+        # self.pulse_led.setPixmap(qta.icon('fa5s.heart', color="#00C8AA00").pixmap(40, 40))
+        # self.pulse_led.setStyleSheet("""
+        #     QLabel {
+        #         background: transparent;
+        #         border-radius: 0px;
+        #         border: none;
+        #         padding: 0px;
+        #     }
+        # """)
+        # self.pulse_led.setAlignment(Qt.AlignCenter)
+        # left_section.addWidget(self.pulse_led)
         
         # ===== SEPARADOR VISUAL =====
         separator = QFrame()
@@ -401,7 +401,7 @@ class SensorMonitor(QWidget):
         plots_layout.setContentsMargins(2, 2, 2, 2)
         plots_layout.setSpacing(2)
         
-        GRAPH_HEIGHT = 130  # Altura uniforme para todas las gráficas
+        GRAPH_HEIGHT = 122  # Altura uniforme para todas las gráficas
         
         # Crear gráficas individuales
         if self.is_standalone:
@@ -519,6 +519,9 @@ class SensorMonitor(QWidget):
         eog_plot.showGrid(x=True, y=True, alpha=0.2)
         
         # Configurar ejes con estilo moderno
+        y_axis = eog_plot.getAxis('left')
+        y_axis.setStyle(showValues=False)
+
         x_axis = eog_plot.getAxis('bottom')
         x_axis.setTickSpacing(major=1, minor=0.5)
         x_axis.setPen(pg.mkPen('#CCCCCC', width=1))
@@ -533,7 +536,7 @@ class SensorMonitor(QWidget):
         x_axis.setHeight(25)       # Reducir altura total del eje X (valor por defecto ~40)
     
         # Configurar eje Y con espaciado personalizado
-        self.configure_y_axis_spacing(eog_plot, 'EOG (µV)', axis_width=60)
+        self.configure_y_axis_spacing(eog_plot, 'EOG', axis_width=35)
         
         # Estilo del área de ploteo
         plot_item = eog_plot.getPlotItem()
@@ -565,7 +568,7 @@ class SensorMonitor(QWidget):
         x_axis.setTextPen(pg.mkPen('#424242'))
         
         # Configurar eje Y con espaciado personalizado
-        self.configure_y_axis_spacing(bpm_plot, 'BPM', axis_width=60)
+        self.configure_y_axis_spacing(bpm_plot, 'BPM', axis_width=35)
         
         # Estilo del área de ploteo
         plot_item = bpm_plot.getPlotItem()
@@ -1325,9 +1328,9 @@ class SensorMonitor(QWidget):
             recent_threshold = len(recent_data) - int(0.1 * SAMPLE_RATE)  # Últimos 100ms
             recent_peaks = peaks[peaks > recent_threshold]
             
-            if len(recent_peaks) > 0:
-                self.activate_pulse_led()
-                
+            # if len(recent_peaks) > 0:
+            #     self.activate_pulse_led()
+        
         except Exception as e:
             print(f"Error en detección de picos: {e}")
     

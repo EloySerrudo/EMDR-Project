@@ -297,7 +297,7 @@ class EMDRControlPanel(QMainWindow):
         fields_container.setStyleSheet("""
             QFrame {
                 background: transparent;
-                border: 1px solid #555555;
+                border: none;
                 border-radius: 0px;
                 color: #FFFFFF;
                 font-size: 13px;
@@ -437,7 +437,7 @@ class EMDRControlPanel(QMainWindow):
         comments_container.setStyleSheet("""
             QFrame {
                 background: transparent;
-                border: 1px solid #555555;
+                border: none;
                 border-radius: 0px;
                 color: #FFFFFF;
                 font-size: 13px;
@@ -445,7 +445,7 @@ class EMDRControlPanel(QMainWindow):
             }
         """)
         comments_layout = QVBoxLayout(comments_container)
-        comments_layout.setContentsMargins(8, 0, 8, 0)
+        comments_layout.setContentsMargins(0, 0, 0, 0)
         comments_layout.setSpacing(4)
         
         # Label de comentarios
@@ -823,51 +823,37 @@ class EMDRControlPanel(QMainWindow):
         header_layout.setContentsMargins(15, 5, 15, 5)
         
         # ESTE FRAGMENT DE CÓDIGO ESTÁ COMENTADO PORQUE NO SE UTILIZA EL LOGO EMDR ACTUALMENTE
-        # # ===== LOGO EMDR =====
-        # logo_label = QLabel()
-        # try:
-        #     # Intentar cargar el logo
-        #     logo_path = Path(__file__).parent.parent.parent / 'resources' / 'emdr_logo.png'
-        #     if os.path.exists(logo_path):
-        #         from PySide6.QtGui import QPixmap
-        #         pixmap = QPixmap(logo_path)
-        #         # Escalar el logo manteniendo proporción
-        #         scaled_pixmap = pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        #         logo_label.setPixmap(scaled_pixmap)
-        #         logo_label.setStyleSheet("""
-        #             QLabel {
-        #                 background: transparent;
-        #                 border: none;
-        #                 padding: 0px;
-        #             }
-        #         """)
-        #     else:
-        #         # Si no existe el logo, mostrar texto alternativo
-        #         logo_label.setText("EMDR")
-        #         logo_label.setStyleSheet("""
-        #             QLabel {
-        #                 color: white;
-        #                 font-size: 16px;
-        #                 font-weight: bold;
-        #                 background: transparent;
-        #                 padding: 4px;
-        #             }
-        #         """)
-        # except Exception as e:
-        #     print(f"Error cargando logo: {e}")
-        #     # Fallback a texto
-        #     logo_label.setText("EMDR")
-        #     logo_label.setStyleSheet("""
-        #         QLabel {
-        #             color: white;
-        #             font-size: 16px;
-        #             font-weight: bold;
-        #             background: transparent;
-        #             padding: 4px;
-        #         }
-        #     """)
+        # ===== LOGO EMDR =====
+        logo_label = QLabel()
         
-        # header_layout.addWidget(logo_label)
+        logo_path = Path(__file__).parent.parent.parent / 'resources' / 'emdr_logo.png'
+        
+        if logo_path.exists():
+            pixmap = QPixmap(str(logo_path))
+            pixmap = pixmap.scaled(70, 70, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_label.setPixmap(pixmap)
+            logo_label.setAlignment(Qt.AlignCenter)
+            logo_label.setStyleSheet("""
+                QLabel {
+                    border: none;
+                    outline: none;
+                    background: transparent;
+                }
+            """)
+        else:
+            # Si no hay logo, usar texto estilizado
+            logo_label.setText("EMDR")
+            logo_label.setAlignment(Qt.AlignCenter)
+            logo_label.setStyleSheet("""
+                QLabel {
+                    color: white;
+                    font-size: 20px;
+                    font-weight: bold;
+                    background: transparent;
+                }
+            """)
+        
+        header_layout.addWidget(logo_label)
         
         # Título principal
         title_label = QLabel("PANEL DE CONTROL EMDR")
@@ -883,28 +869,30 @@ class EMDRControlPanel(QMainWindow):
         """)
         header_layout.addWidget(title_label)
         
-        header_layout.addStretch()
         header_layout.addSpacing(20)
         
         # Información del terapeuta
         therapist_label = QLabel(f"Terapeuta: {self.therapist_name}")
         therapist_label.setStyleSheet("""
             QLabel {
-                color: #003454;
-                font-size: 13px;
-                font-weight: 600;
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
                 background: transparent;
                 border-radius: 12px;
             }
         """)
         header_layout.addWidget(therapist_label)
         
+        header_layout.addStretch()
+        
         # Información del paciente
         patient_label = QLabel(f"Paciente: {self.patient_name}")
         patient_label.setStyleSheet("""
             QLabel {
                 color: #003454;
-                font-weight: 600;
+                font-size: 16px;
+                font-weight: bold;
                 background: transparent;
                 border-radius: 12px;
             }
@@ -916,7 +904,8 @@ class EMDRControlPanel(QMainWindow):
         session_info.setStyleSheet("""
             QLabel {
                 color: #003454;
-                font-weight: 600;
+                font-size: 16px;
+                font-weight: bold;
                 background: transparent;
                 border-radius: 12px;
             }
@@ -930,10 +919,10 @@ class EMDRControlPanel(QMainWindow):
             session_type_info.setStyleSheet("""
                 QLabel {
                     color: #003454;
-                    font-weight: 600;
+                    font-size: 16px;
+                    font-weight: bold;
                     background: transparent;
                     border-radius: 12px;
-                    font-size: 12px;
                 }
             """)
             header_layout.addWidget(session_type_info)
