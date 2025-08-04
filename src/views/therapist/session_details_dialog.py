@@ -137,14 +137,14 @@ class SessionDetailsDialog(QDialog):
         title_layout.setContentsMargins(5, 0, 5, 0)
         title_layout.setSpacing(5)
 
-        sesion = QLabel(f"Detalles de la Sesión #{self.session_id}")
-        sesion.setAlignment(Qt.AlignCenter)
-        title_layout.addWidget(sesion)
-        
         patient_name_text = f"Paciente: {self.patient_data.get('nombre', '')} {self.patient_data.get('apellido_paterno', '')} {self.patient_data.get('apellido_materno', '')}"
         patient_name = QLabel(patient_name_text)
         patient_name.setAlignment(Qt.AlignCenter)
         title_layout.addWidget(patient_name)
+        
+        sesion = QLabel(f"Detalles de la Sesión #{self.session_id}")
+        sesion.setAlignment(Qt.AlignCenter)
+        title_layout.addWidget(sesion)
         
         fecha, hora = self.format_datetime_string(self.session_data.get('fecha'))
         fecha_label = QLabel(f"Fecha: {fecha}")
@@ -183,13 +183,13 @@ class SessionDetailsDialog(QDialog):
         
         # Crear campos de datos clínicos en disposición horizontal
         if self.session_data:
-            self.create_clinical_field_horizontal(clinical_layout, "SUD Inicial:", 
+            self.create_clinical_field(clinical_layout, "SUD Inicial:", 
                                                  self.session_data.get('sud_inicial'))
-            self.create_clinical_field_horizontal(clinical_layout, "SUD Intermedio:", 
+            self.create_clinical_field(clinical_layout, "SUD Intermedio:", 
                                                  self.session_data.get('sud_interm'))
-            self.create_clinical_field_horizontal(clinical_layout, "SUD Final:", 
+            self.create_clinical_field(clinical_layout, "SUD Final:", 
                                                  self.session_data.get('sud_final'))
-            self.create_clinical_field_horizontal(clinical_layout, "VOC:", 
+            self.create_clinical_field(clinical_layout, "VOC:", 
                                                  self.session_data.get('voc'))
 
         main_layout.addWidget(clinical_group)
@@ -311,7 +311,7 @@ class SessionDetailsDialog(QDialog):
         value_label.setWordWrap(True)
         layout.addRow(label, value_label)
     
-    def create_clinical_field_horizontal(self, layout, label_text, value):
+    def create_clinical_field(self, layout, label_text, value):
         """Crea un campo clínico con etiqueta y valor en disposición vertical dentro del layout horizontal"""
         # Contenedor vertical para cada campo
         field_container = QHBoxLayout()
@@ -374,53 +374,6 @@ class SessionDetailsDialog(QDialog):
         container_widget = QWidget()
         container_widget.setLayout(field_container)
         layout.addWidget(container_widget)
-    
-    def create_clinical_field(self, layout, label_text, value):
-        """Crea un campo clínico con etiqueta y valor (método original para compatibilidad)"""
-        label = QLabel(label_text)
-        label.setStyleSheet("""
-            QLabel {
-                color: white;
-                font-weight: bold;
-                background: transparent;
-                font-size: 14px;
-            }
-        """)
-        
-        # Crear QLineEdit de solo lectura
-        field = QLineEdit()
-        field.setReadOnly(True)
-        field.setStyleSheet("""
-            QLineEdit {
-                background-color: #323232;
-                border: 1px solid #555555;
-                border-radius: 4px;
-                padding: 8px;
-                font-weight: normal;
-                color: white;
-                font-size: 13px;
-            }
-        """)
-        
-        # Establecer el valor o mensaje por defecto
-        if value is not None:
-            field.setText(str(value))
-        else:
-            field.setText("No registrado")
-            field.setStyleSheet("""
-                QLineEdit {
-                    background-color: #323232;
-                    border: 1px solid #555555;
-                    border-radius: 4px;
-                    padding: 8px;
-                    font-weight: normal;
-                    color: #AAAAAA;
-                    font-size: 13px;
-                    font-style: italic;
-                }
-            """)
-        
-        layout.addRow(label, field)
     
     def setup_chart(self, parent_layout):
         """Configura la gráfica de datos PPG"""
