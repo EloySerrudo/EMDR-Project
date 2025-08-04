@@ -648,36 +648,23 @@ class DatabaseManager:
     
     @staticmethod
     @secure_connection
-    def update_session(
+    def update_session_clinical_data(
         session_id: int,
-        datos_ms: Optional[bytes] = None,
-        datos_eog: Optional[bytes] = None,
-        datos_ppg: Optional[bytes] = None,
-        datos_bpm: Optional[bytes] = None,
-        comentarios: Optional[str] = None,
+        sud_inicial: Optional[int] = None,
+        sud_intermedio: Optional[int] = None,
+        sud_final: Optional[int] = None,
+        voc: Optional[int] = None,
         conn=None
     ) -> bool:
         """
-        Actualiza una sesión existente
+        Actualiza únicamente los datos clínicos de una sesión (SUD y VOC)
         Retorna: True si la actualización fue exitosa
         """
-        # Obtener sesión actual para actualizar solo los campos proporcionados
-        current = DatabaseManager.get_session(session_id, signal_data=True)
-        if not current:
-            return False
-            
-        # Solo actualizar campos proporcionados
-        datos_ms = datos_ms if datos_ms is not None else current.get("datos_ms")
-        datos_eog = datos_eog if datos_eog is not None else current.get("datos_eog")
-        datos_ppg = datos_ppg if datos_ppg is not None else current.get("datos_ppg")
-        datos_bpm = datos_bpm if datos_bpm is not None else current.get("datos_bpm")
-        comentarios = comentarios if comentarios is not None else current.get("comentarios")
-        
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE sesiones SET datos_ms = ?, datos_eog = ?, datos_ppg = ?, datos_bpm = ?, comentarios = ? " +
+            "UPDATE sesiones SET sud_inicial = ?, sud_interm = ?, sud_final = ?, voc = ? " +
             "WHERE id = ?",
-            (datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios, session_id)
+            (sud_inicial, sud_intermedio, sud_final, voc, session_id)
         )
         conn.commit()
         return cursor.rowcount > 0

@@ -253,8 +253,8 @@ class PatientDetailsDialog(QDialog):
         cancel_button.clicked.connect(self.accept)
         
         button_layout.addWidget(edit_button)
-        button_layout.addWidget(self.delete_session_button)
         button_layout.addWidget(self.view_session_button)
+        button_layout.addWidget(self.delete_session_button)
         button_layout.addStretch()
         button_layout.addWidget(cancel_button)
         

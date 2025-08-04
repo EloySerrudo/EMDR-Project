@@ -1097,7 +1097,7 @@ class EMDRControlPanel(QMainWindow):
                 )
                 
                 # Opcionalmente, también guardar en CSV como respaldo
-                # self.sensor_monitor.save_data_to_csv()
+                self.sensor_monitor.save_data_to_csv()
                 
                 # Actualizar la tabla de pacientes en el patient_manager si existe
                 try:

@@ -1167,16 +1167,6 @@ class SensorMonitor(QWidget):
                 msg.exec()
                 return
                 
-            # CONVERTIR TIMESTAMPS DIRECTAMENTE EN EL DICCIONARIO EXISTENTE
-            converted_timestamps = []
-            for timestamp_ms in self.csv_data['timestamp']:
-                absolute_timestamp = self.start_datetime + pd.Timedelta(milliseconds=timestamp_ms)
-                timestamp_formatted = absolute_timestamp.strftime("%H:%M:%S.%f")[:-3]  # HH:MM:SS.mmm
-                converted_timestamps.append(timestamp_formatted)
-            
-            # REEMPLAZAR TIMESTAMPS EN EL DICCIONARIO ORIGINAL
-            self.csv_data['timestamp'] = converted_timestamps
-            
             # Crear DataFrame directamente con el diccionario modificado
             df = pd.DataFrame(self.csv_data)
             
@@ -1230,7 +1220,7 @@ class SensorMonitor(QWidget):
             print(f"Error al guardar datos: {e}")
             # Mostrar mensaje de error con estilo moderno
             msg = QMessageBox(self)
-            msg.setWindowTitle("Error al Guardar")
+            msg.setWindowTitle("Error al Guardar CSV")
             msg.setText("Ocurrió un error al guardar los datos.")
             msg.setInformativeText(f"Error: {str(e)}")
             msg.setIcon(QMessageBox.Critical)

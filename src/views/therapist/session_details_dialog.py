@@ -9,11 +9,8 @@ from PySide6.QtWidgets import (
     QScrollBar, QScrollArea, QGridLayout
 )
 from PySide6.QtCore import Qt, Signal
-import matplotlib
-matplotlib.use('Qt5Agg')  # Configurar backend antes de importar pyplot
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
+import pyqtgraph as pg
+from pyqtgraph import PlotWidget
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
@@ -38,8 +35,18 @@ class SessionDetailsDialog(QDialog):
         self.window_size_seconds = 8  # Ventana de 8 segundos
         self.current_position = 0  # Posición actual en la gráfica
         
+        # Variables para campos clínicos editables
+        self.sud_inicial_field = None
+        self.sud_intermedio_field = None
+        self.sud_final_field = None
+        self.voc_field = None
+        
+        # Variables para botones de edición
+        self.edit_button = None
+        self.save_button = None
+        
         self.setWindowTitle("Detalles de la Sesión")
-        self.resize(900, 700)
+        self.resize(900, 600)
         self.setModal(True)
         
         self.load_session_data()
@@ -130,6 +137,7 @@ class SessionDetailsDialog(QDialog):
                 color: #00A99D; 
                 padding: 0px;
                 background: transparent;
+                border: none;
             }
         """)
         
@@ -183,13 +191,13 @@ class SessionDetailsDialog(QDialog):
         
         # Crear campos de datos clínicos en disposición horizontal
         if self.session_data:
-            self.create_clinical_field(clinical_layout, "SUD Inicial:", 
+            self.sud_inicial_field = self.create_clinical_field(clinical_layout, "SUD Inicial:", 
                                                  self.session_data.get('sud_inicial'))
-            self.create_clinical_field(clinical_layout, "SUD Intermedio:", 
+            self.sud_intermedio_field = self.create_clinical_field(clinical_layout, "SUD Intermedio:", 
                                                  self.session_data.get('sud_interm'))
-            self.create_clinical_field(clinical_layout, "SUD Final:", 
+            self.sud_final_field = self.create_clinical_field(clinical_layout, "SUD Final:", 
                                                  self.session_data.get('sud_final'))
-            self.create_clinical_field(clinical_layout, "VOC:", 
+            self.voc_field = self.create_clinical_field(clinical_layout, "VOC:", 
                                                  self.session_data.get('voc'))
 
         main_layout.addWidget(clinical_group)
@@ -242,6 +250,63 @@ class SessionDetailsDialog(QDialog):
         # === BOTONES DE ACCIÓN ===
         button_layout = QHBoxLayout()
         
+        # Botón para editar
+        self.edit_button = QPushButton("Editar")
+        self.edit_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00A99D;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #00A99D;
+            }
+            QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+            QPushButton:disabled {
+                background-color: #555555;
+                border: 2px solid #555555;
+                color: #AAAAAA;
+            }
+        """)
+        self.edit_button.clicked.connect(self.toggle_edit_mode)
+        
+        # Botón para guardar (inicialmente deshabilitado)
+        self.save_button = QPushButton("Guardar")
+        self.save_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00A99D;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #00A99D;
+            }
+            QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+            QPushButton:disabled {
+                background-color: #555555;
+                border: 2px solid #555555;
+                color: #AAAAAA;
+            }
+        """)
+        self.save_button.clicked.connect(self.save_changes)
+        self.save_button.setEnabled(False)  # Inicialmente deshabilitado
+        
         # Botón para cerrar
         close_button = QPushButton("Cerrar")
         close_button.setStyleSheet("""
@@ -265,6 +330,8 @@ class SessionDetailsDialog(QDialog):
         """)
         close_button.clicked.connect(self.accept)
         
+        button_layout.addWidget(self.edit_button)
+        button_layout.addWidget(self.save_button)
         button_layout.addStretch()
         button_layout.addWidget(close_button)
 
@@ -374,30 +441,47 @@ class SessionDetailsDialog(QDialog):
         container_widget = QWidget()
         container_widget.setLayout(field_container)
         layout.addWidget(container_widget)
+        
+        # Retornar el campo para poder mantener referencia
+        return field
     
     def setup_chart(self, parent_layout):
-        """Configura la gráfica de datos PPG"""
-        # Crear la figura de matplotlib
-        self.figure = Figure(figsize=(12, 4), dpi=100)
-        self.canvas = FigureCanvas(self.figure)
-        self.canvas.setStyleSheet("background-color: #323232;")
+        """Configura la gráfica de datos PPG usando PyQtGraph"""
+        # Configurar el tema oscuro de PyQtGraph
+        pg.setConfigOptions(antialias=True)
+        pg.setConfigOption('background', '#323232')
+        pg.setConfigOption('foreground', 'w')
         
-        # Configurar el eje
-        self.ax = self.figure.add_subplot(111)
-        self.figure.patch.set_facecolor('#323232')
-        self.ax.set_facecolor('#2a2a2a')
+        # Crear el widget de gráfica
+        self.plot_widget = PlotWidget()
+        self.plot_widget.setFixedHeight(300)
         
-        # Estilo de la gráfica
-        self.ax.tick_params(colors='white')
-        self.ax.spines['bottom'].set_color('white')
-        self.ax.spines['top'].set_color('white')
-        self.ax.spines['right'].set_color('white')
-        self.ax.spines['left'].set_color('white')
-        self.ax.set_xlabel('Tiempo (ms)', color='white')
-        self.ax.set_ylabel('Señal PPG', color='white')
-        self.ax.set_title('Datos de Pulso (PPG)', color='#00A99D', fontweight='bold')
+        # Configurar el estilo del plot widget
+        self.plot_widget.setStyleSheet("""
+            PlotWidget {
+                background-color: #323232;
+                border: 1px solid #555555;
+                border-radius: 4px;
+            }
+        """)
         
-        parent_layout.addWidget(self.canvas)
+        # Configurar el plot
+        self.plot_widget.setBackground('#2a2a2a')
+        self.plot_widget.setLabel('left', 'Señal PPG', color='white', size='12pt')
+        self.plot_widget.setLabel('bottom', 'Tiempo (ms)', color='white', size='12pt')
+        self.plot_widget.setTitle('Datos de Pulso (PPG)', color='#00A99D', size='14pt')
+        
+        # Configurar la grilla
+        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        
+        # Configurar los ejes
+        self.plot_widget.getAxis('left').setPen(color='white', width=1)
+        self.plot_widget.getAxis('bottom').setPen(color='white', width=1)
+        self.plot_widget.getAxis('left').setTextPen(color='white')
+        self.plot_widget.getAxis('bottom').setTextPen(color='white')
+        
+        # Añadir el widget al layout
+        parent_layout.addWidget(self.plot_widget)
         
         # Crear scroll bar para navegar por los datos
         if len(self.ms_data) > 0:
@@ -463,7 +547,7 @@ class SessionDetailsDialog(QDialog):
         self.update_chart()
     
     def update_chart(self):
-        """Actualiza la gráfica con la ventana de datos actual"""
+        """Actualiza la gráfica con la ventana de datos actual usando PyQtGraph"""
         if self.ppg_data is None or self.ms_data is None:
             return
         
@@ -477,44 +561,221 @@ class SessionDetailsDialog(QDialog):
             windowed_ms = self.ms_data[mask]
             windowed_ppg = self.ppg_data[mask]
             
-            # Limpiar y redibujar
-            self.ax.clear()
+            # Limpiar la gráfica
+            self.plot_widget.clear()
             
             if len(windowed_ms) > 0 and len(windowed_ppg) > 0:
-                # Graficar datos
-                self.ax.plot(windowed_ms, windowed_ppg, color='#00A99D', linewidth=1.5)
+                # Graficar datos con color verde esmeralda
+                pen = pg.mkPen(color='#00A99D', width=2)
+                self.plot_widget.plot(windowed_ms, windowed_ppg, pen=pen, name='PPG')
                 
-                # Configurar ejes
-                self.ax.set_xlim(start_time_ms, end_time_ms)
-                self.ax.set_xlabel('Tiempo (ms)', color='white')
-                self.ax.set_ylabel('Señal PPG', color='white')
-                self.ax.set_title(f'Datos de Pulso (PPG) - Ventana: {self.current_position}s a {self.current_position + self.window_size_seconds}s', 
-                                color='#00A99D', fontweight='bold')
+                # Configurar los límites del eje X
+                self.plot_widget.setXRange(start_time_ms, end_time_ms, padding=0)
+                
+                # Actualizar el título con información de la ventana
+                self.plot_widget.setTitle(
+                    f'Datos de Pulso (PPG) - Ventana: {self.current_position}s a {self.current_position + self.window_size_seconds}s',
+                    color='#00A99D', 
+                    size='14pt'
+                )
             else:
                 # Mostrar mensaje si no hay datos en esta ventana
-                self.ax.text(0.5, 0.5, 'No hay datos en esta ventana', 
-                           transform=self.ax.transAxes, ha='center', va='center',
-                           color='#AAAAAA', fontsize=14)
-                self.ax.set_title('Datos de Pulso (PPG) - Sin datos', color='#AAAAAA')
-            
-            # Aplicar estilo
-            self.ax.set_facecolor('#2a2a2a')
-            self.ax.tick_params(colors='white')
-            self.ax.spines['bottom'].set_color('white')
-            self.ax.spines['top'].set_color('white')
-            self.ax.spines['right'].set_color('white')
-            self.ax.spines['left'].set_color('white')
-            
-            # Actualizar canvas
-            self.canvas.draw()
+                text_item = pg.TextItem(
+                    'No hay datos en esta ventana',
+                    color='#AAAAAA',
+                    anchor=(0.5, 0.5)
+                )
+                text_item.setPos(start_time_ms + (end_time_ms - start_time_ms) / 2, 0)
+                self.plot_widget.addItem(text_item)
+                self.plot_widget.setTitle('Datos de Pulso (PPG) - Sin datos', color='#AAAAAA', size='14pt')
             
         except Exception as e:
             print(f"Error actualizando gráfica: {e}")
-            self.ax.clear()
-            self.ax.text(0.5, 0.5, f'Error mostrando datos: {str(e)}', 
-                       transform=self.ax.transAxes, ha='center', va='center',
-                       color='red', fontsize=12)
-            self.canvas.draw()
+            # Limpiar y mostrar mensaje de error
+            self.plot_widget.clear()
+            error_text = pg.TextItem(
+                f'Error mostrando datos: {str(e)}',
+                color='red',
+                anchor=(0.5, 0.5)
+            )
+            error_text.setPos(0, 0)
+            self.plot_widget.addItem(error_text)
+
+    def toggle_edit_mode(self):
+        """Activa/desactiva el modo de edición para los campos clínicos"""
+        # Habilitar campos para edición
+        if self.sud_inicial_field:
+            self.sud_inicial_field.setReadOnly(False)
+            self.sud_inicial_field.setStyleSheet("""
+                QLineEdit {
+                    background-color: #424242;
+                    border: 2px solid #00A99D;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-weight: normal;
+                    color: white;
+                    font-size: 13px;
+                    text-align: center;
+                }
+                QLineEdit:focus {
+                    background-color: #4a4a4a;
+                    border: 2px solid #00C2B3;
+                }
+            """)
+        
+        if self.sud_intermedio_field:
+            self.sud_intermedio_field.setReadOnly(False)
+            self.sud_intermedio_field.setStyleSheet("""
+                QLineEdit {
+                    background-color: #424242;
+                    border: 2px solid #00A99D;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-weight: normal;
+                    color: white;
+                    font-size: 13px;
+                    text-align: center;
+                }
+                QLineEdit:focus {
+                    background-color: #4a4a4a;
+                    border: 2px solid #00C2B3;
+                }
+            """)
+        
+        if self.sud_final_field:
+            self.sud_final_field.setReadOnly(False)
+            self.sud_final_field.setStyleSheet("""
+                QLineEdit {
+                    background-color: #424242;
+                    border: 2px solid #00A99D;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-weight: normal;
+                    color: white;
+                    font-size: 13px;
+                    text-align: center;
+                }
+                QLineEdit:focus {
+                    background-color: #4a4a4a;
+                    border: 2px solid #00C2B3;
+                }
+            """)
+        
+        if self.voc_field:
+            self.voc_field.setReadOnly(False)
+            self.voc_field.setStyleSheet("""
+                QLineEdit {
+                    background-color: #424242;
+                    border: 2px solid #00A99D;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-weight: normal;
+                    color: white;
+                    font-size: 13px;
+                    text-align: center;
+                }
+                QLineEdit:focus {
+                    background-color: #4a4a4a;
+                    border: 2px solid #00C2B3;
+                }
+            """)
+        
+        # Cambiar estado de botones
+        self.edit_button.setEnabled(False)
+        self.save_button.setEnabled(True)
+    
+    def save_changes(self):
+        """Guarda los cambios en la base de datos"""
+        try:
+            # Obtener valores de los campos
+            sud_inicial = self.get_field_value(self.sud_inicial_field)
+            sud_intermedio = self.get_field_value(self.sud_intermedio_field)
+            sud_final = self.get_field_value(self.sud_final_field)
+            voc = self.get_field_value(self.voc_field)
+            
+            # Actualizar en la base de datos
+            success = DatabaseManager.update_session_clinical_data(
+                session_id=self.session_id,
+                sud_inicial=sud_inicial,
+                sud_intermedio=sud_intermedio,
+                sud_final=sud_final,
+                voc=voc
+            )
+            
+            if success:
+                QMessageBox.information(self, "Éxito", "Los datos clínicos han sido actualizados correctamente.")
+                
+                # Actualizar datos locales
+                self.session_data['sud_inicial'] = sud_inicial
+                self.session_data['sud_interm'] = sud_intermedio
+                self.session_data['sud_final'] = sud_final
+                self.session_data['voc'] = voc
+                
+                # Restaurar modo de solo lectura
+                self.restore_readonly_mode()
+                
+                # Notificar al padre para actualizar la vista si es necesario
+                if hasattr(self.parent, 'refresh_session_history'):
+                    self.parent.refresh_session_history()
+                    
+            else:
+                QMessageBox.critical(self, "Error", "No se pudieron guardar los cambios en la base de datos.")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al guardar los cambios: {str(e)}")
+    
+    def get_field_value(self, field):
+        """Obtiene el valor de un campo, retornando None si está vacío o contiene 'No registrado'"""
+        if field is None:
+            return None
+        
+        value = field.text().strip()
+        if value == "" or value == "No registrado":
+            return None
+        
+        try:
+            # Intentar convertir a número
+            return int(value)
+        except ValueError:
+            try:
+                return float(value)
+            except ValueError:
+                return None
+    
+    def restore_readonly_mode(self):
+        """Restaura el modo de solo lectura para los campos"""
+        readonly_style = """
+            QLineEdit {
+                background-color: #323232;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 8px;
+                font-weight: normal;
+                color: white;
+                font-size: 13px;
+                text-align: center;
+            }
+        """
+        
+        if self.sud_inicial_field:
+            self.sud_inicial_field.setReadOnly(True)
+            self.sud_inicial_field.setStyleSheet(readonly_style)
+        
+        if self.sud_intermedio_field:
+            self.sud_intermedio_field.setReadOnly(True)
+            self.sud_intermedio_field.setStyleSheet(readonly_style)
+        
+        if self.sud_final_field:
+            self.sud_final_field.setReadOnly(True)
+            self.sud_final_field.setStyleSheet(readonly_style)
+        
+        if self.voc_field:
+            self.voc_field.setReadOnly(True)
+            self.voc_field.setStyleSheet(readonly_style)
+        
+        # Cambiar estado de botones
+        self.edit_button.setEnabled(True)
+        self.save_button.setEnabled(False)
 
     def format_datetime_string(self, datetime_str):
         """
