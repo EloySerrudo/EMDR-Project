@@ -954,32 +954,16 @@ class EMDRControlPanel(QMainWindow):
             comentarios = text if (text := self.comments_text.toPlainText().strip()) else 'Sin comentarios'
 
             # Preparar los datos de las señales
-            if len(self.sensor_monitor.csv_data['index']) > 0:
-                # Serializar datos usando numpy para eficiencia
-                
-                # Comprimir timestamp
-                timestamps = np.array(self.sensor_monitor.csv_data['timestamp'])
-                timestamps_bytes = pickle.dumps(timestamps)
-                timestamps_compressed = zlib.compress(timestamps_bytes)
-                
-                # Comprimir EOG (señal filtrada)
-                eog_data = np.array(self.sensor_monitor.csv_data['eog_raw'])
-                eog_bytes = pickle.dumps(eog_data)
-                eog_compressed = zlib.compress(eog_bytes)
-                
-                # Comprimir PPG (señal filtrada)
-                ppg_data = np.array(self.sensor_monitor.csv_data['ppg_raw'])
-                ppg_bytes = pickle.dumps(ppg_data)
-                ppg_compressed = zlib.compress(ppg_bytes)
-                
-                # Comprimir BPM
-                bpm_data = np.array(self.sensor_monitor.csv_data['pulse_bpm'])
-                bpm_bytes = pickle.dumps(bpm_data)
-                bpm_compressed = zlib.compress(bpm_bytes)
+            if len(self.sensor_monitor.csv_data['timestamp']) > 0:
+                # Extraer datos
+                timestamps_compressed = self.sensor_monitor.csv_data['timestamp']
+                eog_compressed = self.sensor_monitor.csv_data['eog_raw']
+                ppg_compressed = self.sensor_monitor.csv_data['ppg_raw']
+                bpm_compressed = self.sensor_monitor.csv_data['pulse_bpm']
                 
                 # Mensaje de datos guardados
                 mensaje = "¡Datos guardados correctamente! " + \
-                          f"Se han guardado {self.milliseconds_to_time(timestamps[-1])} en la sesión N°{self.current_session}."
+                          f"Se han guardado {self.milliseconds_to_time(timestamps_compressed[-1])} en la sesión N°{self.current_session}."
             
             else:
                 mensaje = "¡Datos guardados correctamente! " + \
@@ -1115,8 +1099,8 @@ class EMDRControlPanel(QMainWindow):
                 # Opcionalmente, también guardar en CSV como respaldo
                 # self.sensor_monitor.save_data_to_csv()
                 
+                # Actualizar la tabla de pacientes en el patient_manager si existe
                 try:
-                    # Actualizar la tabla de pacientes en el patient_manager si existe
                     if self.parent:
                         try:
                             # Actualizar la tabla de pacientes para reflejar las nuevas sesiones
@@ -1130,7 +1114,6 @@ class EMDRControlPanel(QMainWindow):
                     
                     # Cerrar la ventana actual
                     self.close()
-                    
                 except Exception as e:
                     QMessageBox.critical(self, "Error", f"No se pudo regresar al dashboard: {str(e)}")
                 

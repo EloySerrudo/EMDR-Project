@@ -40,15 +40,15 @@ class SignalAnalyzer:
             sessions = DatabaseManager.get_sessions_for_patient(patient['id'])
             for session in sessions:
                 # Obtener datos completos de la sesión
-                full_session_data = DatabaseManager.get_session_data(session['id'])
+                full_session_data = DatabaseManager.get_session(session_id=session['id'], signal_data=True)
                 if full_session_data:
                     session_data['session_ids'].append(session['id'])
                     session_data['patient_ids'].append(patient['id'])
                     session_data['fechas'].append(session['fecha'])
                     session_data['notas'].append(session['notas'])
-                    session_data['datos_eog'].append(full_session_data.get('eog_data'))
-                    session_data['datos_ppg'].append(full_session_data.get('ppg_data'))
-                    session_data['datos_bpm'].append(full_session_data.get('bpm_data'))
+                    session_data['datos_eog'].append(full_session_data.get('datos_eog'))
+                    session_data['datos_ppg'].append(full_session_data.get('datos_ppg'))
+                    session_data['datos_bpm'].append(full_session_data.get('datos_bpm'))
         
         self.data = session_data
         return len(session_data['session_ids']) > 0

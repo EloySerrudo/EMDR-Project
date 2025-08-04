@@ -78,7 +78,9 @@ class DatabaseManager:
     @staticmethod
     @secure_connection
     def get_all_patients(conn=None) -> List[Dict[str, Any]]:
-        """Obtiene todos los pacientes de la base de datos"""
+        """
+        Obtiene todos los pacientes de la base de datos orderados por apellidos paterno, materno y nombre
+        """
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, apellido_paterno, apellido_materno, nombre, fecha_nacimiento, celular, fecha_registro, comentarios 
@@ -531,16 +533,17 @@ class DatabaseManager:
     
     @staticmethod
     @secure_connection
-    def get_session(session_id: int, include_data: bool = False, conn=None) -> Optional[Dict[str, Any]]:
+    def get_session(session_id: int, signal_data: bool = False, conn=None) -> Optional[Dict[str, Any]]:
         """
         Obtiene una sesión específica
-        include_data: Si es True, incluye los datos de EOG, PPG y milisegundos (puede ser pesado)
+        signal_data: Si es True, incluye los datos de EOG, PPG y milisegundos (puede ser pesado)
         """
         cursor = conn.cursor()
         
-        if include_data:
+        if signal_data:
             cursor.execute(
-                "SELECT id, id_paciente, fecha, datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios " +
+                "SELECT id, id_paciente, fecha, objetivo, sud_inicial, sud_interm, sud_final, voc, " +
+                "datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios " +
                 "FROM sesiones WHERE id = ?",
                 (session_id,)
             )
@@ -548,20 +551,32 @@ class DatabaseManager:
             
             if not session:
                 return None
-                
+            
+            signal_data = DatabaseManager.decompress_signal_data(datos_ms=session[8],
+                                                                 datos_eog=session[9],
+                                                                 datos_ppg=session[10],
+                                                                 datos_bpm=session[11]
+                                                                )
+            
+            # Retornar la sesión con los datos de señales
             return {
                 "id": session[0],
                 "id_paciente": session[1],
                 "fecha": session[2],
-                "datos_ms": session[3],
-                "datos_eog": session[4],
-                "datos_ppg": session[5],
-                "datos_bpm": session[6],
-                "comentarios": session[7]
+                "objetivo": session[3],
+                "sud_inicial": session[4],
+                "sud_interm": session[5],
+                "sud_final": session[6],
+                "voc": session[7],
+                "datos_ms": signal_data['ms_data_decompressed'],
+                "datos_eog": signal_data['eog_data_decompressed'],
+                "datos_ppg": signal_data['ppg_data_decompressed'],
+                "datos_bpm": signal_data['bpm_data_decompressed'],
+                "comentarios": session[12]
             }
         else:
             cursor.execute(
-                "SELECT id, id_paciente, fecha, comentarios " +
+                "SELECT id, id_paciente, fecha, objetivo, sud_inicial, sud_interm, sud_final, voc, comentarios " +
                 "FROM sesiones WHERE id = ?",
                 (session_id,)
             )
@@ -574,7 +589,12 @@ class DatabaseManager:
                 "id": session[0],
                 "id_paciente": session[1],
                 "fecha": session[2],
-                "comentarios": session[3]
+                "objetivo": session[3],
+                "sud_inicial": session[4],
+                "sud_interm": session[5],
+                "sud_final": session[6],
+                "voc": session[7],
+                "comentarios": session[8]
             }
     
     @staticmethod
@@ -587,10 +607,10 @@ class DatabaseManager:
         sud_intermedio: Optional[int] = None,
         sud_final: Optional[int] = None,
         voc: Optional[int] = None,
-        datos_ms: Optional[bytes] = None,
-        datos_eog: Optional[bytes] = None,
-        datos_ppg: Optional[bytes] = None,
-        datos_bpm: Optional[bytes] = None,
+        datos_ms: Optional[List[int]] = None,
+        datos_eog: Optional[List[int]] = None,
+        datos_ppg: Optional[List[int]] = None,
+        datos_bpm: Optional[List[int]] = None,
         comentarios: Optional[str] = None,
         conn=None
     ) -> int:
@@ -609,7 +629,13 @@ class DatabaseManager:
         # Si no se proporciona fecha, usar la actual
         if not fecha:
             fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
+        
+        # Comprimir los datos de señales si se proporcionan
+        if not any(d is None for d in [datos_ms, datos_eog, datos_ppg, datos_bpm]):
+            datos_ms, datos_eog, datos_ppg, datos_bpm = DatabaseManager.compress_signal_data(
+                datos_ms, datos_eog, datos_ppg, datos_bpm
+            )
+        
         cursor.execute(
             "INSERT INTO sesiones (id_paciente, fecha, objetivo, sud_inicial, sud_interm, sud_final, \
                                    voc, datos_ms, datos_eog, datos_ppg, datos_bpm, comentarios) " +
@@ -636,7 +662,7 @@ class DatabaseManager:
         Retorna: True si la actualización fue exitosa
         """
         # Obtener sesión actual para actualizar solo los campos proporcionados
-        current = DatabaseManager.get_session(session_id, include_data=True)
+        current = DatabaseManager.get_session(session_id, signal_data=True)
         if not current:
             return False
             
@@ -958,63 +984,84 @@ class DatabaseManager:
             raise e
 
     @staticmethod
-    def get_session_data(session_id: int):
+    def decompress_signal_data(**kwargs: Any) -> Optional[Dict[str, Any]]:
         """
         Recupera los datos fisiológicos de una sesión específica
+        Args:
+            **kwargs: Argumentos con nombres que pueden incluir:
+                - datos_ms: bytes | None
+                - datos_eog: bytes | None  
+                - datos_ppg: bytes | None
+                - datos_bpm: bytes | None
+        Returns:
+            Dict con los datos descomprimidos o None si hay error
         """
         try:
-            import numpy as np
             import pickle
             import zlib
             
-            # Obtener la sesión con todos los datos
-            session = DatabaseManager.get_session(session_id, include_data=True)
-            if not session:
-                return None
-                
-            result = {"session_info": session}
-            
+            ms_data = kwargs.get("datos_ms")
+            eog_data = kwargs.get("datos_eog")
+            ppg_data = kwargs.get("datos_ppg")
+            bpm_data = kwargs.get("datos_bpm")
+
             # Descomprimir datos de milisegundos si existe
-            if session.get("datos_ms"):
-                try:
-                    ms_decompressed = zlib.decompress(session["datos_ms"])
-                    ms_data = pickle.loads(ms_decompressed)
-                    result["ms_data"] = ms_data
-                except:
-                    result["ms_data"] = None
+            if ms_data:
+                ms_decompressed = zlib.decompress(ms_data)
+                ms_data = pickle.loads(ms_decompressed)
             
             # Descomprimir EOG si existe
-            if session.get("datos_eog"):
-                try:
-                    eog_decompressed = zlib.decompress(session["datos_eog"])
-                    eog_data = pickle.loads(eog_decompressed)
-                    result["eog_data"] = eog_data
-                except:
-                    result["eog_data"] = None
-                    
-            # Descomprimir PPG si existe  
-            if session.get("datos_ppg"):
-                try:
-                    ppg_decompressed = zlib.decompress(session["datos_ppg"])
-                    ppg_data = pickle.loads(ppg_decompressed)
-                    result["ppg_data"] = ppg_data
-                except:
-                    result["ppg_data"] = None
-                    
+            if eog_data:
+                eog_decompressed = zlib.decompress(eog_data)
+                eog_data = pickle.loads(eog_decompressed)
+
+            # Descomprimir PPG si existe
+            if ppg_data:
+                ppg_decompressed = zlib.decompress(ppg_data)
+                ppg_data = pickle.loads(ppg_decompressed)
+
             # Descomprimir BPM si existe
-            if session.get("datos_bpm"):
-                try:
-                    bpm_decompressed = zlib.decompress(session["datos_bpm"])
-                    bpm_data = pickle.loads(bpm_decompressed)
-                    result["bpm_data"] = bpm_data
-                except:
-                    result["bpm_data"] = None
-                
-            return result
-            
+            if bpm_data:
+                bpm_decompressed = zlib.decompress(bpm_data)
+                bpm_data = pickle.loads(bpm_decompressed)
+
+            return {
+                "ms_data_decompressed": ms_data,
+                "eog_data_decompressed": eog_data,
+                "ppg_data_decompressed": ppg_data,
+                "bpm_data_decompressed": bpm_data
+            }
+
         except Exception as e:
             print(f"Error al recuperar datos de sesión: {e}")
             return None
+    
+    @staticmethod
+    def compress_signal_data(
+        datos_ms: List[int],
+        datos_eog: List[int],
+        datos_ppg: List[int],
+        datos_bpm: List[int]
+    ) -> Tuple[bytes, bytes, bytes, bytes]:
+        """
+        Comprime los datos fisiológicos de una sesión para almacenamiento
+        Retorna: Tupla con los datos comprimidos (ms, eog, ppg, bpm)
+        """
+        import numpy as np
+        import zlib
+        import pickle
+
+        # Convertir listas a arreglos de numpy
+        datos_ms_np = np.array(datos_ms, dtype=np.int32)
+        datos_eog_np = np.array(datos_eog, dtype=np.int32)
+        datos_ppg_np = np.array(datos_ppg, dtype=np.int32)
+
+        compressed_ms = zlib.compress(pickle.dumps(datos_ms_np))
+        compressed_eog = zlib.compress(pickle.dumps(datos_eog_np))
+        compressed_ppg = zlib.compress(pickle.dumps(datos_ppg_np))
+        compressed_bpm = zlib.compress(pickle.dumps(datos_bpm))
+        
+        return compressed_ms, compressed_eog, compressed_ppg, compressed_bpm
 
 # Ejemplo de uso modificado para incluir diagnósticos
 if __name__ == "__main__":

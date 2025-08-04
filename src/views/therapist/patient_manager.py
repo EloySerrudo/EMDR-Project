@@ -19,7 +19,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.database.database_manager import DatabaseManager
 from src.views.therapist.new_session_dialog import NewSessionDialog
 from src.views.therapist.patient_details_dialog import PatientDetailsDialog
-from src.views.therapist.session_viewer import SessionViewerWindow
 
 
 class PatientManagerWidget(QMainWindow):

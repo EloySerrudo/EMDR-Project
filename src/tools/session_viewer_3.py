@@ -339,21 +339,18 @@ class SessionViewer(QMainWindow):
             QApplication.processEvents()
             
             # Cargar datos desde la base de datos
-            session_data = DatabaseManager.get_session_data(self.current_session_id)
-            
-            if not session_data:
+            self.session_data = DatabaseManager.get_session(self.current_session_id, signal_data=True)
+
+            if not self.session_data:
                 QMessageBox.warning(self, "Error", "No se encontraron datos para esta sesión")
                 return
-                
-            # Almacenar datos de la sesión
-            self.session_data = session_data
-            
+             
             # Extraer y descomprimir datos si es necesario
             try:
                 # Intentar extraer directamente (si ya están descomprimidos)
-                self.eog_data = session_data.get('eog_data')
-                self.ppg_data = session_data.get('ppg_data')
-                self.bpm_data = session_data.get('bpm_data')
+                self.eog_data = self.session_data.get('datos_eog')
+                self.ppg_data = self.session_data.get('datos_ppg')
+                self.bpm_data = self.session_data.get('datos_bpm')
                 
                 # Verificar si los datos son bytes comprimidos
                 if isinstance(self.eog_data, bytes):
@@ -493,11 +490,10 @@ class SessionViewer(QMainWindow):
         if not self.session_data or not self.time_data.size:
             return
             
-        # Obtener información de la sesión
-        session_info = self.session_data['session_info']
+        # Obtener información de la fecha de la sesión
+        date_str = self.session_data['fecha']
         
         # Formatear fecha
-        date_str = session_info['fecha']
         if isinstance(date_str, str):
             try:
                 date_obj = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")

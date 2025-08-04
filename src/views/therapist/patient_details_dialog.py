@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Importar la clase DatabaseManager
 from src.database.database_manager import DatabaseManager
-from src.views.therapist.session_viewer import SessionViewerWindow
+from views.therapist.session_details_dialog import SessionDetailsDialog
 
 
 class PatientDetailsDialog(QDialog):
@@ -27,9 +27,6 @@ class PatientDetailsDialog(QDialog):
         self.parent = parent
         self.patient_data = None
         self.sessions_data = None
-        
-        # Añadir referencia para la ventana del visor
-        self.session_viewer_window = None
         
         self.setWindowTitle("Detalles del Paciente")
         self.resize(700, 600)
@@ -104,9 +101,9 @@ class PatientDetailsDialog(QDialog):
         
         layout.addWidget(personal_group)
         
-        # === NOTAS CLÍNICAS ===
-        notes_group = QGroupBox("Notas Clínicas")
-        notes_group.setStyleSheet("""
+        # === COMENTARIOS ===
+        comments_group = QGroupBox("Comentarios")
+        comments_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
                 font-size: 14px;
@@ -125,13 +122,13 @@ class PatientDetailsDialog(QDialog):
             }
         """)
         
-        notes_layout = QVBoxLayout(notes_group)
-        
-        # Campo de texto para las notas (solo lectura)
-        self.notes_display = QTextEdit()
-        self.notes_display.setReadOnly(True)
-        self.notes_display.setMaximumHeight(50)
-        self.notes_display.setStyleSheet("""
+        comments_layout = QVBoxLayout(comments_group)
+
+        # Campo de texto para los comentarios (solo lectura)
+        self.comments_display = QTextEdit()
+        self.comments_display.setReadOnly(True)
+        self.comments_display.setMaximumHeight(50)
+        self.comments_display.setStyleSheet("""
             QTextEdit {
                 background-color: #323232;
                 border: 1px solid #555555;
@@ -142,13 +139,13 @@ class PatientDetailsDialog(QDialog):
             }
         """)
         
-        if self.patient_data and self.patient_data.get('notas'):
-            self.notes_display.setPlainText(self.patient_data.get('notas'))
+        if self.patient_data and self.patient_data.get('comentarios'):
+            self.comments_display.setPlainText(self.patient_data.get('comentarios'))
         else:
-            self.notes_display.setPlainText("No hay notas registradas para este paciente.")
-        
-        notes_layout.addWidget(self.notes_display)
-        layout.addWidget(notes_group)
+            self.comments_display.setPlainText("No hay comentarios registrados para este paciente.")
+
+        comments_layout.addWidget(self.comments_display)
+        layout.addWidget(comments_group)
         
         # === HISTORIAL DE SESIONES ===
         sessions_group = QGroupBox("Historial de Sesiones")
@@ -230,7 +227,7 @@ class PatientDetailsDialog(QDialog):
                 color: #AAAAAA;
             }
         """)
-        # self.view_session_button.clicked.connect(self.view_session)
+        self.view_session_button.clicked.connect(self.view_session)
         self.view_session_button.setEnabled(False)
 
         # Botón para borrar sesión
@@ -420,61 +417,34 @@ class PatientDetailsDialog(QDialog):
             self.sessions_layout.addWidget(error_label)
     
     # === NUEVO MÉTODO: VER ANÁLISIS DE SESIÓN ===
-    def view_session_analysis(self, session_id: int):
-        """Abre el visor de análisis para una sesión específica"""
+    def view_session(self):
+        """Abre el diálogo de detalles para una sesión específica"""
+        selected_rows = self.sessions_table.selectionModel().selectedRows()
+        
+        if not selected_rows:
+            QMessageBox.warning(self, "Advertencia", "Por favor, seleccione una sesión de la tabla para ver.")
+            return
+        
         try:
-            # Si ya hay una ventana abierta, cerrarla
-            if self.session_viewer_window:
-                self.session_viewer_window.close()
+            # Obtener los datos de la sesión seleccionada
+            row_index = selected_rows[0].row()
+            selected_session = self.sessions_data[row_index]
+            session_id = selected_session.get('id')
             
-            # Crear nueva ventana del visor
-            self.session_viewer_window = SessionViewerWindow(
-                session_id=session_id,
-                parent=self
-            )
+            if not session_id:
+                QMessageBox.warning(self, "Error", "No se pudo obtener el ID de la sesión.")
+                return
             
-            # Configurar para mostrar solo sesiones de este paciente
-            self.filter_sessions_for_patient()
-            
-            # Conectar señal de cierre
-            self.session_viewer_window.window_closed.connect(self.on_session_viewer_closed)
-            
-            # Mostrar ventana
-            self.session_viewer_window.show()
-            
-            # Cerrar este diálogo para no abarrotar la pantalla
-            self.accept()
+            # Crear y mostrar el diálogo de detalles de sesión
+            session_dialog = SessionDetailsDialog(session_id, self)
+            session_dialog.exec()
             
         except Exception as e:
             QMessageBox.critical(
                 self,
                 "Error",
-                f"No se pudo abrir el análisis de la sesión:\n{str(e)}"
+                f"No se pudo abrir los detalles de la sesión:\n{str(e)}"
             )
-    
-    def filter_sessions_for_patient(self):
-        """Filtra las sesiones en el visor para mostrar solo de este paciente"""
-        if not self.session_viewer_window:
-            return
-        
-        try:
-            # Obtener sesiones del paciente
-            patient_sessions = DatabaseManager.get_sessions_for_patient(self.patient_id)
-            
-            # Limpiar y llenar el combo del visor
-            self.session_viewer_window.session_combo.clear()
-            
-            for session in patient_sessions:
-                patient_name = f"{self.patient_data['nombre']} {self.patient_data['apellido_paterno']}"
-                display_text = f"Sesión {session['id']} - {patient_name} ({session['fecha']})"
-                self.session_viewer_window.session_combo.addItem(display_text, session['id'])
-            
-            # Actualizar título
-            patient_name = f"{self.patient_data['nombre']} {self.patient_data['apellido_paterno']}"
-            self.session_viewer_window.setWindowTitle(f"EMDR Project - Análisis de Sesiones: {patient_name}")
-            
-        except Exception as e:
-            print(f"Error filtrando sesiones para paciente: {e}")
     
     def format_datetime_string(self, datetime_str):
         """
@@ -501,10 +471,6 @@ class PatientDetailsDialog(QDialog):
         self.delete_session_button.setEnabled(has_selection)
         self.view_session_button.setEnabled(has_selection)
 
-    def on_session_viewer_closed(self):
-        """Maneja el cierre de la ventana del visor"""
-        self.session_viewer_window = None
-    
     def edit_patient(self):
         """Abre un diálogo para editar los datos del paciente"""
         QMessageBox.information(self, "Función en desarrollo", 
