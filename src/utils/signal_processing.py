@@ -539,6 +539,354 @@ class OfflineEOGFilter:
             print("matplotlib no disponible")
             return None, None
 
+class OfflinePPGFilter:
+    """
+    Filtro PPG offline optimizado para análisis de frecuencia cardíaca.
+    
+    Estrategia específica para PPG:
+    1. DC removal suave (0.5 Hz) - Preserva variabilidad HRV
+    2. Notch 50 Hz - Elimina interferencia eléctrica
+    3. Bandpass 0.5-5.0 Hz - Rango óptimo para señales cardíacas
+    4. Filtro de suavizado opcional para reducir ruido
+    
+    CLAVE: PPG requiere preservar componentes de 0.5-5 Hz (30-300 BPM)
+    """
+    
+    def __init__(self, fs=125, hp_cutoff=0.5, lp_cutoff=5.0, 
+                 notch_freq=50, notch_q=30, smoothing=True):
+        """
+        Inicializar filtro PPG offline.
+        
+        Args:
+            fs: Frecuencia de muestreo (Hz)
+            hp_cutoff: Corte HP para eliminar deriva (0.5 Hz típico)
+            lp_cutoff: Corte LP para ruido HF (5 Hz típico)
+            notch_freq: Frecuencia notch (50/60 Hz)
+            notch_q: Factor de calidad del notch
+            smoothing: Aplicar suavizado adicional
+        """
+        self.fs = fs
+        self.hp_cutoff = hp_cutoff
+        self.lp_cutoff = lp_cutoff
+        self.notch_freq = notch_freq
+        self.notch_q = notch_q
+        self.smoothing = smoothing
+        
+        # Validar rango de frecuencias cardíacas
+        self.min_hr_hz = hp_cutoff      # ~30 BPM
+        self.max_hr_hz = lp_cutoff      # ~300 BPM
+        
+        self._design_filters()
+        
+        print(f"Filtro PPG Offline configurado:")
+        print(f"  - Bandpass: {self.hp_cutoff}-{self.lp_cutoff} Hz")
+        print(f"  - Rango BPM: {self.hp_cutoff*60:.0f}-{self.lp_cutoff*60:.0f}")
+        print(f"  - Notch: {self.notch_freq} Hz")
+        print(f"  - Suavizado: {'ON' if smoothing else 'OFF'}")
+        print(f"  - FASE CERO con filtfilt()")
+    
+    def _design_filters(self):
+        """Diseñar filtros específicos para PPG."""
+        nyq = self.fs * 0.5
+        
+        # 1. Bandpass Butterworth para rango cardíaco
+        # Orden 4 da buen balance entre roll-off y estabilidad
+        low_norm = self.hp_cutoff / nyq
+        high_norm = self.lp_cutoff / nyq
+        
+        self.b_bandpass, self.a_bandpass = signal.butter(
+            4, [low_norm, high_norm], btype='bandpass'
+        )
+        
+        # 2. Notch para interferencia eléctrica
+        if self.notch_freq < nyq:
+            self.b_notch, self.a_notch = signal.iirnotch(
+                self.notch_freq/nyq, self.notch_q
+            )
+            self.notch_enabled = True
+        else:
+            self.notch_enabled = False
+            print(f"Advertencia: Notch {self.notch_freq} Hz deshabilitado")
+        
+        # 3. Filtro de suavizado opcional (FIR)
+        if self.smoothing:
+            # FIR corto para reducir ruido sin afectar morfología
+            self.smooth_taps = int(0.1 * self.fs)  # 100ms
+            if self.smooth_taps % 2 == 0:
+                self.smooth_taps += 1  # Asegurar impar
+                
+            self.b_smooth = signal.firwin(
+                self.smooth_taps,
+                self.lp_cutoff * 0.8,  # Cutoff ligeramente menor
+                fs=self.fs,
+                window='hamming'
+            )
+        
+        # 4. Detector de artefactos (opcional)
+        self.artifact_threshold_std = 4.0  # Umbral en desviaciones estándar
+    
+    def filter_signal(self, ppg_data):
+        """
+        Filtrar señal PPG completa con fase cero.
+        
+        Args:
+            ppg_data: Array numpy con datos PPG raw
+            
+        Returns:
+            dict: Resultado completo del filtrado
+        """
+        if not isinstance(ppg_data, np.ndarray):
+            ppg_data = np.array(ppg_data)
+        
+        print(f"Filtrando señal PPG: {len(ppg_data)} muestras ({len(ppg_data)/self.fs:.1f}s)")
+        
+        # PASO 1: Bandpass principal (elimina DC + ruido HF)
+        bandpass_filtered = signal.filtfilt(
+            self.b_bandpass, self.a_bandpass, ppg_data
+        )
+        
+        # PASO 2: Notch 50 Hz (si está habilitado)
+        if self.notch_enabled:
+            notch_filtered = signal.filtfilt(
+                self.b_notch, self.a_notch, bandpass_filtered
+            )
+        else:
+            notch_filtered = bandpass_filtered.copy()
+        
+        # PASO 3: Suavizado opcional
+        if self.smoothing:
+            final_filtered = signal.filtfilt(
+                self.b_smooth, [1.0], notch_filtered
+            )
+        else:
+            final_filtered = notch_filtered.copy()
+        
+        # PASO 4: Detección de artefactos
+        artifacts = self._detect_movement_artifacts(final_filtered)
+        
+        # PASO 5: Análisis de calidad
+        quality_metrics = self._assess_ppg_quality(ppg_data, final_filtered)
+        
+        return {
+            'filtered': final_filtered,
+            'bandpass_only': bandpass_filtered,
+            'notch_applied': notch_filtered,
+            'artifacts': artifacts,
+            'quality': quality_metrics,
+            'metadata': {
+                'original_length': len(ppg_data),
+                'duration_sec': len(ppg_data) / self.fs,
+                'dc_removed': np.mean(ppg_data) - np.mean(final_filtered),
+                'snr_improvement_db': self._calculate_snr_improvement(ppg_data, final_filtered),
+                'processing_chain': self._get_processing_chain()
+            }
+        }
+    
+    def _detect_movement_artifacts(self, filtered_signal):
+        """
+        Detectar artefactos de movimiento en señal PPG.
+        
+        Los artefactos de movimiento típicamente:
+        - Tienen amplitud muy alta (>4 std)
+        - Duración relativamente larga (>1 segundo)
+        - Distorsionan la morfología normal del pulso
+        """
+        signal_std = np.std(filtered_signal)
+        threshold = self.artifact_threshold_std * signal_std
+        
+        # Encontrar regiones que excedan el umbral
+        above_threshold = np.abs(filtered_signal) > threshold
+        
+        # Agrupar regiones consecutivas
+        artifact_regions = []
+        in_artifact = False
+        start_idx = 0
+        
+        for i, is_artifact in enumerate(above_threshold):
+            if is_artifact and not in_artifact:
+                start_idx = i
+                in_artifact = True
+            elif not is_artifact and in_artifact:
+                # Verificar duración mínima (evitar false positives)
+                duration_ms = (i - start_idx) / self.fs * 1000
+                if duration_ms > 200:  # Mínimo 200ms
+                    artifact_regions.append((start_idx, i, duration_ms))
+                in_artifact = False
+        
+        print(f"Detectados {len(artifact_regions)} artefactos de movimiento")
+        return artifact_regions
+    
+    def _assess_ppg_quality(self, original, filtered):
+        """Evaluar calidad de la señal PPG."""
+        # Métricas básicas
+        snr_db = self._calculate_snr_improvement(original, filtered)
+        signal_std = np.std(filtered)
+        
+        # Detectar pulsos para evaluar regularidad
+        peaks, _ = signal.find_peaks(
+            filtered,
+            distance=int(0.4 * self.fs),  # Mínimo 150 BPM
+            prominence=np.std(filtered) * 0.3
+        )
+        
+        if len(peaks) > 2:
+            rr_intervals = np.diff(peaks) / self.fs
+            hr_mean = 60 / np.mean(rr_intervals)
+            hr_cv = np.std(rr_intervals) / np.mean(rr_intervals)
+            
+            # Clasificar calidad
+            if 50 <= hr_mean <= 120 and hr_cv < 0.1 and snr_db > 10:
+                quality = 'excellent'
+            elif 40 <= hr_mean <= 150 and hr_cv < 0.2 and snr_db > 5:
+                quality = 'good'
+            elif 30 <= hr_mean <= 180 and hr_cv < 0.3 and snr_db > 0:
+                quality = 'acceptable'
+            else:
+                quality = 'poor'
+        else:
+            quality = 'insufficient_peaks'
+        
+        return {
+            'overall': quality,
+            'snr_db': snr_db,
+            'peaks_detected': len(peaks),
+            'estimated_hr': hr_mean if len(peaks) > 2 else None,
+            'hr_variability': hr_cv if len(peaks) > 2 else None
+        }
+    
+    def _calculate_snr_improvement(self, original, filtered):
+        """Calcular mejora de SNR en dB."""
+        try:
+            # Estimar ruido como diferencia
+            noise_estimate = original - filtered
+            
+            signal_power = np.var(filtered)
+            noise_power = np.var(noise_estimate)
+            
+            if noise_power > 0:
+                snr_db = 10 * np.log10(signal_power / noise_power)
+                return max(0, snr_db)  # No negativo
+        except:
+            pass
+        
+        return 0.0
+    
+    def _get_processing_chain(self):
+        """Obtener cadena de procesamiento aplicada."""
+        chain = ['bandpass_0.5-5Hz']
+        
+        if self.notch_enabled:
+            chain.append(f'notch_{self.notch_freq}Hz')
+        
+        if self.smoothing:
+            chain.append('smoothing_FIR')
+        
+        chain.append('phase_zero_filtfilt')
+        return chain
+    
+    def extract_heart_rate(self, filtered_signal, method='peaks'):
+        """
+        Extraer frecuencia cardíaca de señal PPG filtrada.
+        
+        Args:
+            filtered_signal: Señal PPG ya filtrada
+            method: 'peaks' o 'fft'
+            
+        Returns:
+            dict: Resultados de análisis cardíaco
+        """
+        if method == 'peaks':
+            return self._hr_from_peaks(filtered_signal)
+        elif method == 'fft':
+            return self._hr_from_fft(filtered_signal)
+        else:
+            # Ambos métodos
+            peaks_result = self._hr_from_peaks(filtered_signal)
+            fft_result = self._hr_from_fft(filtered_signal)
+            
+            return {
+                'peaks_method': peaks_result,
+                'fft_method': fft_result,
+                'consensus_hr': self._consensus_hr(peaks_result, fft_result)
+            }
+    
+    def _hr_from_peaks(self, signal_data):
+        """Extraer HR usando detección de picos."""
+        # Similar al método ya implementado en PPGHeartRateCalculator
+        peaks, _ = signal.find_peaks(
+            signal_data,
+            distance=int(0.4 * self.fs),  # Min 150 BPM
+            prominence=np.std(signal_data) * 0.2
+        )
+        
+        if len(peaks) < 3:
+            return {'hr_bpm': None, 'confidence': 0.0, 'method': 'peaks'}
+        
+        rr_intervals = np.diff(peaks) / self.fs
+        hr_bpm = 60 / np.mean(rr_intervals)
+        hr_std = 60 * np.std(rr_intervals) / (np.mean(rr_intervals)**2)
+        
+        # Confianza basada en regularidad
+        cv = np.std(rr_intervals) / np.mean(rr_intervals)
+        confidence = max(0.0, 1.0 - cv * 2)
+        
+        return {
+            'hr_bpm': hr_bpm,
+            'hr_std': hr_std,
+            'confidence': confidence,
+            'peaks_count': len(peaks),
+            'method': 'peaks'
+        }
+    
+    def _hr_from_fft(self, signal_data):
+        """Extraer HR usando análisis FFT."""
+        # Aplicar ventana y calcular FFT
+        windowed = signal_data * signal.windows.hann(len(signal_data))
+        fft = np.fft.rfft(windowed)
+        freqs = np.fft.rfftfreq(len(signal_data), 1/self.fs)
+        
+        # Rango de frecuencias cardíacas (0.5-3 Hz = 30-180 BPM)
+        mask = (freqs >= 0.5) & (freqs <= 3.0)
+        power = np.abs(fft[mask])**2
+        
+        # Encontrar pico dominante
+        peak_idx = np.argmax(power)
+        peak_freq = freqs[mask][peak_idx]
+        hr_bpm = peak_freq * 60
+        
+        # Confianza basada en prominencia del pico
+        peak_power = power[peak_idx]
+        mean_power = np.mean(power)
+        snr_linear = peak_power / (mean_power + 1e-10)
+        confidence = min(1.0, np.log10(snr_linear + 1) / 2)
+        
+        return {
+            'hr_bpm': hr_bpm,
+            'peak_frequency': peak_freq,
+            'confidence': confidence,
+            'snr_linear': snr_linear,
+            'method': 'fft'
+        }
+    
+    def _consensus_hr(self, peaks_result, fft_result):
+        """Consenso entre métodos de detección."""
+        hr_peaks = peaks_result.get('hr_bpm')
+        hr_fft = fft_result.get('hr_bpm')
+        
+        if hr_peaks is None or hr_fft is None:
+            return hr_peaks or hr_fft
+        
+        # Si están cerca (±10%), promediar
+        diff_percent = abs(hr_peaks - hr_fft) / ((hr_peaks + hr_fft) / 2) * 100
+        
+        if diff_percent < 10:
+            return (hr_peaks + hr_fft) / 2
+        else:
+            # Elegir el más confiable
+            conf_peaks = peaks_result.get('confidence', 0)
+            conf_fft = fft_result.get('confidence', 0)
+            
+            return hr_peaks if conf_peaks > conf_fft else hr_fft
 
 class PPGHeartRateCalculator:
     """

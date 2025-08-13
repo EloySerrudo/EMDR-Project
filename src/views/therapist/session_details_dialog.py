@@ -6,7 +6,7 @@ import numpy as np
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QApplication, QMessageBox, QFrame, QGroupBox, QDialog, QFormLayout,
-    QScrollBar, QScrollArea, QGridLayout
+    QSlider, QScrollArea, QGridLayout, QSpinBox
 )
 from PySide6.QtCore import Qt, Signal
 import pyqtgraph as pg
@@ -485,66 +485,116 @@ class SessionDetailsDialog(QDialog):
         
         # Crear scroll bar para navegar por los datos
         if len(self.ms_data) > 0:
-            self.setup_scrollbar(parent_layout)
+            self.setup_navigation_panel(parent_layout)
             self.update_chart()
     
-    def setup_scrollbar(self, parent_layout):
-        """Configura la barra de desplazamiento para navegar por los datos"""
+    def setup_navigation_panel(self, parent_layout):
+        """Crear panel de navegación temporal basado en offline_analysis_window"""
         # Calcular el rango total de tiempo en segundos
         total_time_ms = max(self.ms_data) - min(self.ms_data) if len(self.ms_data) > 0 else 0
         total_time_seconds = total_time_ms / 1000.0
         
-        # Solo crear scrollbar si hay más datos que la ventana
+        # Solo crear panel si hay más datos que la ventana
         if total_time_seconds > self.window_size_seconds:
-            scroll_container = QHBoxLayout()
+            nav_frame = QFrame()
+            nav_frame.setStyleSheet("""
+                QFrame {
+                    background-color: #2A2A2A;
+                    border: 1px solid #444444;
+                    border-radius: 5px;
+                    padding: 10px;
+                }
+            """)
+            nav_layout = QHBoxLayout(nav_frame)
+            nav_layout.setContentsMargins(15, 10, 15, 10)
             
-            # Etiqueta de información
-            info_label = QLabel(f"Ventana: {self.window_size_seconds}s | Total: {total_time_seconds:.1f}s")
-            info_label.setStyleSheet("""
-                QLabel {
-                    color: #AAAAAA;
-                    font-size: 12px;
-                    background: transparent;
+            # Control de ventana de tiempo
+            window_label = QLabel("Ventana:")
+            window_label.setStyleSheet("color: #FFFFFF; font-size: 12px;")
+            
+            self.window_spinbox = QSpinBox()
+            self.window_spinbox.setRange(2, 60)
+            self.window_spinbox.setValue(self.window_size_seconds)
+            self.window_spinbox.setSuffix(" segundos")
+            self.window_spinbox.valueChanged.connect(self.update_window_duration)
+            self.window_spinbox.setStyleSheet("""
+                QSpinBox {
+                    background-color: #3A3A3A;
+                    border: 2px solid #555555;
+                    border-radius: 5px;
+                    padding: 5px;
+                    color: #FFFFFF;
                 }
             """)
             
-            # Scroll bar
-            self.scroll_bar = QScrollBar(Qt.Horizontal)
-            self.scroll_bar.setMinimum(0)
-            self.scroll_bar.setMaximum(int(total_time_seconds - self.window_size_seconds))
-            self.scroll_bar.setValue(0)
-            self.scroll_bar.setStyleSheet("""
-                QScrollBar:horizontal {
-                    background-color: #424242;
-                    height: 20px;
+            # Slider de navegación
+            nav_label = QLabel("Navegación:")
+            nav_label.setStyleSheet("color: #FFFFFF; font-size: 12px;")
+            
+            self.time_slider = QSlider(Qt.Horizontal)
+            self.time_slider.setMinimum(0)
+            max_time = max(0, total_time_seconds - self.window_size_seconds)
+            self.time_slider.setMaximum(int(max_time * 10))  # Mayor resolución
+            self.time_slider.setValue(0)
+            self.time_slider.valueChanged.connect(self.update_time_position)
+            self.time_slider.setStyleSheet("""
+                QSlider::groove:horizontal {
+                    background: #3A3A3A;
+                    height: 8px;
+                    border-radius: 4px;
+                }
+                QSlider::handle:horizontal {
+                    background: #00A99D;
+                    border: 2px solid #00A99D;
+                    width: 20px;
+                    margin: -6px 0;
                     border-radius: 10px;
                 }
-                QScrollBar::handle:horizontal {
-                    background-color: #00A99D;
-                    border-radius: 8px;
-                    min-width: 20px;
-                }
-                QScrollBar::handle:horizontal:hover {
-                    background-color: #00C2B3;
-                }
-                QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                    border: none;
-                    background: none;
+                QSlider::handle:horizontal:hover {
+                    background: #00C2B3;
+                    border: 2px solid #00C2B3;
                 }
             """)
-            self.scroll_bar.valueChanged.connect(self.on_scroll)
             
-            scroll_container.addWidget(QLabel("Inicio"))
-            scroll_container.addWidget(self.scroll_bar)
-            scroll_container.addWidget(QLabel("Fin"))
-            scroll_container.addWidget(info_label)
+            # Label posición actual
+            self.position_label = QLabel(f"Posición: 0.0 / {total_time_seconds:.1f} s")
+            self.position_label.setStyleSheet("color: #00A99D; font-weight: bold; font-size: 12px;")
             
-            parent_layout.addLayout(scroll_container)
+            nav_layout.addWidget(window_label)
+            nav_layout.addWidget(self.window_spinbox)
+            nav_layout.addWidget(QLabel("   "))  # Espaciador
+            nav_layout.addWidget(nav_label)
+            nav_layout.addWidget(self.time_slider)
+            nav_layout.addWidget(self.position_label)
+            
+            parent_layout.addWidget(nav_frame)
     
-    def on_scroll(self, value):
-        """Maneja el cambio en la posición del scroll bar"""
-        self.current_position = value
+    def update_window_duration(self, value):
+        """Actualizar duración de ventana de visualización"""
+        self.window_size_seconds = value
+        
+        if self.ms_data is not None and len(self.ms_data) > 0:
+            # Reconfigurar slider
+            total_time_ms = max(self.ms_data) - min(self.ms_data)
+            total_time_seconds = total_time_ms / 1000.0
+            max_time = max(0, total_time_seconds - self.window_size_seconds)
+            self.time_slider.setMaximum(int(max_time * 10))
+            
+            # Actualizar gráficas
+            self.update_chart()
+    
+    def update_time_position(self, value):
+        """Actualizar posición temporal desde el slider"""
+        if self.ms_data is None or len(self.ms_data) == 0:
+            return
+            
+        total_time_ms = max(self.ms_data) - min(self.ms_data)
+        total_time_seconds = total_time_ms / 1000.0
+        
+        self.current_position = value / 10.0  # Convertir de resolución alta
         self.update_chart()
+        
+        self.position_label.setText(f"Posición: {self.current_position:.1f} / {total_time_seconds:.1f} s")
     
     def update_chart(self):
         """Actualiza la gráfica con la ventana de datos actual usando PyQtGraph"""
