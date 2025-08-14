@@ -553,8 +553,8 @@ class OfflinePPGFilter:
     CLAVE: PPG requiere preservar componentes de 0.5-5 Hz (30-300 BPM)
     """
     
-    def __init__(self, fs=125, hp_cutoff=0.5, lp_cutoff=5.0, 
-                 notch_freq=50, notch_q=30, smoothing=True):
+    def __init__(self, fs=125, hp_cutoff=0.5, lp_cutoff=5.0, notch_enabled=False,
+                 notch_freq=50, notch_q=30, smoothing=True):    # notch_q: Factor de calidad
         """
         Inicializar filtro PPG offline.
         
@@ -569,6 +569,7 @@ class OfflinePPGFilter:
         self.fs = fs
         self.hp_cutoff = hp_cutoff
         self.lp_cutoff = lp_cutoff
+        self.notch_enabled = notch_enabled
         self.notch_freq = notch_freq
         self.notch_q = notch_q
         self.smoothing = smoothing
@@ -600,7 +601,7 @@ class OfflinePPGFilter:
         )
         
         # 2. Notch para interferencia eléctrica
-        if self.notch_freq < nyq:
+        if self.notch_freq < nyq and self.notch_enabled:
             self.b_notch, self.a_notch = signal.iirnotch(
                 self.notch_freq/nyq, self.notch_q
             )
@@ -643,7 +644,7 @@ class OfflinePPGFilter:
         
         # PASO 1: Bandpass principal (elimina DC + ruido HF)
         bandpass_filtered = signal.filtfilt(
-            self.b_bandpass, self.a_bandpass, ppg_data
+            self.b_bandpass, self.a_bandpass, ppg_data, method='gust'   # Metodo de Gustafsson
         )
         
         # PASO 2: Notch 50 Hz (si está habilitado)
@@ -1156,3 +1157,225 @@ class PPGHeartRateCalculator:
         self.samples_received = 0
         self.confidence_score = 0.0
         print("BPM Calculator reiniciado")
+
+
+class BPMOfflineCalculation:
+    """
+    Calculador offline de evolución de BPM para señales PPG filtradas.
+    
+    Análisis offline optimizado para sessiones EMDR:
+    - Ventana de cálculo: 15 segundos
+    - Intervalo de cálculo: 1 segundo
+    - Extensión automática para artefactos: 5 segundos
+    - Suavizado de serie temporal integrado
+    
+    Uso típico:
+        calculator = BPMOfflineCalculation()
+        result = calculator.calculate_bpm_evolution(filtered_ppg, ms_data)
+    """
+    
+    def __init__(self, fs=125):
+        """
+        Inicializar calculador BPM offline.
+        
+        Args:
+            fs: Frecuencia de muestreo estimada (Hz)
+        """
+        self.fs = fs
+        
+        # Parámetros fijos optimizados para análisis offline
+        self.window_size_sec = 15        # Ventana de cálculo
+        self.calculation_interval_sec = 1  # BPM cada segundo
+        self.min_window_size_sec = 8     # Ventana mínima válida
+        self.artifact_extension_sec = 5   # Extensión por artefactos
+        
+        print(f"BPM Offline Calculator configurado:")
+        print(f"  - Ventana de análisis: {self.window_size_sec}s")
+        print(f"  - Intervalo de cálculo: {self.calculation_interval_sec}s")
+        print(f"  - Extensión por artefactos: {self.artifact_extension_sec}s")
+        print(f"  - Frecuencia de muestreo: {self.fs} Hz")
+    
+    def calculate_bmp_evolution(self, filtered_ppg_data, ms_data):
+        """
+        Calcular evolución de BPM a lo largo de toda la señal filtrada.
+        
+        Args:
+            filtered_ppg_data: Array numpy con señal PPG ya filtrada
+            ms_data: Array numpy con timestamps en milisegundos
+            
+        Returns:
+            dict: {
+                'times_sec': array con tiempos en segundos,
+                'bmp_values': array con valores BPM suavizados,
+                'confidence_values': array con valores de confianza,
+                'metadata': dict con información del procesamiento
+            }
+        """
+        if not isinstance(filtered_ppg_data, np.ndarray):
+            filtered_ppg_data = np.array(filtered_ppg_data)
+        
+        if not isinstance(ms_data, np.ndarray):
+            ms_data = np.array(ms_data)
+        
+        print(f"Calculando evolución BPM: {len(filtered_ppg_data)} muestras")
+        
+        # Convertir tiempo a segundos
+        time_sec = ms_data / 1000.0
+        total_duration = time_sec[-1] - time_sec[0]
+        
+        # Preparar arrays de resultado
+        bmp_times = []
+        bmp_values = []
+        confidence_values = []
+        
+        # Empezar después de la ventana inicial
+        start_time = time_sec[0] + self.window_size_sec
+        end_time = time_sec[-1]
+        current_time = start_time
+        
+        print(f"Calculando BPM desde {start_time:.1f}s hasta {end_time:.1f}s")
+        
+        while current_time <= end_time:
+            # Definir ventana de análisis
+            window_start = current_time - self.window_size_sec
+            window_end = current_time
+            
+            # Extraer datos de la ventana
+            mask = (time_sec >= window_start) & (time_sec <= window_end)
+            window_ppg = filtered_ppg_data[mask]
+            window_time = time_sec[mask]
+            
+            if len(window_ppg) > 0:
+                # Calcular BPM para esta ventana
+                bmp_result = self._calculate_bmp_for_window(window_ppg, window_time)
+                
+                if bmp_result['bmp'] is not None:
+                    bmp_times.append(current_time)
+                    bmp_values.append(bmp_result['bmp'])
+                    confidence_values.append(bmp_result['confidence'])
+                else:
+                    # Extender ventana por artefactos
+                    extended_result = self._calculate_with_extended_window(
+                        time_sec, filtered_ppg_data, current_time, window_start, window_end
+                    )
+                    if extended_result['bmp'] is not None:
+                        bmp_times.append(current_time)
+                        bmp_values.append(extended_result['bmp'])
+                        confidence_values.append(extended_result['confidence'])
+            
+            # Avanzar en el tiempo
+            current_time += self.calculation_interval_sec
+        
+        # Aplicar suavizado a la serie temporal de BPM
+        if len(bmp_values) > 5:
+            bmp_smoothed = self._smooth_bmp_series(np.array(bmp_values))
+        else:
+            bmp_smoothed = np.array(bmp_values)
+        
+        # Preparar resultado
+        result = {
+            'times_sec': np.array(bmp_times),
+            'bmp_values': bmp_smoothed,
+            'confidence_values': np.array(confidence_values),
+            'metadata': {
+                'total_points': len(bmp_times),
+                'duration_sec': total_duration,
+                'window_size_sec': self.window_size_sec,
+                'calculation_interval_sec': self.calculation_interval_sec,
+                'mean_bmp': np.mean(bmp_smoothed) if len(bmp_smoothed) > 0 else None,
+                'std_bmp': np.std(bmp_smoothed) if len(bmp_smoothed) > 0 else None
+            }
+        }
+        
+        print(f"✅ BPM evolution calculado: {len(bmp_times)} puntos")
+        if result['metadata']['mean_bmp']:
+            print(f"  - BPM promedio: {result['metadata']['mean_bmp']:.1f} ± {result['metadata']['std_bmp']:.1f}")
+        
+        return result
+    
+    def _calculate_bmp_for_window(self, ppg_window, time_window):
+        """Calcular BPM para una ventana específica"""
+        try:
+            if len(ppg_window) < self.fs * 5:  # Mínimo 5 segundos
+                return {'bmp': None, 'confidence': 0.0}
+            
+            # Detección de picos con parámetros optimizados
+            # Distancia mínima entre picos (0.4s = 150 BPM máximo)
+            min_distance = int(0.4 * self.fs)
+            
+            # Prominencia adaptativa
+            prominence = np.std(ppg_window) * 0.3
+            
+            peaks, properties = signal.find_peaks(
+                ppg_window,
+                distance=min_distance,
+                prominence=prominence,
+                height=np.mean(ppg_window)
+            )
+            
+            if len(peaks) < 3:
+                return {'bmp': None, 'confidence': 0.0}
+            
+            # Calcular intervalos RR en segundos
+            peak_times = time_window[peaks[0]] + (peaks / self.fs)
+            rr_intervals = np.diff(peak_times)
+            
+            # Filtrar intervalos fisiológicos (0.4s a 1.5s = 40-150 BPM)
+            valid_rr = rr_intervals[(rr_intervals >= 0.4) & (rr_intervals <= 1.5)]
+            
+            if len(valid_rr) < 2:
+                return {'bmp': None, 'confidence': 0.0}
+            
+            # Calcular BPM promedio
+            mean_rr = np.mean(valid_rr)
+            bmp = 60.0 / mean_rr
+            
+            # Validar rango fisiológico
+            if bmp < 40 or bmp > 120:
+                return {'bmp': None, 'confidence': 0.0}
+            
+            # Calcular confianza basada en variabilidad
+            cv = np.std(valid_rr) / mean_rr  # Coeficiente de variación
+            confidence = max(0.0, min(1.0, 1.0 - cv * 3))  # Normalizar
+            
+            return {'bmp': bmp, 'confidence': confidence}
+            
+        except Exception as e:
+            return {'bmp': None, 'confidence': 0.0}
+    
+    def _calculate_with_extended_window(self, full_time, full_ppg, current_time, original_start, original_end):
+        """Calcular BPM con ventana extendida para manejar artefactos"""
+        try:
+            # Extender ventana hacia atrás y adelante
+            extended_start = original_start - self.artifact_extension_sec
+            extended_end = original_end + self.artifact_extension_sec
+            
+            # Asegurar límites
+            extended_start = max(extended_start, full_time[0])
+            extended_end = min(extended_end, full_time[-1])
+            
+            # Extraer datos extendidos
+            mask = (full_time >= extended_start) & (full_time <= extended_end)
+            extended_ppg = full_ppg[mask]
+            extended_time = full_time[mask]
+            
+            return self._calculate_bmp_for_window(extended_ppg, extended_time)
+            
+        except Exception as e:
+            return {'bmp': None, 'confidence': 0.0}
+    
+    def _smooth_bmp_series(self, bmp_values):
+        """Aplicar suavizado a la serie temporal de BPM"""
+        if len(bmp_values) < 5:
+            return bmp_values
+        
+        # Usar filtro de media móvil con ventana de 5 puntos
+        try:
+            from scipy.ndimage import uniform_filter1d
+            return uniform_filter1d(bmp_values, size=5, mode='nearest')
+        except:
+            # Fallback: media móvil simple
+            smoothed = np.copy(bmp_values)
+            for i in range(2, len(bmp_values) - 2):
+                smoothed[i] = np.mean(bmp_values[i-2:i+3])
+            return smoothed

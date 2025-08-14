@@ -220,9 +220,9 @@ class PatientManagerWidget(QMainWindow):
         
         # === TABLA DE PACIENTES ===
         self.patients_table = QTableWidget()
-        self.patients_table.setColumnCount(7)
+        self.patients_table.setColumnCount(8)
         self.patients_table.setHorizontalHeaderLabels([
-            "Código Paciente", "Apellido Paterno", "Apellido Materno", "Nombre", "Edad", "Teléfono", "Sesiones"
+            "Código Paciente", "Apellido Paterno", "Apellido Materno", "Nombre", "Edad", "Teléfono", "Sesiones", "Última Sesión"
         ])
         
         # Configurar tabla
@@ -268,6 +268,7 @@ class PatientManagerWidget(QMainWindow):
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Edad
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Teléfono
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Sesiones
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # Última Sesión
         
         # Doble clic para ver detalles
         self.patients_table.doubleClicked.connect(self.show_patient_details)
@@ -512,14 +513,34 @@ class PatientManagerWidget(QMainWindow):
                 if patient_id:
                     sessions = DatabaseManager.get_sessions_for_patient(patient_id)
                     session_count = len(sessions) if sessions else 0
+                    
+                    # Obtener fecha de la última sesión
+                    if sessions and len(sessions) > 0:
+                        # Las sesiones están ordenadas por fecha DESC, así que la primera es la más reciente
+                        last_session_date = sessions[0].get('fecha', '')
+                        if last_session_date:
+                            # Formatear la fecha para mostrar solo DD/MM/YYYY
+                            try:
+                                fecha_parte = last_session_date.split(' ')[0]  # Obtener solo la parte de fecha
+                                year, month, day = fecha_parte.split('-')
+                                last_session_formatted = f"{day}/{month}/{year}"
+                            except:
+                                last_session_formatted = "Ninguna"
+                        else:
+                            last_session_formatted = "Ninguna"
+                    else:
+                        last_session_formatted = "Ninguna"
                 else:
                     session_count = 0
+                    last_session_formatted = "Ninguna"
                 
                 self.patients_table.setItem(i, 6, QTableWidgetItem(str(session_count)))
+                self.patients_table.setItem(i, 7, QTableWidgetItem(last_session_formatted))
                 
             except Exception as e:
                 print(f"Error obteniendo sesiones para paciente {patient.get('id', 'N/A')}: {e}")
                 self.patients_table.setItem(i, 6, QTableWidgetItem("0"))
+                self.patients_table.setItem(i, 7, QTableWidgetItem("Ninguna"))
         
         # Resetear selección
         self.patients_table.clearSelection()

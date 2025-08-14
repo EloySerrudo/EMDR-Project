@@ -5,7 +5,7 @@ import secrets
 from typing import List, Dict, Tuple, Optional, Union, Any
 
 # Importar la conexión base
-from src.database.db_connection import get_connection
+from database.db_connection import get_connection
 
 # Definir el decorador fuera de la clase
 def secure_connection(func):

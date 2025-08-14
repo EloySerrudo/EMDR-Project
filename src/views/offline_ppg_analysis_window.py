@@ -26,8 +26,134 @@ if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
 # Importar clases necesarias
-from utils.signal_processing import OfflinePPGFilter
+from utils.signal_processing import OfflinePPGFilter, BPMOfflineCalculation
 from database.database_manager import DatabaseManager
+from scipy import signal
+
+
+class BPMCalculationThread(QThread):
+    """Hilo para calcular evolución de BPM offline sin bloquear la UI"""
+    
+    progress_updated = Signal(int)
+    bpm_calculated = Signal(dict)
+    error_occurred = Signal(str)
+    
+    def __init__(self, filtered_ppg_data, ms_data, fs=125):
+        super().__init__()
+        self.filtered_ppg_data = filtered_ppg_data
+        self.ms_data = ms_data
+        self.fs = fs
+        
+    def run(self):
+        """Calcular evolución de BPM usando BPMOfflineCalculation"""
+        try:
+            self.progress_updated.emit(5)
+            
+            # Crear calculador BPM offline
+            bmp_calculator = BPMOfflineCalculation(fs=self.fs)
+            
+            self.progress_updated.emit(20)
+            
+            # Calcular evolución de BPM
+            result = bmp_calculator.calculate_bmp_evolution(
+                self.filtered_ppg_data, 
+                self.ms_data
+            )
+            
+            self.progress_updated.emit(100)
+            
+            # Emitir resultado
+            self.bmp_calculated.emit(result)
+            
+        except Exception as e:
+            self.error_occurred.emit(f"Error calculando BPM: {str(e)}")
+    
+    def _calculate_bpm_for_window(self, ppg_window, time_window):
+        """Calcular BPM para una ventana específica"""
+        try:
+            if len(ppg_window) < self.fs * 5:  # Mínimo 5 segundos
+                return {'bpm': None, 'confidence': 0.0}
+            
+            # Detección de picos con parámetros optimizados
+            # Distancia mínima entre picos (0.4s = 150 BPM máximo)
+            min_distance = int(0.4 * self.fs)
+            
+            # Prominencia adaptativa
+            prominence = np.std(ppg_window) * 0.3
+            
+            peaks, properties = signal.find_peaks(
+                ppg_window,
+                distance=min_distance,
+                prominence=prominence,
+                height=np.mean(ppg_window)
+            )
+            
+            if len(peaks) < 3:
+                return {'bpm': None, 'confidence': 0.0}
+            
+            # Calcular intervalos RR en segundos
+            peak_times = time_window[peaks[0]] + (peaks / self.fs)
+            rr_intervals = np.diff(peak_times)
+            
+            # Filtrar intervalos fisiológicos (0.4s a 1.5s = 40-150 BPM)
+            valid_rr = rr_intervals[(rr_intervals >= 0.4) & (rr_intervals <= 1.5)]
+            
+            if len(valid_rr) < 2:
+                return {'bpm': None, 'confidence': 0.0}
+            
+            # Calcular BPM promedio
+            mean_rr = np.mean(valid_rr)
+            bpm = 60.0 / mean_rr
+            
+            # Validar rango fisiológico
+            if bpm < 40 or bpm > 120:
+                return {'bpm': None, 'confidence': 0.0}
+            
+            # Calcular confianza basada en variabilidad
+            cv = np.std(valid_rr) / mean_rr  # Coeficiente de variación
+            confidence = max(0.0, min(1.0, 1.0 - cv * 3))  # Normalizar
+            
+            return {'bpm': bpm, 'confidence': confidence}
+            
+        except Exception as e:
+            return {'bpm': None, 'confidence': 0.0}
+    
+    def _calculate_with_extended_window(self, full_time, current_time, original_start, original_end):
+        """Calcular BPM con ventana extendida para manejar artefactos"""
+        try:
+            # Extender ventana hacia atrás y adelante
+            extended_start = original_start - self.artifact_extension_sec
+            extended_end = original_end + self.artifact_extension_sec
+            
+            # Asegurar límites
+            extended_start = max(extended_start, full_time[0])
+            extended_end = min(extended_end, full_time[-1])
+            
+            # Extraer datos extendidos
+            mask = (full_time >= extended_start) & (full_time <= extended_end)
+            extended_ppg = self.filtered_ppg_data[mask]
+            extended_time = full_time[mask]
+            
+            return self._calculate_bpm_for_window(extended_ppg, extended_time)
+            
+        except Exception as e:
+            return {'bpm': None, 'confidence': 0.0}
+    
+    def _smooth_bpm_series(self, bpm_values):
+        """Aplicar suavizado a la serie temporal de BPM"""
+        if len(bpm_values) < 5:
+            return bpm_values
+        
+        # Usar filtro de media móvil con ventana de 5 puntos
+        try:
+            from scipy.ndimage import uniform_filter1d
+            return uniform_filter1d(bpm_values, size=5, mode='nearest')
+        except:
+            # Fallback: media móvil simple
+            smoothed = np.copy(bpm_values)
+            for i in range(2, len(bpm_values) - 2):
+                smoothed[i] = np.mean(bpm_values[i-2:i+3])
+            return smoothed
 
 
 class PPGFilteringThread(QThread):
@@ -53,8 +179,7 @@ class PPGFilteringThread(QThread):
                 fs=self.fs,
                 hp_cutoff=0.5,      # Eliminar deriva DC
                 lp_cutoff=5.0,      # Rango cardíaco óptimo
-                notch_freq=50,      # Eliminar ruido de red
-                notch_q=30,         # Factor de calidad
+                notch_enabled=False,  # Desactivar notch para evitar problemas con datos PPG
                 smoothing=True      # Suavizado adicional
             )
             
@@ -102,6 +227,12 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         self.ms_data = None
         self.filter_result = None
         self.sessions_list = []
+        
+        # Variables de BPM
+        self.bpm_data = None
+        self.bpm_times = None
+        self.bpm_confidence = None
+        self.bpm_thread = None
         
         # Variables de navegación
         self.window_size_seconds = 10.0  # Ventana de visualización
@@ -226,9 +357,9 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         
         self.raw_plot = pg.PlotWidget()
         self.raw_plot.setObjectName("rawPlot")
-        self.raw_plot.setMinimumHeight(250)
+        self.raw_plot.setMinimumHeight(200)
         self.raw_plot.setLabel('left', 'Amplitud', color='white', size='11pt')
-        self.raw_plot.setLabel('bottom', 'Tiempo (ms)', color='white', size='11pt')
+        self.raw_plot.setLabel('bottom', 'Tiempo (s)', color='white', size='11pt')
         self.raw_plot.setTitle('Señal PPG Sin Filtrar', color='#FFFFFF', size='12pt')
         self.raw_plot.showGrid(x=True, y=True, alpha=0.3)
         
@@ -248,9 +379,9 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         
         self.filtered_plot = pg.PlotWidget()
         self.filtered_plot.setObjectName("filteredPlot")
-        self.filtered_plot.setMinimumHeight(250)
+        self.filtered_plot.setMinimumHeight(200)
         self.filtered_plot.setLabel('left', 'Amplitud', color='white', size='11pt')
-        self.filtered_plot.setLabel('bottom', 'Tiempo (ms)', color='white', size='11pt')
+        self.filtered_plot.setLabel('bottom', 'Tiempo (s)', color='white', size='11pt')
         self.filtered_plot.setTitle('Señal PPG Filtrada', color='#00A99D', size='12pt')
         self.filtered_plot.showGrid(x=True, y=True, alpha=0.3)
         
@@ -262,6 +393,31 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         
         filtered_layout.addWidget(self.filtered_plot)
         charts_layout.addWidget(filtered_group)
+        
+        # === GRÁFICA EVOLUCIÓN BPM ===
+        bpm_group = QGroupBox("Evolución de BPM")
+        bpm_group.setObjectName("chartGroup")
+        bpm_layout = QVBoxLayout(bpm_group)
+        
+        self.bpm_plot = pg.PlotWidget()
+        self.bpm_plot.setObjectName("bpmPlot")
+        self.bpm_plot.setMinimumHeight(200)
+        self.bpm_plot.setLabel('left', 'BPM', color='white', size='11pt')
+        self.bpm_plot.setLabel('bottom', 'Tiempo (s)', color='white', size='11pt')
+        self.bpm_plot.setTitle('Frecuencia Cardíaca en Tiempo Real', color='#FF6B6B', size='12pt')
+        self.bpm_plot.showGrid(x=True, y=True, alpha=0.3)
+        
+        # Configurar ejes
+        self.bpm_plot.getAxis('left').setPen(color='white', width=1)
+        self.bpm_plot.getAxis('bottom').setPen(color='white', width=1)
+        self.bpm_plot.getAxis('left').setTextPen(color='white')
+        self.bpm_plot.getAxis('bottom').setTextPen(color='white')
+        
+        # Configurar rango Y para BPM (40-120)
+        self.bpm_plot.setYRange(40, 120, padding=0.1)
+        
+        bpm_layout.addWidget(self.bpm_plot)
+        charts_layout.addWidget(bpm_group)
         
         return charts_frame
     
@@ -410,7 +566,7 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         """Cargar sesiones disponibles desde la base de datos"""
         try:
             # Obtener todas las sesiones que tengan datos PPG
-            all_sessions = [DatabaseManager.get_session(session_id=14, signal_data=False)]
+            all_sessions = [DatabaseManager.get_session(session_id=11, signal_data=False)]
             
             if not all_sessions:
                 self.session_combo.addItem("No hay sesiones con datos PPG disponibles")
@@ -605,12 +761,133 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         # Mostrar señal filtrada
         self.plot_filtered_signal()
         
+        # Iniciar cálculo de BPM
+        self.start_bpm_calculation()
+        
         # Habilitar exportación
         self.export_button.setEnabled(True)
         
-        self.update_status(f"Filtrado completado - Calidad: {quality}")
+        self.update_status(f"Filtrado completado - Calculando BPM...")
         
         print(f"✅ Filtrado PPG completado - Calidad: {quality}")
+    
+    def start_bpm_calculation(self):
+        """Iniciar cálculo de evolución de BPM"""
+        if self.ppg_data_filtered is None or self.ms_data is None:
+            return
+        
+        # Mostrar progreso nuevamente
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+        self.filter_status_label.setText("Calculando evolución de BPM...")
+        
+        # Estimar frecuencia de muestreo
+        if len(self.ms_data) > 1:
+            time_span_sec = (max(self.ms_data) - min(self.ms_data)) / 1000.0
+            estimated_fs = len(self.ms_data) / time_span_sec
+        else:
+            estimated_fs = 125
+        
+        # Crear y configurar hilo de cálculo BPM
+        self.bpm_thread = BPMCalculationThread(
+            self.ppg_data_filtered, 
+            self.ms_data, 
+            estimated_fs
+        )
+        self.bpm_thread.progress_updated.connect(self.update_bpm_progress)
+        self.bpm_thread.bpm_calculated.connect(self.on_bpm_completed)
+        self.bpm_thread.error_occurred.connect(self.on_bpm_error)
+        
+        # Iniciar cálculo
+        self.bpm_thread.start()
+    
+    def update_bpm_progress(self, progress):
+        """Actualizar progreso del cálculo BPM"""
+        self.progress_bar.setValue(progress)
+    
+    def on_bpm_completed(self, bpm_result):
+        """Manejar finalización del cálculo BPM"""
+        self.bpm_data = bpm_result['bpm_values']
+        self.bpm_times = bpm_result['times_sec']
+        self.bpm_confidence = bpm_result['confidence_values']
+        
+        # Ocultar barra de progreso
+        self.progress_bar.setVisible(False)
+        
+        # Actualizar estado
+        metadata = bpm_result['metadata']
+        mean_bpm = metadata.get('mean_bpm', 0)
+        std_bpm = metadata.get('std_bpm', 0)
+        
+        status_text = f"BPM calculado\n"
+        status_text += f"Puntos: {metadata['total_points']}\n"
+        if mean_bpm:
+            status_text += f"Promedio: {mean_bpm:.1f} ± {std_bpm:.1f} BPM"
+        
+        self.filter_status_label.setText(status_text)
+        
+        # Mostrar gráfica de BPM
+        self.plot_bpm_evolution()
+        
+        self.update_status(f"BPM completado - Promedio: {mean_bpm:.1f} BPM")
+        
+        print(f"✅ Cálculo BPM completado - {metadata['total_points']} puntos")
+    
+    def on_bpm_error(self, error_message):
+        """Manejar error en el cálculo BPM"""
+        self.progress_bar.setVisible(False)
+        self.filter_status_label.setText(f"Error calculando BPM:\n{error_message}")
+        
+        QMessageBox.warning(self, "Error de BPM", f"Error calculando BPM:\n\n{error_message}")
+        self.update_status(f"Error BPM: {error_message}")
+    
+    def plot_bpm_evolution(self):
+        """Graficar evolución de BPM"""
+        if self.bpm_data is None or self.bpm_times is None:
+            return
+        
+        try:
+            self.bpm_plot.clear()
+            
+            # Calcular ventana de visualización en segundos
+            start_time_sec, end_time_sec = self.get_current_time_window_seconds()
+            
+            # Filtrar datos en la ventana
+            mask = (self.bpm_times >= start_time_sec) & (self.bpm_times <= end_time_sec)
+            windowed_times = self.bpm_times[mask]
+            windowed_bpm = self.bpm_data[mask]
+            
+            if len(windowed_times) > 0:
+                # Graficar con color rojizo
+                pen = pg.mkPen(color='#FF6B6B', width=2)
+                self.bpm_plot.plot(windowed_times, windowed_bpm, pen=pen)
+                
+                # Agregar puntos para mejor visualización
+                scatter = pg.ScatterPlotItem(
+                    x=windowed_times, 
+                    y=windowed_bpm,
+                    size=6,
+                    brush=pg.mkBrush(255, 107, 107, 150),
+                    pen=pg.mkPen(255, 107, 107, 200, width=1)
+                )
+                self.bpm_plot.addItem(scatter)
+                
+                # Configurar límites
+                self.bpm_plot.setXRange(start_time_sec, end_time_sec, padding=0)
+                
+                # Ajustar rango Y dinámicamente
+                if len(windowed_bpm) > 0:
+                    bpm_min = max(40, np.min(windowed_bpm) - 5)
+                    bpm_max = min(120, np.max(windowed_bpm) + 5)
+                    self.bpm_plot.setYRange(bpm_min, bpm_max, padding=0.1)
+                
+                # Actualizar título
+                duration_s = end_time_sec - start_time_sec
+                title = f'Evolución BPM - Ventana: {start_time_sec:.1f}s a {end_time_sec:.1f}s'
+                self.bpm_plot.setTitle(title, color='#FF6B6B', size='12pt')
+            
+        except Exception as e:
+            print(f"Error graficando evolución BPM: {e}")
     
     def on_filtering_error(self, error_message):
         """Manejar error en el filtrado"""
@@ -628,15 +905,18 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         try:
             self.raw_plot.clear()
             
-            # Calcular ventana de visualización
-            start_time_ms, end_time_ms = self.get_current_time_window()
+            # Calcular ventana de visualización en segundos
+            start_time_sec, end_time_sec = self.get_current_time_window_seconds()
+            
+            # Convertir tiempo a segundos
+            time_sec = self.ms_data / 1000.0
             
             # Filtrar datos en la ventana
-            mask = (self.ms_data >= start_time_ms) & (self.ms_data <= end_time_ms)
-            windowed_ms = self.ms_data[mask]
+            mask = (time_sec >= start_time_sec) & (time_sec <= end_time_sec)
+            windowed_time_sec = time_sec[mask]
             windowed_ppg = self.ppg_data_raw[mask]
             
-            if len(windowed_ms) > 0:
+            if len(windowed_time_sec) > 0:
                 # Aplicar zoom vertical
                 if self.zoom_factor != 1.0:
                     mean_val = np.mean(windowed_ppg)
@@ -644,14 +924,14 @@ class OfflinePPGAnalysisWindow(QMainWindow):
                 
                 # Graficar con color azul
                 pen = pg.mkPen(color='#4A90E2', width=1.5)
-                self.raw_plot.plot(windowed_ms, windowed_ppg, pen=pen)
+                self.raw_plot.plot(windowed_time_sec, windowed_ppg, pen=pen)
                 
                 # Configurar límites
-                self.raw_plot.setXRange(start_time_ms, end_time_ms, padding=0)
+                self.raw_plot.setXRange(start_time_sec, end_time_sec, padding=0)
                 
                 # Actualizar título
-                duration_s = (end_time_ms - start_time_ms) / 1000.0
-                title = f'Señal PPG Cruda - Ventana: {self.current_position:.1f}s a {self.current_position + duration_s:.1f}s'
+                duration_s = end_time_sec - start_time_sec
+                title = f'Señal PPG Cruda - Ventana: {start_time_sec:.1f}s a {end_time_sec:.1f}s'
                 self.raw_plot.setTitle(title, color='#FFFFFF', size='12pt')
             
         except Exception as e:
@@ -665,15 +945,18 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         try:
             self.filtered_plot.clear()
             
-            # Calcular ventana de visualización
-            start_time_ms, end_time_ms = self.get_current_time_window()
+            # Calcular ventana de visualización en segundos
+            start_time_sec, end_time_sec = self.get_current_time_window_seconds()
+            
+            # Convertir tiempo a segundos
+            time_sec = self.ms_data / 1000.0
             
             # Filtrar datos en la ventana
-            mask = (self.ms_data >= start_time_ms) & (self.ms_data <= end_time_ms)
-            windowed_ms = self.ms_data[mask]
+            mask = (time_sec >= start_time_sec) & (time_sec <= end_time_sec)
+            windowed_time_sec = time_sec[mask]
             windowed_ppg = self.ppg_data_filtered[mask]
             
-            if len(windowed_ms) > 0:
+            if len(windowed_time_sec) > 0:
                 # Aplicar zoom vertical
                 if self.zoom_factor != 1.0:
                     mean_val = np.mean(windowed_ppg)
@@ -681,22 +964,22 @@ class OfflinePPGAnalysisWindow(QMainWindow):
                 
                 # Graficar con color verde esmeralda
                 pen = pg.mkPen(color='#00A99D', width=2)
-                self.filtered_plot.plot(windowed_ms, windowed_ppg, pen=pen)
+                self.filtered_plot.plot(windowed_time_sec, windowed_ppg, pen=pen)
                 
                 # Configurar límites
-                self.filtered_plot.setXRange(start_time_ms, end_time_ms, padding=0)
+                self.filtered_plot.setXRange(start_time_sec, end_time_sec, padding=0)
                 
                 # Actualizar título con información de calidad
-                duration_s = (end_time_ms - start_time_ms) / 1000.0
+                duration_s = end_time_sec - start_time_sec
                 quality = self.filter_result['quality']['overall'] if self.filter_result else "unknown"
-                title = f'Señal PPG Filtrada (Calidad: {quality}) - Ventana: {self.current_position:.1f}s a {self.current_position + duration_s:.1f}s'
+                title = f'Señal PPG Filtrada (Calidad: {quality}) - Ventana: {start_time_sec:.1f}s a {end_time_sec:.1f}s'
                 self.filtered_plot.setTitle(title, color='#00A99D', size='12pt')
             
         except Exception as e:
             print(f"Error graficando señal filtrada: {e}")
     
     def get_current_time_window(self):
-        """Calcular ventana de tiempo actual"""
+        """Calcular ventana de tiempo actual en milisegundos"""
         if self.ms_data is None or len(self.ms_data) == 0:
             return 0, 1000
         
@@ -708,6 +991,14 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         end_time_ms = min(end_time_ms, max(self.ms_data))
         
         return start_time_ms, end_time_ms
+    
+    def get_current_time_window_seconds(self):
+        """Calcular ventana de tiempo actual en segundos"""
+        if self.ms_data is None or len(self.ms_data) == 0:
+            return 0.0, 1.0
+        
+        start_time_ms, end_time_ms = self.get_current_time_window()
+        return start_time_ms / 1000.0, end_time_ms / 1000.0
     
     def setup_navigation(self):
         """Configurar controles de navegación"""
@@ -766,18 +1057,22 @@ class OfflinePPGAnalysisWindow(QMainWindow):
             self.position_label.setText("Posición: 0.0s / 0.0s")
     
     def update_plots(self):
-        """Actualizar ambas gráficas"""
+        """Actualizar todas las gráficas"""
         self.plot_raw_signal()
         if self.ppg_data_filtered is not None:
             self.plot_filtered_signal()
+        if self.bpm_data is not None:
+            self.plot_bpm_evolution()
     
     def clear_plots(self):
-        """Limpiar ambas gráficas"""
+        """Limpiar todas las gráficas"""
         self.raw_plot.clear()
         self.filtered_plot.clear()
+        self.bpm_plot.clear()
         
         self.raw_plot.setTitle('Señal PPG Sin Filtrar - Sin datos', color='#AAAAAA', size='12pt')
         self.filtered_plot.setTitle('Señal PPG Filtrada - Sin datos', color='#AAAAAA', size='12pt')
+        self.bpm_plot.setTitle('Evolución BPM - Sin datos', color='#AAAAAA', size='12pt')
     
     def export_data(self):
         """Exportar datos procesados"""
@@ -802,24 +1097,55 @@ class OfflinePPGAnalysisWindow(QMainWindow):
             # Preparar datos para exportación
             export_data = {
                 'tiempo_ms': self.ms_data,
+                'tiempo_s': self.ms_data / 1000.0,
                 'ppg_cruda': self.ppg_data_raw
             }
             
             if self.ppg_data_filtered is not None:
                 export_data['ppg_filtrada'] = self.ppg_data_filtered
             
-            # Exportar a CSV
+            # Crear DataFrame principal
             import pandas as pd
-            df = pd.DataFrame(export_data)
-            df.to_csv(file_path, index=False)
+            df_main = pd.DataFrame(export_data)
+            
+            # Si hay datos de BPM, crear DataFrame separado y guardarlo en hoja adicional
+            if self.bpm_data is not None and self.bpm_times is not None:
+                bpm_export_data = {
+                    'tiempo_s': self.bpm_times,
+                    'bpm': self.bpm_data,
+                    'confianza': self.bpm_confidence if self.bpm_confidence is not None else [1.0] * len(self.bpm_data)
+                }
+                df_bpm = pd.DataFrame(bpm_export_data)
+                
+                # Guardar en archivo Excel con dos hojas
+                try:
+                    excel_path = file_path.replace('.csv', '.xlsx')
+                    with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                        df_main.to_csv(file_path, index=False)  # Guardar CSV también
+                        df_main.to_excel(writer, sheet_name='Señales_PPG', index=False)
+                        df_bpm.to_excel(writer, sheet_name='Evolucion_BPM', index=False)
+                    
+                    exported_files = f"{file_path} (CSV)\n{excel_path} (Excel con BPM)"
+                    columns_info = f"Señales: {list(df_main.columns)}\nBPM: {list(df_bpm.columns)}"
+                    
+                except:
+                    # Fallback: solo CSV
+                    df_main.to_csv(file_path, index=False)
+                    exported_files = file_path
+                    columns_info = f"Columnas: {list(df_main.columns)}"
+            else:
+                # Solo datos de señales
+                df_main.to_csv(file_path, index=False)
+                exported_files = file_path
+                columns_info = f"Columnas: {list(df_main.columns)}"
             
             QMessageBox.information(
                 self, 
                 "Exportación exitosa", 
-                f"Datos exportados exitosamente a:\n{file_path}\n\nColumnas exportadas: {list(export_data.keys())}"
+                f"Datos exportados exitosamente a:\n{exported_files}\n\n{columns_info}"
             )
             
-            self.update_status(f"Datos exportados a: {file_path}")
+            self.update_status(f"Datos exportados a: {exported_files}")
             
         except Exception as e:
             error_msg = f"Error durante la exportación: {str(e)}"
@@ -1115,6 +1441,11 @@ class OfflinePPGAnalysisWindow(QMainWindow):
         if self.filtering_thread and self.filtering_thread.isRunning():
             self.filtering_thread.terminate()
             self.filtering_thread.wait()
+        
+        # Detener hilo de BPM si está ejecutándose
+        if self.bpm_thread and self.bpm_thread.isRunning():
+            self.bpm_thread.terminate()
+            self.bpm_thread.wait()
         
         event.accept()
         print("🔴 Ventana de análisis PPG cerrada")

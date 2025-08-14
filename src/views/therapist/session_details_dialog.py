@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 # Importar la clase DatabaseManager
 from src.database.database_manager import DatabaseManager
+# Importar el filtro PPG offline
+from src.utils.signal_processing import OfflinePPGFilter
 
 
 class SessionDetailsDialog(QDialog):
@@ -31,9 +33,14 @@ class SessionDetailsDialog(QDialog):
         
         # Variables para la gráfica
         self.ppg_data = None
+        self.ppg_filtered = None  # Señal PPG filtrada
         self.ms_data = None
         self.window_size_seconds = 8  # Ventana de 8 segundos
         self.current_position = 0  # Posición actual en la gráfica
+        
+        # Variables para el filtro PPG
+        self.ppg_filter = None
+        self.filter_result = None
         
         # Variables para campos clínicos editables
         self.sud_inicial_field = None
@@ -71,10 +78,89 @@ class SessionDetailsDialog(QDialog):
             # Recuperar datos de PPG y milisegundos
             self.ppg_data = self.session_data.get('datos_ppg')
             self.ms_data = self.session_data.get('datos_ms')
+            
+            # Procesar y filtrar datos PPG si están disponibles
+            if self.ppg_data is not None and self.ms_data is not None:
+                self.process_and_filter_ppg()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al cargar datos de la sesión: {str(e)}")
             self.reject()
+    
+    def process_and_filter_ppg(self):
+        """Procesa y filtra los datos PPG usando OfflinePPGFilter"""
+        try:
+            # Verificar que los datos sean válidos
+            if self.ppg_data is None or self.ms_data is None:
+                print("Datos PPG o MS no disponibles")
+                return
+            
+            # Convertir a arrays numpy si es necesario
+            if not isinstance(self.ppg_data, np.ndarray):
+                self.ppg_data = np.array(self.ppg_data)
+            
+            if not isinstance(self.ms_data, np.ndarray):
+                self.ms_data = np.array(self.ms_data)
+            
+            # Verificar que tenemos suficientes datos
+            if len(self.ppg_data) < 500:  # Mínimo ~4 segundos a 125 Hz
+                print(f"Insuficientes datos PPG: {len(self.ppg_data)} muestras")
+                return
+            
+            print(f"Procesando señal PPG: {len(self.ppg_data)} muestras")
+            
+            # Calcular frecuencia de muestreo estimada
+            if len(self.ms_data) > 1:
+                time_span_sec = (max(self.ms_data) - min(self.ms_data)) / 1000.0
+                estimated_fs = len(self.ms_data) / time_span_sec
+                print(f"Frecuencia de muestreo estimada: {estimated_fs:.1f} Hz")
+            else:
+                estimated_fs = 125  # Valor por defecto
+            
+            # Crear filtro PPG offline con parámetros optimizados
+            self.ppg_filter = OfflinePPGFilter(
+                fs=estimated_fs,
+                hp_cutoff=0.5,      # Eliminar deriva DC, preservar HRV
+                lp_cutoff=5.0,      # Rango cardíaco hasta 300 BPM
+                notch_freq=50,      # Eliminar ruido de red eléctrica
+                notch_q=30,         # Factor de calidad del notch
+                smoothing=True      # Suavizado adicional
+            )
+            
+            # Aplicar filtro offline
+            self.filter_result = self.ppg_filter.filter_signal(self.ppg_data)
+            
+            # Obtener señal filtrada
+            self.ppg_filtered = self.filter_result['filtered']
+            
+            # Mostrar información del filtrado
+            quality = self.filter_result['quality']
+            metadata = self.filter_result['metadata']
+            
+            print(f"✅ Filtrado PPG completado:")
+            print(f"  - Calidad general: {quality['overall']}")
+            print(f"  - SNR mejorado: {metadata['snr_improvement_db']:.1f} dB")
+            print(f"  - Picos detectados: {quality['peaks_detected']}")
+            
+            if quality.get('estimated_hr'):
+                print(f"  - Frecuencia cardíaca estimada: {quality['estimated_hr']:.1f} BPM")
+            
+            # Detectar artefactos si los hay
+            artifacts = self.filter_result.get('artifacts', [])
+            if artifacts:
+                print(f"  - Artefactos de movimiento detectados: {len(artifacts)}")
+                for i, (start, end, duration) in enumerate(artifacts):
+                    print(f"    Artefacto {i+1}: {duration:.0f}ms")
+            
+        except Exception as e:
+            print(f"Error procesando datos PPG: {e}")
+            QMessageBox.warning(
+                self, 
+                "Advertencia", 
+                f"Error al filtrar señal PPG: {str(e)}\n\nSe mostrará la señal sin filtrar."
+            )
+            # Usar señal original si falla el filtrado
+            self.ppg_filtered = self.ppg_data.copy() if self.ppg_data is not None else None
     
     def process_sensor_data(self):
         """Procesa los datos de sensores desde la base de datos"""
@@ -226,7 +312,7 @@ class SessionDetailsDialog(QDialog):
         chart_layout = QVBoxLayout(chart_group)
         
         # Verificar si hay datos de PPG disponibles
-        if self.ppg_data is not None and self.ms_data is not None:
+        if self.ppg_filtered is not None and self.ms_data is not None:
             self.setup_chart(chart_layout)
         else:
             # Mostrar mensaje de datos no disponibles
@@ -469,7 +555,19 @@ class SessionDetailsDialog(QDialog):
         self.plot_widget.setBackground('#2a2a2a')
         self.plot_widget.setLabel('left', 'Señal PPG', color='white', size='12pt')
         self.plot_widget.setLabel('bottom', 'Tiempo (ms)', color='white', size='12pt')
-        self.plot_widget.setTitle('Datos de Pulso (PPG)', color='#00A99D', size='14pt')
+        
+        # Título dinámico basado en si hay filtrado
+        if self.filter_result:
+            quality = self.filter_result['quality']['overall']
+            hr_est = self.filter_result['quality'].get('estimated_hr')
+            if hr_est:
+                title_text = f'Datos de Pulso (PPG) - Filtrado | Calidad: {quality} | HR: {hr_est:.0f} BPM'
+            else:
+                title_text = f'Datos de Pulso (PPG) - Filtrado | Calidad: {quality}'
+        else:
+            title_text = 'Datos de Pulso (PPG) - Sin filtrar'
+            
+        self.plot_widget.setTitle(title_text, color='#00A99D', size='14pt')
         
         # Configurar la grilla
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
@@ -483,10 +581,64 @@ class SessionDetailsDialog(QDialog):
         # Añadir el widget al layout
         parent_layout.addWidget(self.plot_widget)
         
+        # Crear información del filtrado si está disponible
+        if self.filter_result:
+            self.add_filter_info_panel(parent_layout)
+        
         # Crear scroll bar para navegar por los datos
         if len(self.ms_data) > 0:
             self.setup_navigation_panel(parent_layout)
             self.update_chart()
+    
+    def add_filter_info_panel(self, parent_layout):
+        """Agregar panel con información del filtrado"""
+        if not self.filter_result:
+            return
+        
+        info_frame = QFrame()
+        info_frame.setStyleSheet("""
+            QFrame {
+                background-color: #1A1A1A;
+                border: 1px solid #00A99D;
+                border-radius: 5px;
+                padding: 5px;
+            }
+        """)
+        
+        info_layout = QHBoxLayout(info_frame)
+        info_layout.setContentsMargins(10, 5, 10, 5)
+        
+        # Información básica del filtrado
+        quality = self.filter_result['quality']
+        metadata = self.filter_result['metadata']
+        
+        # Label con información
+        info_text = f"Filtrado PPG aplicado | "
+        info_text += f"SNR: +{metadata['snr_improvement_db']:.1f}dB | "
+        info_text += f"Picos: {quality['peaks_detected']} | "
+        
+        if quality.get('estimated_hr'):
+            info_text += f"HR: {quality['estimated_hr']:.1f} BPM | "
+        
+        artifacts = len(self.filter_result.get('artifacts', []))
+        if artifacts > 0:
+            info_text += f"Artefactos: {artifacts}"
+        else:
+            info_text += "Sin artefactos"
+        
+        info_label = QLabel(info_text)
+        info_label.setStyleSheet("""
+            QLabel {
+                color: #00A99D;
+                font-size: 11px;
+                font-weight: bold;
+            }
+        """)
+        
+        info_layout.addWidget(info_label)
+        info_layout.addStretch()
+        
+        parent_layout.addWidget(info_frame)
     
     def setup_navigation_panel(self, parent_layout):
         """Crear panel de navegación temporal basado en offline_analysis_window"""
@@ -598,7 +750,10 @@ class SessionDetailsDialog(QDialog):
     
     def update_chart(self):
         """Actualiza la gráfica con la ventana de datos actual usando PyQtGraph"""
-        if self.ppg_data is None or self.ms_data is None:
+        # Usar señal filtrada si está disponible, sino usar original
+        ppg_to_plot = self.ppg_filtered if self.ppg_filtered is not None else self.ppg_data
+        
+        if ppg_to_plot is None or self.ms_data is None:
             return
         
         try:
@@ -609,25 +764,44 @@ class SessionDetailsDialog(QDialog):
             # Filtrar datos dentro de la ventana
             mask = (self.ms_data >= start_time_ms) & (self.ms_data <= end_time_ms)
             windowed_ms = self.ms_data[mask]
-            windowed_ppg = self.ppg_data[mask]
+            windowed_ppg = ppg_to_plot[mask]
             
             # Limpiar la gráfica
             self.plot_widget.clear()
             
             if len(windowed_ms) > 0 and len(windowed_ppg) > 0:
-                # Graficar datos con color verde esmeralda
+                # Graficar señal filtrada con color verde esmeralda
                 pen = pg.mkPen(color='#00A99D', width=2)
-                self.plot_widget.plot(windowed_ms, windowed_ppg, pen=pen, name='PPG')
+                self.plot_widget.plot(windowed_ms, windowed_ppg, pen=pen, name='PPG Filtrada')
+                
+                # Si tenemos la señal original, mostrarla también en gris tenue
+                if (self.ppg_filtered is not None and 
+                    self.ppg_data is not None and 
+                    hasattr(self, 'show_original') and self.show_original):
+                    
+                    windowed_ppg_original = self.ppg_data[mask]
+                    pen_original = pg.mkPen(color='#666666', width=1, style=Qt.DashLine)
+                    self.plot_widget.plot(windowed_ms, windowed_ppg_original, 
+                                        pen=pen_original, name='PPG Original')
                 
                 # Configurar los límites del eje X
                 self.plot_widget.setXRange(start_time_ms, end_time_ms, padding=0)
                 
-                # Actualizar el título con información de la ventana
-                self.plot_widget.setTitle(
-                    f'Datos de Pulso (PPG) - Ventana: {self.current_position}s a {self.current_position + self.window_size_seconds}s',
-                    color='#00A99D', 
-                    size='14pt'
-                )
+                # Título con información de filtrado y ventana
+                if self.filter_result:
+                    quality = self.filter_result['quality']['overall']
+                    title_text = f'PPG Filtrada (Calidad: {quality}) - Ventana: {self.current_position:.1f}s a {self.current_position + self.window_size_seconds:.1f}s'
+                else:
+                    title_text = f'PPG Original - Ventana: {self.current_position:.1f}s a {self.current_position + self.window_size_seconds:.1f}s'
+                
+                self.plot_widget.setTitle(title_text, color='#00A99D', size='14pt')
+                
+                # Marcar artefactos si existen
+                if (self.filter_result and 
+                    self.filter_result.get('artifacts') and 
+                    len(self.filter_result['artifacts']) > 0):
+                    self.mark_artifacts_in_window(start_time_ms, end_time_ms)
+                    
             else:
                 # Mostrar mensaje si no hay datos en esta ventana
                 text_item = pg.TextItem(
@@ -650,6 +824,54 @@ class SessionDetailsDialog(QDialog):
             )
             error_text.setPos(0, 0)
             self.plot_widget.addItem(error_text)
+    
+    def mark_artifacts_in_window(self, start_time_ms, end_time_ms):
+        """Marcar artefactos de movimiento que estén visible en la ventana actual"""
+        if not self.filter_result or not self.filter_result.get('artifacts'):
+            return
+        
+        try:
+            # Calcular frecuencia de muestreo estimada para convertir índices a tiempo
+            if len(self.ms_data) > 1:
+                time_span_sec = (max(self.ms_data) - min(self.ms_data)) / 1000.0
+                estimated_fs = len(self.ms_data) / time_span_sec
+            else:
+                estimated_fs = 125
+            
+            # Tiempo base de la grabación
+            base_time_ms = min(self.ms_data)
+            
+            for artifact_idx_start, artifact_idx_end, duration_ms in self.filter_result['artifacts']:
+                # Convertir índices de muestra a tiempo absoluto
+                artifact_start_ms = base_time_ms + (artifact_idx_start / estimated_fs) * 1000
+                artifact_end_ms = base_time_ms + (artifact_idx_end / estimated_fs) * 1000
+                
+                # Verificar si el artefacto está visible en la ventana actual
+                if (artifact_start_ms < end_time_ms and artifact_end_ms > start_time_ms):
+                    # Crear región de resaltado para el artefacto
+                    region = pg.LinearRegionItem(
+                        [max(artifact_start_ms, start_time_ms), 
+                         min(artifact_end_ms, end_time_ms)],
+                        brush=pg.mkBrush(255, 0, 0, 50),  # Rojo semi-transparente
+                        pen=pg.mkPen(255, 0, 0, 100),     # Borde rojo
+                        movable=False
+                    )
+                    self.plot_widget.addItem(region)
+                    
+                    # Agregar etiqueta del artefacto
+                    artifact_label = pg.TextItem(
+                        f'Artefacto ({duration_ms:.0f}ms)',
+                        color='red',
+                        anchor=(0.5, 1.0)
+                    )
+                    artifact_label.setPos(
+                        (artifact_start_ms + artifact_end_ms) / 2,
+                        self.plot_widget.getViewBox().viewRange()[1][1] * 0.9
+                    )
+                    self.plot_widget.addItem(artifact_label)
+                    
+        except Exception as e:
+            print(f"Error marcando artefactos: {e}")
 
     def toggle_edit_mode(self):
         """Activa/desactiva el modo de edición para los campos clínicos"""
