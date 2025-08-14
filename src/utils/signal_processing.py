@@ -539,6 +539,7 @@ class OfflineEOGFilter:
             print("matplotlib no disponible")
             return None, None
 
+
 class OfflinePPGFilter:
     """
     Filtro PPG offline optimizado para análisis de frecuencia cardíaca.
@@ -887,6 +888,7 @@ class OfflinePPGFilter:
             conf_fft = fft_result.get('confidence', 0)
             
             return hr_peaks if conf_peaks > conf_fft else hr_fft
+
 
 class PPGHeartRateCalculator:
     """
