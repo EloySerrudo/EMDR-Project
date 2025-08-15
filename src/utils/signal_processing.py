@@ -1184,13 +1184,17 @@ class BPMOfflineCalculation:
         self.fs = fs
         
         # Parámetros fijos optimizados para análisis offline
-        self.window_size_sec = 15        # Ventana de cálculo
+        self.initial_window_sec = 15     # Ventana inicial (primeros 60s)
+        self.extended_window_sec = 60    # Ventana extendida (después de 60s)
+        self.transition_time_sec = 60    # Momento de transición
         self.calculation_interval_sec = 1  # BPM cada segundo
         self.min_window_size_sec = 8     # Ventana mínima válida
         self.artifact_extension_sec = 5   # Extensión por artefactos
         
         print(f"BPM Offline Calculator configurado:")
-        print(f"  - Ventana de análisis: {self.window_size_sec}s")
+        print(f"  - Ventana inicial (0-60s): {self.initial_window_sec}s")
+        print(f"  - Ventana extendida (>60s): {self.extended_window_sec}s")
+        print(f"  - Transición en: {self.transition_time_sec}s")
         print(f"  - Intervalo de cálculo: {self.calculation_interval_sec}s")
         print(f"  - Extensión por artefactos: {self.artifact_extension_sec}s")
         print(f"  - Frecuencia de muestreo: {self.fs} Hz")
@@ -1228,16 +1232,27 @@ class BPMOfflineCalculation:
         bpm_values = []
         confidence_values = []
         
-        # Empezar después de la ventana inicial
-        start_time = time_sec[0] + self.window_size_sec
+        # Empezar después de la ventana inicial mínima
+        start_time = time_sec[0] + self.initial_window_sec
         end_time = time_sec[-1]
         current_time = start_time
         
         print(f"Calculando BPM desde {start_time:.1f}s hasta {end_time:.1f}s")
+        print(f"Transición de ventana en {self.transition_time_sec}s")
         
         while current_time <= end_time:
+            # **VENTANA ADAPTATIVA**: Determinar tamaño de ventana según tiempo transcurrido
+            time_from_start = current_time - time_sec[0]
+            
+            if time_from_start <= self.transition_time_sec:
+                # Primeros 60 segundos: ventana de 15s
+                current_window_size = self.initial_window_sec
+            else:
+                # Después de 60 segundos: ventana de 60s
+                current_window_size = self.extended_window_sec
+            
             # Definir ventana de análisis
-            window_start = current_time - self.window_size_sec
+            window_start = current_time - current_window_size
             window_end = current_time
             
             # Extraer datos de la ventana
@@ -1280,7 +1295,9 @@ class BPMOfflineCalculation:
             'metadata': {
                 'total_points': len(bpm_times),
                 'duration_sec': total_duration,
-                'window_size_sec': self.window_size_sec,
+                'initial_window_sec': self.initial_window_sec,
+                'extended_window_sec': self.extended_window_sec,
+                'transition_time_sec': self.transition_time_sec,
                 'calculation_interval_sec': self.calculation_interval_sec,
                 'mean_bpm': np.mean(bpm_smoothed) if len(bpm_smoothed) > 0 else None,
                 'std_bpm': np.std(bpm_smoothed) if len(bpm_smoothed) > 0 else None

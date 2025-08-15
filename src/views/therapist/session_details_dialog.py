@@ -10,15 +10,14 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 import pyqtgraph as pg
-from pyqtgraph import PlotWidget
 
 # Ajustar el path para importaciones absolutas
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 # Importar la clase DatabaseManager
 from src.database.database_manager import DatabaseManager
-# Importar el filtro PPG offline
-from src.utils.signal_processing import OfflinePPGFilter
+# Importar el filtro PPG offline y calculador BPM
+from src.utils.signal_processing import OfflinePPGFilter, BPMOfflineCalculation
 
 
 class SessionDetailsDialog(QDialog):
@@ -35,12 +34,18 @@ class SessionDetailsDialog(QDialog):
         self.ppg_data = None
         self.ppg_filtered = None  # Señal PPG filtrada
         self.ms_data = None
-        self.window_size_seconds = 8  # Ventana de 8 segundos
+        self.window_size_seconds = 300  # Ventana de 5 minutos (300 segundos)
         self.current_position = 0  # Posición actual en la gráfica
         
         # Variables para el filtro PPG
         self.ppg_filter = None
         self.filter_result = None
+        
+        # Variables para BPM
+        self.bpm_data = None
+        self.bpm_times = None
+        self.bpm_confidence = None
+        self.bpm_calculator = None
         
         # Variables para campos clínicos editables
         self.sud_inicial_field = None
@@ -133,6 +138,31 @@ class SessionDetailsDialog(QDialog):
             # Obtener señal filtrada
             self.ppg_filtered = self.filter_result['filtered']
             
+            # Calcular evolución de BPM
+            try:
+                print("Calculando evolución de BPM...")
+                self.bpm_calculator = BPMOfflineCalculation(fs=estimated_fs)
+                bpm_result = self.bpm_calculator.calculate_bpm_evolution(
+                    self.ppg_filtered, 
+                    self.ms_data
+                )
+                
+                # Extraer datos de BPM
+                self.bpm_data = bpm_result['bpm_values']
+                self.bpm_times = bpm_result['times_sec']
+                self.bpm_confidence = bpm_result['confidence_values']
+                
+                metadata_bpm = bpm_result['metadata']
+                print(f"✅ BPM calculado: {metadata_bpm['total_points']} puntos")
+                if metadata_bpm.get('mean_bpm'):
+                    print(f"  - BPM promedio: {metadata_bpm['mean_bpm']:.1f} ± {metadata_bpm['std_bpm']:.1f}")
+                    
+            except Exception as e:
+                print(f"Error calculando BPM: {e}")
+                self.bpm_data = None
+                self.bpm_times = None
+                self.bpm_confidence = None
+            
             # Mostrar información del filtrado
             quality = self.filter_result['quality']
             metadata = self.filter_result['metadata']
@@ -144,6 +174,9 @@ class SessionDetailsDialog(QDialog):
             
             if quality.get('estimated_hr'):
                 print(f"  - Frecuencia cardíaca estimada: {quality['estimated_hr']:.1f} BPM")
+            
+            # Calcular límites fijos del eje Y
+            self.calculate_fixed_y_limits()
             
             # Detectar artefactos si los hay
             artifacts = self.filter_result.get('artifacts', [])
@@ -539,7 +572,7 @@ class SessionDetailsDialog(QDialog):
         pg.setConfigOption('foreground', 'w')
         
         # Crear el widget de gráfica
-        self.plot_widget = PlotWidget()
+        self.plot_widget = pg.PlotWidget()
         self.plot_widget.setFixedHeight(300)
         
         # Configurar el estilo del plot widget
@@ -554,7 +587,7 @@ class SessionDetailsDialog(QDialog):
         # Configurar el plot
         self.plot_widget.setBackground('#2a2a2a')
         self.plot_widget.setLabel('left', 'Señal PPG', color='white', size='12pt')
-        self.plot_widget.setLabel('bottom', 'Tiempo (ms)', color='white', size='12pt')
+        self.plot_widget.setLabel('bottom', 'Tiempo (MM:SS)', color='white', size='12pt')
         
         # Título dinámico basado en si hay filtrado
         if self.filter_result:
@@ -578,67 +611,17 @@ class SessionDetailsDialog(QDialog):
         self.plot_widget.getAxis('left').setTextPen(color='white')
         self.plot_widget.getAxis('bottom').setTextPen(color='white')
         
+        # Configurar límites Y fijos si están disponibles
+        if hasattr(self, 'y_min') and hasattr(self, 'y_max') and self.y_min is not None and self.y_max is not None:
+            self.plot_widget.setYRange(self.y_min, self.y_max, padding=0)
+        
         # Añadir el widget al layout
         parent_layout.addWidget(self.plot_widget)
-        
-        # Crear información del filtrado si está disponible
-        if self.filter_result:
-            self.add_filter_info_panel(parent_layout)
         
         # Crear scroll bar para navegar por los datos
         if len(self.ms_data) > 0:
             self.setup_navigation_panel(parent_layout)
             self.update_chart()
-    
-    def add_filter_info_panel(self, parent_layout):
-        """Agregar panel con información del filtrado"""
-        if not self.filter_result:
-            return
-        
-        info_frame = QFrame()
-        info_frame.setStyleSheet("""
-            QFrame {
-                background-color: #1A1A1A;
-                border: 1px solid #00A99D;
-                border-radius: 5px;
-                padding: 5px;
-            }
-        """)
-        
-        info_layout = QHBoxLayout(info_frame)
-        info_layout.setContentsMargins(10, 5, 10, 5)
-        
-        # Información básica del filtrado
-        quality = self.filter_result['quality']
-        metadata = self.filter_result['metadata']
-        
-        # Label con información
-        info_text = f"Filtrado PPG aplicado | "
-        info_text += f"SNR: +{metadata['snr_improvement_db']:.1f}dB | "
-        info_text += f"Picos: {quality['peaks_detected']} | "
-        
-        if quality.get('estimated_hr'):
-            info_text += f"HR: {quality['estimated_hr']:.1f} BPM | "
-        
-        artifacts = len(self.filter_result.get('artifacts', []))
-        if artifacts > 0:
-            info_text += f"Artefactos: {artifacts}"
-        else:
-            info_text += "Sin artefactos"
-        
-        info_label = QLabel(info_text)
-        info_label.setStyleSheet("""
-            QLabel {
-                color: #00A99D;
-                font-size: 11px;
-                font-weight: bold;
-            }
-        """)
-        
-        info_layout.addWidget(info_label)
-        info_layout.addStretch()
-        
-        parent_layout.addWidget(info_frame)
     
     def setup_navigation_panel(self, parent_layout):
         """Crear panel de navegación temporal basado en offline_analysis_window"""
@@ -665,10 +648,10 @@ class SessionDetailsDialog(QDialog):
             window_label.setStyleSheet("color: #FFFFFF; font-size: 12px;")
             
             self.window_spinbox = QSpinBox()
-            self.window_spinbox.setRange(2, 60)
-            self.window_spinbox.setValue(self.window_size_seconds)
-            self.window_spinbox.setSuffix(" segundos")
-            self.window_spinbox.valueChanged.connect(self.update_window_duration)
+            self.window_spinbox.setRange(5, 20)  # 5-20 minutos
+            self.window_spinbox.setValue(int(self.window_size_seconds / 60))  # Convertir a minutos
+            self.window_spinbox.setSuffix(" minutos")
+            self.window_spinbox.valueChanged.connect(self.update_window_duration_minutes)
             self.window_spinbox.setStyleSheet("""
                 QSpinBox {
                     background-color: #3A3A3A;
@@ -709,7 +692,8 @@ class SessionDetailsDialog(QDialog):
             """)
             
             # Label posición actual
-            self.position_label = QLabel(f"Posición: 0.0 / {total_time_seconds:.1f} s")
+            total_time_mmss = self.format_time_mmss(total_time_seconds)
+            self.position_label = QLabel(f"Posición: 00:00 / {total_time_mmss}")
             self.position_label.setStyleSheet("color: #00A99D; font-weight: bold; font-size: 12px;")
             
             nav_layout.addWidget(window_label)
@@ -721,6 +705,111 @@ class SessionDetailsDialog(QDialog):
             
             parent_layout.addWidget(nav_frame)
     
+    def format_time_mmss(self, time_seconds):
+        """Convierte tiempo en segundos a formato MM:SS"""
+        minutes = int(time_seconds // 60)
+        seconds = int(time_seconds % 60)
+        return f"{minutes:02d}:{seconds:02d}"
+    
+    def generate_time_ticks(self, start_time_ms, end_time_ms):
+        """Genera ticks personalizados para el eje X en formato MM:SS"""
+        ticks = []
+        
+        # Convertir a segundos desde el inicio de la grabación
+        base_time_ms = min(self.ms_data) if self.ms_data is not None else 0
+        start_sec = (start_time_ms - base_time_ms) / 1000.0
+        end_sec = (end_time_ms - base_time_ms) / 1000.0
+        
+        # Determinar intervalo de ticks basado en la duración de la ventana
+        window_duration = end_sec - start_sec
+        if window_duration <= 60:  # <= 1 minuto
+            tick_interval = 10  # cada 10 segundos
+        elif window_duration <= 300:  # <= 5 minutos
+            tick_interval = 30  # cada 30 segundos
+        else:
+            tick_interval = 60  # cada minuto
+        
+        # Generar ticks
+        current_sec = int(start_sec // tick_interval) * tick_interval
+        while current_sec <= end_sec:
+            tick_time_ms = base_time_ms + (current_sec * 1000)
+            if start_time_ms <= tick_time_ms <= end_time_ms:
+                tick_label = self.format_time_mmss(current_sec)
+                ticks.append((tick_time_ms, tick_label))
+            current_sec += tick_interval
+            
+        return ticks
+    
+    def generate_time_ticks_seconds(self, start_time_sec, end_time_sec):
+        """Genera ticks personalizados para el eje X en formato MM:SS (entrada en segundos)"""
+        ticks = []
+        
+        # Determinar intervalo de ticks basado en la duración de la ventana
+        window_duration = end_time_sec - start_time_sec
+        if window_duration <= 60:  # <= 1 minuto
+            tick_interval = 10  # cada 10 segundos
+        elif window_duration <= 300:  # <= 5 minutos
+            tick_interval = 30  # cada 30 segundos
+        else:
+            tick_interval = 60  # cada minuto
+        
+        # Generar ticks
+        current_sec = int(start_time_sec // tick_interval) * tick_interval
+        while current_sec <= end_time_sec:
+            if start_time_sec <= current_sec <= end_time_sec:
+                tick_label = self.format_time_mmss(current_sec)
+                ticks.append((current_sec, tick_label))
+            current_sec += tick_interval
+            
+        return ticks
+    
+    def calculate_fixed_y_limits(self):
+        """Calcula los límites fijos del eje Y basándose en toda la señal"""
+        self.y_min = None
+        self.y_max = None
+        
+        # Priorizar datos de BPM si están disponibles
+        if self.bpm_data is not None and len(self.bpm_data) > 0:
+            # Para BPM, usar límites más amplios para mejor visualización
+            data_min = np.min(self.bpm_data)
+            data_max = np.max(self.bpm_data)
+            
+            # Agregar margen del 10% para mejor visualización
+            margin = (data_max - data_min) * 0.1
+            self.y_min = max(0, data_min - margin)  # BPM no puede ser negativo
+            self.y_max = data_max + margin
+            
+            print(f"📊 Límites Y fijos para BPM: {self.y_min:.1f} - {self.y_max:.1f}")
+            
+        else:
+            # Fallback a señal PPG (filtrada o original)
+            ppg_to_analyze = self.ppg_filtered if self.ppg_filtered is not None else self.ppg_data
+            
+            if ppg_to_analyze is not None and len(ppg_to_analyze) > 0:
+                data_min = np.min(ppg_to_analyze)
+                data_max = np.max(ppg_to_analyze)
+                
+                # Agregar margen del 5% para señal PPG
+                margin = (data_max - data_min) * 0.05
+                self.y_min = data_min - margin
+                self.y_max = data_max + margin
+                
+                print(f"📊 Límites Y fijos para PPG: {self.y_min:.1f} - {self.y_max:.1f}")
+    
+    def update_window_duration_minutes(self, value_minutes):
+        """Actualizar duración de ventana de visualización (entrada en minutos)"""
+        self.window_size_seconds = value_minutes * 60  # Convertir minutos a segundos
+        
+        if self.ms_data is not None and len(self.ms_data) > 0:
+            # Reconfigurar slider
+            total_time_ms = max(self.ms_data) - min(self.ms_data)
+            total_time_seconds = total_time_ms / 1000.0
+            max_time = max(0, total_time_seconds - self.window_size_seconds)
+            self.time_slider.setMaximum(int(max_time * 10))
+            
+            # Actualizar gráficas
+            self.update_chart()
+
     def update_window_duration(self, value):
         """Actualizar duración de ventana de visualización"""
         self.window_size_seconds = value
@@ -746,58 +835,113 @@ class SessionDetailsDialog(QDialog):
         self.current_position = value / 10.0  # Convertir de resolución alta
         self.update_chart()
         
-        self.position_label.setText(f"Posición: {self.current_position:.1f} / {total_time_seconds:.1f} s")
+        # Formatear tiempos en MM:SS
+        current_time_mmss = self.format_time_mmss(self.current_position)
+        total_time_mmss = self.format_time_mmss(total_time_seconds)
+        self.position_label.setText(f"Posición: {current_time_mmss} / {total_time_mmss}")
     
     def update_chart(self):
-        """Actualiza la gráfica con la ventana de datos actual usando PyQtGraph"""
-        # Usar señal filtrada si está disponible, sino usar original
-        ppg_to_plot = self.ppg_filtered if self.ppg_filtered is not None else self.ppg_data
-        
-        if ppg_to_plot is None or self.ms_data is None:
-            return
+        """Actualiza la gráfica con la evolución de BPM usando PyQtGraph"""
+        # Usar datos de BPM si están disponibles, sino mostrar señal PPG
+        if self.bpm_data is not None and self.bpm_times is not None:
+            data_to_plot = self.bpm_data
+            times_to_plot_ms = self.bpm_times * 1000  # Ya está en segundos, convertir a ms
+            data_label = 'Evolución BPM'
+            data_unit = 'BPM'
+        else:
+            # Fallback a PPG filtrada o original
+            ppg_to_plot = self.ppg_filtered if self.ppg_filtered is not None else self.ppg_data
+            if ppg_to_plot is None or self.ms_data is None:
+                return
+            data_to_plot = ppg_to_plot
+            times_to_plot_ms = self.ms_data
+            data_label = 'PPG Filtrada' if self.ppg_filtered is not None else 'PPG Original'
+            data_unit = 'Amplitud'
         
         try:
             # Calcular ventana de tiempo
-            start_time_ms = min(self.ms_data) + (self.current_position * 1000)
+            start_time_ms = min(times_to_plot_ms) + (self.current_position * 1000)
             end_time_ms = start_time_ms + (self.window_size_seconds * 1000)
             
             # Filtrar datos dentro de la ventana
-            mask = (self.ms_data >= start_time_ms) & (self.ms_data <= end_time_ms)
-            windowed_ms = self.ms_data[mask]
-            windowed_ppg = ppg_to_plot[mask]
+            mask = (times_to_plot_ms >= start_time_ms) & (times_to_plot_ms <= end_time_ms)
+            windowed_times_ms = times_to_plot_ms[mask]
+            windowed_data = data_to_plot[mask]
+            
+            # CONVERSIÓN A SEGUNDOS para evitar notación científica
+            windowed_times_sec = windowed_times_ms / 1000.0
+            start_time_sec = start_time_ms / 1000.0
+            end_time_sec = end_time_ms / 1000.0
             
             # Limpiar la gráfica
             self.plot_widget.clear()
             
-            if len(windowed_ms) > 0 and len(windowed_ppg) > 0:
-                # Graficar señal filtrada con color verde esmeralda
+            if len(windowed_times_sec) > 0 and len(windowed_data) > 0:
+                # Graficar datos con color verde esmeralda (USANDO SEGUNDOS)
                 pen = pg.mkPen(color='#00A99D', width=2)
-                self.plot_widget.plot(windowed_ms, windowed_ppg, pen=pen, name='PPG Filtrada')
+                self.plot_widget.plot(windowed_times_sec, windowed_data, pen=pen, name=data_label)
                 
-                # Si tenemos la señal original, mostrarla también en gris tenue
-                if (self.ppg_filtered is not None and 
-                    self.ppg_data is not None and 
-                    hasattr(self, 'show_original') and self.show_original):
+                # Si es BPM, agregar líneas de referencia
+                if self.bpm_data is not None:
+                    # Línea de BPM promedio durante esta ventana
+                    if len(windowed_data) > 0:
+                        mean_bpm = np.mean(windowed_data)
+                        ref_line = pg.InfiniteLine(
+                            pos=mean_bpm, 
+                            angle=0, 
+                            pen=pg.mkPen('#CCCCCC', width=1, style=Qt.DashLine),
+                            label=f'Promedio: {mean_bpm:.1f} BPM'
+                        )
+                        self.plot_widget.addItem(ref_line)
                     
-                    windowed_ppg_original = self.ppg_data[mask]
-                    pen_original = pg.mkPen(color='#666666', width=1, style=Qt.DashLine)
-                    self.plot_widget.plot(windowed_ms, windowed_ppg_original, 
-                                        pen=pen_original, name='PPG Original')
+                    # Mostrar confianza si está disponible
+                    if (self.bpm_confidence is not None and 
+                        hasattr(self, 'show_confidence') and self.show_confidence):
+                        windowed_confidence = self.bpm_confidence[mask]
+                        confidence_pen = pg.mkPen(color='#FFA500', width=1, style=Qt.DotLine)
+                        # Normalizar confianza para visualización
+                        conf_normalized = windowed_confidence * np.max(windowed_data)
+                        self.plot_widget.plot(windowed_times_sec, conf_normalized, 
+                                            pen=confidence_pen, name='Confianza')
                 
-                # Configurar los límites del eje X
-                self.plot_widget.setXRange(start_time_ms, end_time_ms, padding=0)
+                # Configurar los límites del eje X (EN SEGUNDOS)
+                self.plot_widget.setXRange(start_time_sec, end_time_sec, padding=0)
                 
-                # Título con información de filtrado y ventana
-                if self.filter_result:
-                    quality = self.filter_result['quality']['overall']
-                    title_text = f'PPG Filtrada (Calidad: {quality}) - Ventana: {self.current_position:.1f}s a {self.current_position + self.window_size_seconds:.1f}s'
+                # Configurar límites fijos del eje Y
+                if hasattr(self, 'y_min') and hasattr(self, 'y_max') and self.y_min is not None and self.y_max is not None:
+                    self.plot_widget.setYRange(self.y_min, self.y_max, padding=0)
+                
+                # Título con información específica del tipo de datos
+                if self.bpm_data is not None:
+                    if len(windowed_data) > 0:
+                        min_bpm = np.min(windowed_data)
+                        max_bpm = np.max(windowed_data)
+                        min_time = self.format_time_mmss(self.current_position)
+                        max_time = self.format_time_mmss(self.current_position + self.window_size_seconds)
+                        title_text = f'Evolución BPM (Rango: {min_bpm:.1f}-{max_bpm:.1f}) - Ventana: {min_time} a {max_time}'
+                    else:
+                        title_text = f'Evolución BPM - Ventana: {self.current_position:.1f}s a {self.current_position + self.window_size_seconds:.1f}s'
                 else:
-                    title_text = f'PPG Original - Ventana: {self.current_position:.1f}s a {self.current_position + self.window_size_seconds:.1f}s'
+                    # Título para PPG
+                    if self.filter_result:
+                        quality = self.filter_result['quality']['overall']
+                        title_text = f'PPG Filtrada (Calidad: {quality}) - Ventana: {self.current_position:.1f}s a {self.current_position + self.window_size_seconds:.1f}s'
+                    else:
+                        title_text = f'PPG Original - Ventana: {self.current_position:.1f}s a {self.current_position + self.window_size_seconds:.1f}s'
                 
                 self.plot_widget.setTitle(title_text, color='#00A99D', size='14pt')
                 
-                # Marcar artefactos si existen
-                if (self.filter_result and 
+                # Configurar etiquetas de ejes
+                self.plot_widget.setLabel('left', data_unit, color='#00A99D')
+                self.plot_widget.setLabel('bottom', 'Tiempo (MM:SS)', color='#00A99D')
+                
+                # Configurar formato personalizado del eje X para mostrar MM:SS (USANDO SEGUNDOS)
+                axis = self.plot_widget.getAxis('bottom')
+                axis.setTicks([self.generate_time_ticks_seconds(start_time_sec, end_time_sec)])
+                
+                # Marcar artefactos si existen y estamos viendo PPG
+                if (self.bpm_data is None and 
+                    self.filter_result and 
                     self.filter_result.get('artifacts') and 
                     len(self.filter_result['artifacts']) > 0):
                     self.mark_artifacts_in_window(start_time_ms, end_time_ms)
@@ -811,7 +955,16 @@ class SessionDetailsDialog(QDialog):
                 )
                 text_item.setPos(start_time_ms + (end_time_ms - start_time_ms) / 2, 0)
                 self.plot_widget.addItem(text_item)
-                self.plot_widget.setTitle('Datos de Pulso (PPG) - Sin datos', color='#AAAAAA', size='14pt')
+                
+                # Configurar límites X y Y fijos incluso sin datos
+                self.plot_widget.setXRange(start_time_ms, end_time_ms, padding=0)
+                if hasattr(self, 'y_min') and hasattr(self, 'y_max') and self.y_min is not None and self.y_max is not None:
+                    self.plot_widget.setYRange(self.y_min, self.y_max, padding=0)
+                
+                if self.bpm_data is not None:
+                    self.plot_widget.setTitle('Evolución BPM - Sin datos', color='#AAAAAA', size='14pt')
+                else:
+                    self.plot_widget.setTitle('Datos de Pulso (PPG) - Sin datos', color='#AAAAAA', size='14pt')
             
         except Exception as e:
             print(f"Error actualizando gráfica: {e}")

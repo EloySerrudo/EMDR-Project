@@ -14,10 +14,13 @@ combined_df <- read_csv(csv_file)
 # Extraer datos
 sensor_bpm <- combined_df$sensor_ppg_bpm
 watch_bpm <- combined_df$samsung_watch_bpm
+oximeter_bpm <- combined_df$fingertip_oximeter
 
 # === ANÁLISIS DE CORRELACIÓN ===
 cat("=== ANÁLISIS DE CORRELACIÓN ===\n")
 
+# COMPARACIÓN SENSOR vs WATCH
+cat("\n--- Sensor PPG vs Samsung Watch ---\n")
 # Correlación de Pearson
 pearson_test <- cor.test(sensor_bpm, watch_bpm, method = "pearson")
 pearson_r <- pearson_test$estimate
@@ -29,12 +32,33 @@ cat(sprintf("Correlación de Pearson: r = %.4f (p = %.4f)\n", pearson_r, pearson
 r_squared <- pearson_r^2
 cat(sprintf("Coeficiente de determinación (R²): %.4f\n", r_squared))
 
+# COMPARACIÓN SENSOR vs OXÍMETRO
+cat("\n--- Sensor PPG vs Oxímetro ---\n")
+# Correlación de Pearson
+pearson_test_ox <- cor.test(sensor_bpm, oximeter_bpm, method = "pearson")
+pearson_r_ox <- pearson_test_ox$estimate
+pearson_p_ox <- pearson_test_ox$p.value
+
+cat(sprintf("Correlación de Pearson: r = %.4f (p = %.4f)\n", pearson_r_ox, pearson_p_ox))
+
+# Coeficiente de determinación
+r_squared_ox <- pearson_r_ox^2
+cat(sprintf("Coeficiente de determinación (R²): %.4f\n", r_squared_ox))
+
 # === MÉTRICAS DE ERROR ===
 cat("\n=== MÉTRICAS DE ERROR ===\n")
 
+# SENSOR vs WATCH
+cat("\n--- Sensor PPG vs Samsung Watch ---\n")
 # Error Cuadrático Medio (RMSE)
 rmse <- sqrt(mean((watch_bpm - sensor_bpm)^2))
 cat(sprintf("Error Cuadrático Medio (RMSE): %.2f BPM\n", rmse))
+
+# SENSOR vs OXÍMETRO
+cat("\n--- Sensor PPG vs Oxímetro ---\n")
+# Error Cuadrático Medio (RMSE)
+rmse_ox <- sqrt(mean((oximeter_bpm - sensor_bpm)^2))
+cat(sprintf("Error Cuadrático Medio (RMSE): %.2f BPM\n", rmse_ox))
 
 # === CREAR GRÁFICAS ELEGANTES ===
 
@@ -55,13 +79,13 @@ elegant_theme <- theme_minimal() +
     strip.text = element_text(size = 11, face = "bold", color = "grey30")
   )
 
-# 1. Diagrama de dispersión elegante
+# 1. Diagrama de dispersión elegante - Sensor vs Watch
 scatter_plot <- ggplot(combined_df, aes(x = sensor_ppg_bpm, y = samsung_watch_bpm)) +
   geom_point(alpha = 0.7, size = 3, color = "#2E86AB", stroke = 0.5) +
   geom_smooth(method = "lm", se = TRUE, color = "#E63946", fill = "#E63946", alpha = 0.2) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "#06D6A0", size = 1, alpha = 0.8) +
   labs(
-    title = sprintf("Correlación entre Sensores"),
+    title = sprintf("Correlación Sensor PPG vs Samsung Watch"),
     subtitle = sprintf("Pearson = %.3f, R² = %.3f", pearson_r, r_squared),
     x = "Sensor PPG (BPM)",
     y = "Samsung Watch 6 (BPM)"
@@ -73,24 +97,42 @@ scatter_plot <- ggplot(combined_df, aes(x = sensor_ppg_bpm, y = samsung_watch_bp
   scale_x_continuous(breaks = pretty_breaks(n = 6)) +
   scale_y_continuous(breaks = pretty_breaks(n = 6))
 
+# 1b. Diagrama de dispersión elegante - Sensor vs Oxímetro
+scatter_plot_ox <- ggplot(combined_df, aes(x = sensor_ppg_bpm, y = fingertip_oximeter)) +
+  geom_point(alpha = 0.7, size = 3, color = "#F77F00", stroke = 0.5) +
+  geom_smooth(method = "lm", se = TRUE, color = "#C1121F", fill = "#C1121F", alpha = 0.2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "#06D6A0", size = 1, alpha = 0.8) +
+  labs(
+    title = sprintf("Correlación Sensor PPG vs Oxímetro"),
+    subtitle = sprintf("Pearson = %.3f, R² = %.3f", pearson_r_ox, r_squared_ox),
+    x = "Sensor PPG (BPM)",
+    y = "Oxímetro Digital (BPM)"
+  ) +
+  elegant_theme +
+  annotate("text", x = min(sensor_bpm) + 2, y = max(oximeter_bpm) - 2, 
+           label = "Línea ideal (y=x)", color = "#06D6A0", size = 3.5, fontface = "italic") +
+  coord_equal(ratio = 1) +
+  scale_x_continuous(breaks = pretty_breaks(n = 6)) +
+  scale_y_continuous(breaks = pretty_breaks(n = 6))
+
 # 2. Series temporales elegante
 time_points <- seq(0, (length(sensor_bpm) - 1) * 2, by = 2)
 
 # Crear dataframe para series temporales
 time_series_df <- data.frame(
-  tiempo = rep(time_points, 2),
-  bpm = c(sensor_bpm, watch_bpm),
-  dispositivo = factor(rep(c("Sensor PPG", "Samsung Watch 6"), each = length(sensor_bpm)))
+  tiempo = rep(time_points, 3),
+  bpm = c(sensor_bpm, watch_bpm, oximeter_bpm),
+  dispositivo = factor(rep(c("Sensor PPG", "Samsung Watch 6", "Oxímetro Digital"), each = length(sensor_bpm)))
 )
 
 time_series_plot <- ggplot(time_series_df, aes(x = tiempo, y = bpm, color = dispositivo, shape = dispositivo)) +
   geom_line(size = 1, alpha = 0.8) +
   geom_point(size = 2.5, alpha = 0.9) +
-  scale_color_manual(values = c("Sensor PPG" = "#2E86AB", "Samsung Watch 6" = "#E63946")) +
-  scale_shape_manual(values = c("Sensor PPG" = 16, "Samsung Watch 6" = 17)) +
+  scale_color_manual(values = c("Sensor PPG" = "#2E86AB", "Samsung Watch 6" = "#E63946", "Oxímetro Digital" = "#F77F00")) +
+  scale_shape_manual(values = c("Sensor PPG" = 16, "Samsung Watch 6" = 17, "Oxímetro Digital" = 18)) +
   labs(
-    title = "Comparación Temporal",
-    subtitle = sprintf("RMSE: %.2f BPM", rmse),
+    title = "Comparación Temporal de los Tres Dispositivos",
+    subtitle = sprintf("RMSE Sensor-Watch: %.2f BPM | RMSE Sensor-Oxímetro: %.2f BPM", rmse, rmse_ox),
     x = "Tiempo (segundos)",
     y = "BPM",
     color = "Dispositivo",
@@ -104,12 +146,15 @@ time_series_plot <- ggplot(time_series_df, aes(x = tiempo, y = bpm, color = disp
     shape = guide_legend(override.aes = list(size = 3))
   )
 
-# Combinar ambas gráficas
-combined_plot <- grid.arrange(scatter_plot, time_series_plot, ncol = 2)
+# Combinar gráficas de dispersión
+scatter_combined <- grid.arrange(scatter_plot, scatter_plot_ox, ncol = 2)
 
-# === GRÁFICA ADICIONAL: ANÁLISIS BLAND-ALTMAN ===
+# Mostrar gráfica de series temporales
+print(time_series_plot)
 
-# Calcular diferencias y promedios para Bland-Altman
+# === ANÁLISIS BLAND-ALTMAN ===
+
+# Calcular diferencias y promedios para Bland-Altman (Sensor vs Watch)
 differences <- sensor_bpm - watch_bpm
 means <- (sensor_bpm + watch_bpm) / 2
 mean_diff <- mean(differences)
@@ -117,12 +162,13 @@ std_diff <- sd(differences)
 limits_of_agreement <- c(mean_diff - 1.96 * std_diff, mean_diff + 1.96 * std_diff)
 
 cat(sprintf("\n=== ANÁLISIS BLAND-ALTMAN ===\n"))
+cat(sprintf("\n--- Sensor PPG vs Samsung Watch ---\n"))
 cat(sprintf("Bias (diferencia promedio): %.2f BPM\n", mean_diff))
 cat(sprintf("Límites de concordancia (95%%): [%.2f, %.2f] BPM\n", 
             limits_of_agreement[1], limits_of_agreement[2]))
 cat(sprintf("Desviación estándar de diferencias: %.2f BPM\n", std_diff))
 
-# Crear dataframe para Bland-Altman
+# Crear dataframe para Bland-Altman (Sensor vs Watch)
 bland_altman_df <- data.frame(
   promedio = means,
   diferencia = differences
@@ -135,7 +181,7 @@ bland_altman_plot <- ggplot(bland_altman_df, aes(x = promedio, y = diferencia)) 
   geom_hline(yintercept = limits_of_agreement[2], color = "#E63946", linetype = "dashed", size = 1) +
   geom_hline(yintercept = 0, color = "#06D6A0", linetype = "dotted", size = 1) +
   labs(
-    title = "Análisis Bland-Altman",
+    title = "Análisis Bland-Altman: Sensor PPG vs Samsung Watch",
     subtitle = sprintf("Bias: %.2f BPM, LoA: ±%.2f BPM", mean_diff, 1.96 * std_diff),
     x = "Promedio de ambas mediciones (BPM)",
     y = "Diferencia (Sensor - Watch) (BPM)"
@@ -148,11 +194,51 @@ bland_altman_plot <- ggplot(bland_altman_df, aes(x = promedio, y = diferencia)) 
   annotate("text", x = max(means) - 2, y = limits_of_agreement[2] + 0.5, 
            label = sprintf("LoA: %.2f", limits_of_agreement[2]), color = "#E63946", size = 3)
 
-# Mostrar gráfica Bland-Altman
-print(bland_altman_plot)
+# Calcular diferencias y promedios para Bland-Altman (Sensor vs Oxímetro)
+differences_ox <- sensor_bpm - oximeter_bpm
+means_ox <- (sensor_bpm + oximeter_bpm) / 2
+mean_diff_ox <- mean(differences_ox)
+std_diff_ox <- sd(differences_ox)
+limits_of_agreement_ox <- c(mean_diff_ox - 1.96 * std_diff_ox, mean_diff_ox + 1.96 * std_diff_ox)
+
+cat(sprintf("\n--- Sensor PPG vs Oxímetro ---\n"))
+cat(sprintf("Bias (diferencia promedio): %.2f BPM\n", mean_diff_ox))
+cat(sprintf("Límites de concordancia (95%%): [%.2f, %.2f] BPM\n", 
+            limits_of_agreement_ox[1], limits_of_agreement_ox[2]))
+cat(sprintf("Desviación estándar de diferencias: %.2f BPM\n", std_diff_ox))
+
+# Crear dataframe para Bland-Altman (Sensor vs Oxímetro)
+bland_altman_df_ox <- data.frame(
+  promedio = means_ox,
+  diferencia = differences_ox
+)
+
+bland_altman_plot_ox <- ggplot(bland_altman_df_ox, aes(x = promedio, y = diferencia)) +
+  geom_point(alpha = 0.7, size = 3, color = "#F77F00") +
+  geom_hline(yintercept = mean_diff_ox, color = "#C1121F", size = 1) +
+  geom_hline(yintercept = limits_of_agreement_ox[1], color = "#C1121F", linetype = "dashed", size = 1) +
+  geom_hline(yintercept = limits_of_agreement_ox[2], color = "#C1121F", linetype = "dashed", size = 1) +
+  geom_hline(yintercept = 0, color = "#06D6A0", linetype = "dotted", size = 1) +
+  labs(
+    title = "Análisis Bland-Altman: Sensor PPG vs Oxímetro",
+    subtitle = sprintf("Bias: %.2f BPM, LoA: ±%.2f BPM", mean_diff_ox, 1.96 * std_diff_ox),
+    x = "Promedio de ambas mediciones (BPM)",
+    y = "Diferencia (Sensor - Oxímetro) (BPM)"
+  ) +
+  elegant_theme +
+  annotate("text", x = max(means_ox) - 2, y = mean_diff_ox + 0.5, 
+           label = sprintf("Bias: %.2f", mean_diff_ox), color = "#C1121F", size = 3.5) +
+  annotate("text", x = max(means_ox) - 2, y = limits_of_agreement_ox[1] - 0.5, 
+           label = sprintf("LoA: %.2f", limits_of_agreement_ox[1]), color = "#C1121F", size = 3) +
+  annotate("text", x = max(means_ox) - 2, y = limits_of_agreement_ox[2] + 0.5, 
+           label = sprintf("LoA: %.2f", limits_of_agreement_ox[2]), color = "#C1121F", size = 3)
+
+# Combinar ambos análisis Bland-Altman
+bland_altman_combined <- grid.arrange(bland_altman_plot, bland_altman_plot_ox, ncol = 2)
 
 # === RESUMEN ESTADÍSTICO FINAL ===
 cat("\n=== RESUMEN ESTADÍSTICO ===\n")
 cat(sprintf("Datos analizados: %d pares de mediciones\n", length(sensor_bpm)))
 cat(sprintf("Sensor PPG - Media: %.1f BPM, SD: %.1f BPM\n", mean(sensor_bpm), sd(sensor_bpm)))
 cat(sprintf("Samsung Watch - Media: %.1f BPM, SD: %.1f BPM\n", mean(watch_bpm), sd(watch_bpm)))
+cat(sprintf("Oxímetro Digital - Media: %.1f BPM, SD: %.1f BPM\n", mean(oximeter_bpm), sd(oximeter_bpm)))
