@@ -50,12 +50,12 @@ class BPMCalculationThread(QThread):
             self.progress_updated.emit(5)
             
             # Crear calculador BPM offline
-            bmp_calculator = BPMOfflineCalculation(fs=self.fs)
+            bpm_calculator = BPMOfflineCalculation(fs=self.fs)
             
             self.progress_updated.emit(20)
             
             # Calcular evolución de BPM
-            result = bmp_calculator.calculate_bmp_evolution(
+            result = bpm_calculator.calculate_bpm_evolution(
                 self.filtered_ppg_data, 
                 self.ms_data
             )
@@ -63,7 +63,7 @@ class BPMCalculationThread(QThread):
             self.progress_updated.emit(100)
             
             # Emitir resultado
-            self.bmp_calculated.emit(result)
+            self.bpm_calculated.emit(result)
             
         except Exception as e:
             self.error_occurred.emit(f"Error calculando BPM: {str(e)}")

@@ -1195,7 +1195,7 @@ class BPMOfflineCalculation:
         print(f"  - Extensión por artefactos: {self.artifact_extension_sec}s")
         print(f"  - Frecuencia de muestreo: {self.fs} Hz")
     
-    def calculate_bmp_evolution(self, filtered_ppg_data, ms_data):
+    def calculate_bpm_evolution(self, filtered_ppg_data, ms_data):
         """
         Calcular evolución de BPM a lo largo de toda la señal filtrada.
         
@@ -1206,7 +1206,7 @@ class BPMOfflineCalculation:
         Returns:
             dict: {
                 'times_sec': array con tiempos en segundos,
-                'bmp_values': array con valores BPM suavizados,
+                'bpm_values': array con valores BPM suavizados,
                 'confidence_values': array con valores de confianza,
                 'metadata': dict con información del procesamiento
             }
@@ -1224,8 +1224,8 @@ class BPMOfflineCalculation:
         total_duration = time_sec[-1] - time_sec[0]
         
         # Preparar arrays de resultado
-        bmp_times = []
-        bmp_values = []
+        bpm_times = []
+        bpm_values = []
         confidence_values = []
         
         # Empezar después de la ventana inicial
@@ -1247,57 +1247,57 @@ class BPMOfflineCalculation:
             
             if len(window_ppg) > 0:
                 # Calcular BPM para esta ventana
-                bmp_result = self._calculate_bmp_for_window(window_ppg, window_time)
+                bpm_result = self._calculate_bpm_for_window(window_ppg, window_time)
                 
-                if bmp_result['bmp'] is not None:
-                    bmp_times.append(current_time)
-                    bmp_values.append(bmp_result['bmp'])
-                    confidence_values.append(bmp_result['confidence'])
+                if bpm_result['bpm'] is not None:
+                    bpm_times.append(current_time)
+                    bpm_values.append(bpm_result['bpm'])
+                    confidence_values.append(bpm_result['confidence'])
                 else:
                     # Extender ventana por artefactos
                     extended_result = self._calculate_with_extended_window(
                         time_sec, filtered_ppg_data, current_time, window_start, window_end
                     )
-                    if extended_result['bmp'] is not None:
-                        bmp_times.append(current_time)
-                        bmp_values.append(extended_result['bmp'])
+                    if extended_result['bpm'] is not None:
+                        bpm_times.append(current_time)
+                        bpm_values.append(extended_result['bpm'])
                         confidence_values.append(extended_result['confidence'])
             
             # Avanzar en el tiempo
             current_time += self.calculation_interval_sec
         
         # Aplicar suavizado a la serie temporal de BPM
-        if len(bmp_values) > 5:
-            bmp_smoothed = self._smooth_bmp_series(np.array(bmp_values))
+        if len(bpm_values) > 5:
+            bpm_smoothed = self._smooth_bpm_series(np.array(bpm_values))
         else:
-            bmp_smoothed = np.array(bmp_values)
+            bpm_smoothed = np.array(bpm_values)
         
         # Preparar resultado
         result = {
-            'times_sec': np.array(bmp_times),
-            'bmp_values': bmp_smoothed,
+            'times_sec': np.array(bpm_times),
+            'bpm_values': bpm_smoothed,
             'confidence_values': np.array(confidence_values),
             'metadata': {
-                'total_points': len(bmp_times),
+                'total_points': len(bpm_times),
                 'duration_sec': total_duration,
                 'window_size_sec': self.window_size_sec,
                 'calculation_interval_sec': self.calculation_interval_sec,
-                'mean_bmp': np.mean(bmp_smoothed) if len(bmp_smoothed) > 0 else None,
-                'std_bmp': np.std(bmp_smoothed) if len(bmp_smoothed) > 0 else None
+                'mean_bpm': np.mean(bpm_smoothed) if len(bpm_smoothed) > 0 else None,
+                'std_bpm': np.std(bpm_smoothed) if len(bpm_smoothed) > 0 else None
             }
         }
         
-        print(f"✅ BPM evolution calculado: {len(bmp_times)} puntos")
-        if result['metadata']['mean_bmp']:
-            print(f"  - BPM promedio: {result['metadata']['mean_bmp']:.1f} ± {result['metadata']['std_bmp']:.1f}")
+        print(f"✅ BPM evolution calculado: {len(bpm_times)} puntos")
+        if result['metadata']['mean_bpm']:
+            print(f"  - BPM promedio: {result['metadata']['mean_bpm']:.1f} ± {result['metadata']['std_bpm']:.1f}")
         
         return result
     
-    def _calculate_bmp_for_window(self, ppg_window, time_window):
+    def _calculate_bpm_for_window(self, ppg_window, time_window):
         """Calcular BPM para una ventana específica"""
         try:
             if len(ppg_window) < self.fs * 5:  # Mínimo 5 segundos
-                return {'bmp': None, 'confidence': 0.0}
+                return {'bpm': None, 'confidence': 0.0}
             
             # Detección de picos con parámetros optimizados
             # Distancia mínima entre picos (0.4s = 150 BPM máximo)
@@ -1314,7 +1314,7 @@ class BPMOfflineCalculation:
             )
             
             if len(peaks) < 3:
-                return {'bmp': None, 'confidence': 0.0}
+                return {'bpm': None, 'confidence': 0.0}
             
             # Calcular intervalos RR en segundos
             peak_times = time_window[peaks[0]] + (peaks / self.fs)
@@ -1324,24 +1324,24 @@ class BPMOfflineCalculation:
             valid_rr = rr_intervals[(rr_intervals >= 0.4) & (rr_intervals <= 1.5)]
             
             if len(valid_rr) < 2:
-                return {'bmp': None, 'confidence': 0.0}
+                return {'bpm': None, 'confidence': 0.0}
             
             # Calcular BPM promedio
             mean_rr = np.mean(valid_rr)
-            bmp = 60.0 / mean_rr
+            bpm = 60.0 / mean_rr
             
             # Validar rango fisiológico
-            if bmp < 40 or bmp > 120:
-                return {'bmp': None, 'confidence': 0.0}
+            if bpm < 40 or bpm > 120:
+                return {'bpm': None, 'confidence': 0.0}
             
             # Calcular confianza basada en variabilidad
             cv = np.std(valid_rr) / mean_rr  # Coeficiente de variación
             confidence = max(0.0, min(1.0, 1.0 - cv * 3))  # Normalizar
             
-            return {'bmp': bmp, 'confidence': confidence}
+            return {'bpm': bpm, 'confidence': confidence}
             
         except Exception as e:
-            return {'bmp': None, 'confidence': 0.0}
+            return {'bpm': None, 'confidence': 0.0}
     
     def _calculate_with_extended_window(self, full_time, full_ppg, current_time, original_start, original_end):
         """Calcular BPM con ventana extendida para manejar artefactos"""
@@ -1359,23 +1359,23 @@ class BPMOfflineCalculation:
             extended_ppg = full_ppg[mask]
             extended_time = full_time[mask]
             
-            return self._calculate_bmp_for_window(extended_ppg, extended_time)
+            return self._calculate_bpm_for_window(extended_ppg, extended_time)
             
         except Exception as e:
-            return {'bmp': None, 'confidence': 0.0}
+            return {'bpm': None, 'confidence': 0.0}
     
-    def _smooth_bmp_series(self, bmp_values):
+    def _smooth_bpm_series(self, bpm_values):
         """Aplicar suavizado a la serie temporal de BPM"""
-        if len(bmp_values) < 5:
-            return bmp_values
+        if len(bpm_values) < 5:
+            return bpm_values
         
         # Usar filtro de media móvil con ventana de 5 puntos
         try:
             from scipy.ndimage import uniform_filter1d
-            return uniform_filter1d(bmp_values, size=5, mode='nearest')
+            return uniform_filter1d(bpm_values, size=5, mode='nearest')
         except:
             # Fallback: media móvil simple
-            smoothed = np.copy(bmp_values)
-            for i in range(2, len(bmp_values) - 2):
-                smoothed[i] = np.mean(bmp_values[i-2:i+3])
+            smoothed = np.copy(bpm_values)
+            for i in range(2, len(bpm_values) - 2):
+                smoothed[i] = np.mean(bpm_values[i-2:i+3])
             return smoothed
