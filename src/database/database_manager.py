@@ -671,6 +671,44 @@ class DatabaseManager:
     
     @staticmethod
     @secure_connection
+    def update_session_comments(
+        session_id: int,
+        comentarios: Optional[str] = None,
+        conn=None
+    ) -> bool:
+        """
+        Actualiza únicamente los comentarios de una sesión
+        Retorna: True si la actualización fue exitosa
+        """
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE sesiones SET comentarios = ? WHERE id = ?",
+            (comentarios, session_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    
+    @staticmethod
+    @secure_connection
+    def update_session_objective(
+        session_id: int,
+        objetivo: Optional[str] = None,
+        conn=None
+    ) -> bool:
+        """
+        Actualiza únicamente el objetivo de una sesión
+        Retorna: True si la actualización fue exitosa
+        """
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE sesiones SET objetivo = ? WHERE id = ?",
+            (objetivo, session_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    
+    @staticmethod
+    @secure_connection
     def delete_session(session_id: int, conn=None) -> bool:
         """
         Elimina una sesión de la base de datos

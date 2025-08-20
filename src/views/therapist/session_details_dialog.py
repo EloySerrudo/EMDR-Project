@@ -6,7 +6,7 @@ import numpy as np
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QApplication, QMessageBox, QFrame, QGroupBox, QDialog, QFormLayout,
-    QSlider, QScrollArea, QGridLayout, QSpinBox
+    QSlider, QScrollArea, QGridLayout, QSpinBox, QRadioButton, QButtonGroup
 )
 from PySide6.QtCore import Qt, Signal
 import pyqtgraph as pg
@@ -52,10 +52,12 @@ class SessionDetailsDialog(QDialog):
         self.sud_intermedio_field = None
         self.sud_final_field = None
         self.voc_field = None
+        self.comentarios_field = None
         
         # Variables para botones de edición
         self.edit_button = None
         self.save_button = None
+        self.edit_session_type_button = None
         
         self.setWindowTitle("Detalles de la Sesión")
         self.resize(900, 600)
@@ -251,7 +253,7 @@ class SessionDetailsDialog(QDialog):
         title.setFrameShape(QFrame.StyledPanel)
         title.setStyleSheet("""
             QLabel {
-                font-size: 18px; 
+                font-size: 16px; 
                 font-weight: bold; 
                 color: #00A99D; 
                 padding: 0px;
@@ -260,26 +262,89 @@ class SessionDetailsDialog(QDialog):
             }
         """)
         
+        # Layout principal vertical para las dos filas
         title_layout = QVBoxLayout(title)
-        title_layout.setContentsMargins(5, 0, 5, 0)
-        title_layout.setSpacing(5)
+        title_layout.setContentsMargins(5, 10, 5, 10)
+        title_layout.setSpacing(10)
+
+        # PRIMERA FILA - Información básica
+        first_row_layout = QHBoxLayout()
+        first_row_layout.setSpacing(15)
 
         patient_name_text = f"Paciente: {self.patient_data.get('nombre', '')} {self.patient_data.get('apellido_paterno', '')} {self.patient_data.get('apellido_materno', '')}"
         patient_name = QLabel(patient_name_text)
         patient_name.setAlignment(Qt.AlignCenter)
-        title_layout.addWidget(patient_name)
+        first_row_layout.addWidget(patient_name)
         
-        sesion = QLabel(f"Detalles de la Sesión #{self.session_id}")
+        # Separador visual
+        separator1 = QLabel("|")
+        separator1.setStyleSheet("color: #555555; font-size: 16px;")
+        first_row_layout.addWidget(separator1)
+        
+        sesion = QLabel(f"Sesión #{self.session_id}")
         sesion.setAlignment(Qt.AlignCenter)
-        title_layout.addWidget(sesion)
+        first_row_layout.addWidget(sesion)
+        
+        # Separador visual
+        separator2 = QLabel("|")
+        separator2.setStyleSheet("color: #555555; font-size: 16px;")
+        first_row_layout.addWidget(separator2)
         
         fecha, hora = self.format_datetime_string(self.session_data.get('fecha'))
-        fecha_label = QLabel(f"Fecha: {fecha}")
-        hora_label = QLabel(f"Hora: {hora}")
+        fecha_label = QLabel(f"{fecha}")
         fecha_label.setAlignment(Qt.AlignCenter)
+        first_row_layout.addWidget(fecha_label)
+        
+        # Separador visual
+        separator3 = QLabel("|")
+        separator3.setStyleSheet("color: #555555; font-size: 16px;")
+        first_row_layout.addWidget(separator3)
+        
+        hora_label = QLabel(f"{hora}")
         hora_label.setAlignment(Qt.AlignCenter)
-        title_layout.addWidget(fecha_label)
-        title_layout.addWidget(hora_label)
+        first_row_layout.addWidget(hora_label)
+        
+        # Añadir primera fila al layout principal
+        title_layout.addLayout(first_row_layout)
+        
+        # SEGUNDA FILA - Objetivo de la sesión
+        second_row_layout = QHBoxLayout()
+        second_row_layout.setSpacing(10)
+        
+        objetivo_text = self.session_data.get('objetivo', '')
+        if not objetivo_text or objetivo_text.strip() == '':
+            objetivo_text = "Sin objetivo registrado"
+            objetivo_style = """
+                QLabel {
+                    font-size: 14px; 
+                    font-weight: normal; 
+                    color: #AAAAAA; 
+                    padding: 0px;
+                    background: transparent;
+                    border: none;
+                    font-style: italic;
+                }
+            """
+        else:
+            objetivo_style = """
+                QLabel {
+                    font-size: 14px; 
+                    font-weight: normal; 
+                    color: #CCCCCC; 
+                    padding: 0px;
+                    background: transparent;
+                    border: none;
+                }
+            """
+        
+        objetivo_label = QLabel(f"Objetivo: {objetivo_text}")
+        objetivo_label.setAlignment(Qt.AlignCenter)
+        objetivo_label.setStyleSheet(objetivo_style)
+        objetivo_label.setWordWrap(True)  # Permitir salto de línea si es muy largo
+        second_row_layout.addWidget(objetivo_label)
+        
+        # Añadir segunda fila al layout principal
+        title_layout.addLayout(second_row_layout)
         
         main_layout.addWidget(title)
 
@@ -291,8 +356,8 @@ class SessionDetailsDialog(QDialog):
                 font-size: 14px;
                 border: 2px solid #00A99D;
                 border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
+                margin-top: 0px;
+                padding-top: 0px;
                 background-color: transparent;
                 color: white;
             }
@@ -304,20 +369,73 @@ class SessionDetailsDialog(QDialog):
             }
         """)
         
-        # Crear layout horizontal para los campos clínicos
-        clinical_layout = QHBoxLayout(clinical_group)
-        clinical_layout.setSpacing(15)
+        # Crear layout vertical principal para los campos clínicos
+        clinical_main_layout = QVBoxLayout(clinical_group)
+        clinical_main_layout.setSpacing(10)
+        
+        # Layout horizontal para SUD y VOC
+        clinical_horizontal_layout = QHBoxLayout()
+        clinical_horizontal_layout.setSpacing(15)
         
         # Crear campos de datos clínicos en disposición horizontal
         if self.session_data:
-            self.sud_inicial_field = self.create_clinical_field(clinical_layout, "SUD Inicial:", 
+            self.sud_inicial_field = self.create_clinical_field(clinical_horizontal_layout, "SUD Inicial:", 
                                                  self.session_data.get('sud_inicial'))
-            self.sud_intermedio_field = self.create_clinical_field(clinical_layout, "SUD Intermedio:", 
+            self.sud_intermedio_field = self.create_clinical_field(clinical_horizontal_layout, "SUD Intermedio:", 
                                                  self.session_data.get('sud_interm'))
-            self.sud_final_field = self.create_clinical_field(clinical_layout, "SUD Final:", 
+            self.sud_final_field = self.create_clinical_field(clinical_horizontal_layout, "SUD Final:", 
                                                  self.session_data.get('sud_final'))
-            self.voc_field = self.create_clinical_field(clinical_layout, "VOC:", 
+            self.voc_field = self.create_clinical_field(clinical_horizontal_layout, "VOC:", 
                                                  self.session_data.get('voc'))
+
+        clinical_main_layout.addLayout(clinical_horizontal_layout)
+        
+        # Campo de comentarios en una segunda fila
+        comentarios_layout = QHBoxLayout()
+        comentarios_layout.setSpacing(10)
+        
+        # Label de comentarios
+        comentarios_label = QLabel("Comentarios:")
+        comentarios_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-weight: bold;
+                background: transparent;
+                font-size: 14px;
+                text-align: center;
+            }
+        """)
+        comentarios_label.setAlignment(Qt.AlignCenter)
+        comentarios_label.setFixedWidth(100)  # Ancho fijo similar a otros labels
+        
+        # Campo de texto para comentarios
+        self.comentarios_field = QLineEdit()
+        self.comentarios_field.setReadOnly(True)
+        
+        # Establecer valor inicial
+        comentarios_value = self.session_data.get('comentarios') if self.session_data else None
+        if comentarios_value:
+            self.comentarios_field.setText(str(comentarios_value))
+        else:
+            self.comentarios_field.setText("Sin comentarios")
+            
+        # Estilo inicial para modo solo lectura
+        self.comentarios_field.setStyleSheet("""
+            QLineEdit {
+                background-color: #323232;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 8px;
+                font-weight: normal;
+                color: white;
+                font-size: 13px;
+            }
+        """)
+        
+        comentarios_layout.addWidget(comentarios_label)
+        comentarios_layout.addWidget(self.comentarios_field)
+        
+        clinical_main_layout.addLayout(comentarios_layout)
 
         main_layout.addWidget(clinical_group)
 
@@ -426,6 +544,35 @@ class SessionDetailsDialog(QDialog):
         self.save_button.clicked.connect(self.save_changes)
         self.save_button.setEnabled(False)  # Inicialmente deshabilitado
         
+        # Botón para editar tipo de sesión (inicialmente deshabilitado)
+        self.edit_session_type_button = QPushButton("Editar Tipo de Sesión")
+        self.edit_session_type_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00A99D;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #00A99D;
+            }
+            QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+            QPushButton:disabled {
+                background-color: #555555;
+                border: 2px solid #555555;
+                color: #AAAAAA;
+            }
+        """)
+        self.edit_session_type_button.clicked.connect(self.open_session_type_editor)
+        self.edit_session_type_button.setEnabled(False)  # Inicialmente deshabilitado
+        
         # Botón para cerrar
         close_button = QPushButton("Cerrar")
         close_button.setStyleSheet("""
@@ -451,6 +598,7 @@ class SessionDetailsDialog(QDialog):
         
         button_layout.addWidget(self.edit_button)
         button_layout.addWidget(self.save_button)
+        button_layout.addWidget(self.edit_session_type_button)
         button_layout.addStretch()
         button_layout.addWidget(close_button)
 
@@ -634,14 +782,13 @@ class SessionDetailsDialog(QDialog):
             nav_frame = QFrame()
             nav_frame.setStyleSheet("""
                 QFrame {
-                    background-color: #2A2A2A;
+                    background-color: transparent;
                     border: 1px solid #444444;
-                    border-radius: 5px;
-                    padding: 10px;
+                    padding: 0px;
                 }
             """)
             nav_layout = QHBoxLayout(nav_frame)
-            nav_layout.setContentsMargins(15, 10, 15, 10)
+            nav_layout.setContentsMargins(15, 0, 15, 0)
             
             # Control de ventana de tiempo
             window_label = QLabel("Ventana:")
@@ -1105,9 +1252,32 @@ class SessionDetailsDialog(QDialog):
                 }
             """)
         
+        # Habilitar campo de comentarios
+        if self.comentarios_field:
+            self.comentarios_field.setReadOnly(False)
+            # Limpiar "Sin comentarios" cuando se entra en modo edición
+            if self.comentarios_field.text() == "Sin comentarios":
+                self.comentarios_field.setText("")
+            self.comentarios_field.setStyleSheet("""
+                QLineEdit {
+                    background-color: #424242;
+                    border: 2px solid #00A99D;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-weight: normal;
+                    color: white;
+                    font-size: 13px;
+                }
+                QLineEdit:focus {
+                    background-color: #4a4a4a;
+                    border: 2px solid #00C2B3;
+                }
+            """)
+        
         # Cambiar estado de botones
         self.edit_button.setEnabled(False)
         self.save_button.setEnabled(True)
+        self.edit_session_type_button.setEnabled(True)
     
     def save_changes(self):
         """Guarda los cambios en la base de datos"""
@@ -1118,8 +1288,18 @@ class SessionDetailsDialog(QDialog):
             sud_final = self.get_field_value(self.sud_final_field)
             voc = self.get_field_value(self.voc_field)
             
-            # Actualizar en la base de datos
-            success = DatabaseManager.update_session_clinical_data(
+            # Obtener comentarios
+            comentarios_text = ""
+            if self.comentarios_field:
+                comentarios_text = self.comentarios_field.text().strip()
+                # Si está vacío o es "Sin comentarios", guardar como None
+                if comentarios_text == "" or comentarios_text == "Sin comentarios":
+                    comentarios_text = None
+            else:
+                comentarios_text = None
+            
+            # Actualizar datos clínicos en la base de datos
+            success_clinical = DatabaseManager.update_session_clinical_data(
                 session_id=self.session_id,
                 sud_inicial=sud_inicial,
                 sud_intermedio=sud_intermedio,
@@ -1127,14 +1307,21 @@ class SessionDetailsDialog(QDialog):
                 voc=voc
             )
             
-            if success:
-                QMessageBox.information(self, "Éxito", "Los datos clínicos han sido actualizados correctamente.")
+            # Actualizar comentarios en la base de datos
+            success_comments = DatabaseManager.update_session_comments(
+                session_id=self.session_id,
+                comentarios=comentarios_text
+            )
+            
+            if success_clinical and success_comments:
+                QMessageBox.information(self, "Éxito", "Los datos clínicos y comentarios han sido actualizados correctamente.")
                 
                 # Actualizar datos locales
                 self.session_data['sud_inicial'] = sud_inicial
                 self.session_data['sud_interm'] = sud_intermedio
                 self.session_data['sud_final'] = sud_final
                 self.session_data['voc'] = voc
+                self.session_data['comentarios'] = comentarios_text
                 
                 # Restaurar modo de solo lectura
                 self.restore_readonly_mode()
@@ -1198,9 +1385,61 @@ class SessionDetailsDialog(QDialog):
             self.voc_field.setReadOnly(True)
             self.voc_field.setStyleSheet(readonly_style)
         
+        # Restaurar campo de comentarios
+        if self.comentarios_field:
+            self.comentarios_field.setReadOnly(True)
+            # Si el campo está vacío, mostrar "Sin comentarios"
+            if self.comentarios_field.text().strip() == "":
+                self.comentarios_field.setText("Sin comentarios")
+            
+            readonly_style_comments = """
+                QLineEdit {
+                    background-color: #323232;
+                    border: 1px solid #555555;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-weight: normal;
+                    color: white;
+                    font-size: 13px;
+                }
+            """
+            self.comentarios_field.setStyleSheet(readonly_style_comments)
+        
         # Cambiar estado de botones
         self.edit_button.setEnabled(True)
         self.save_button.setEnabled(False)
+        self.edit_session_type_button.setEnabled(False)
+
+    def open_session_type_editor(self):
+        """Abre el diálogo para editar el tipo de sesión (objetivo)"""
+        current_objetivo = self.session_data.get('objetivo', '')
+        
+        # Crear y abrir el diálogo
+        dialog = SessionTypeEditorDialog(current_objetivo, self)
+        if dialog.exec() == QDialog.Accepted:
+            # Obtener el nuevo objetivo
+            new_objetivo = dialog.get_selected_session_type()
+            
+            # Actualizar en la base de datos
+            success = DatabaseManager.update_session_objective(self.session_id, new_objetivo)
+            
+            if success:
+                # Actualizar datos locales
+                self.session_data['objetivo'] = new_objetivo
+                
+                # Actualizar la interfaz - recargar la ventana con los nuevos datos
+                self.refresh_objective_display()
+                
+                QMessageBox.information(self, "Éxito", "El tipo de sesión ha sido actualizado correctamente.")
+            else:
+                QMessageBox.critical(self, "Error", "No se pudo actualizar el tipo de sesión en la base de datos.")
+    
+    def refresh_objective_display(self):
+        """Actualiza la visualización del objetivo en la interfaz"""
+        # Buscar y actualizar el label del objetivo en la segunda fila
+        objetivo_text = self.session_data.get('objetivo', '')
+        if not objetivo_text or objetivo_text.strip() == '':
+            objetivo_text = "Sin objetivo registrado"
 
     def format_datetime_string(self, datetime_str):
         """
@@ -1219,6 +1458,310 @@ class SessionDetailsDialog(QDialog):
             return date, time
         except:
             return 'N/A', 'N/A'
+
+
+class SessionTypeEditorDialog(QDialog):
+    """Diálogo para editar el tipo de sesión (objetivo)"""
+    
+    def __init__(self, current_objetivo, parent=None):
+        super().__init__(parent)
+        self.current_objetivo = current_objetivo
+        
+        self.setWindowTitle("Editar Tipo de Sesión")
+        self.resize(500, 350)
+        self.setModal(True)
+        
+        self.setup_ui()
+        
+    def setup_ui(self):
+        """Configura la interfaz del diálogo"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # === TIPO DE SESIÓN ===
+        session_type_group = QGroupBox("Tipo de Sesión")
+        session_type_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid #00A99D;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                background-color: transparent;
+                color: white;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 10px;
+                color: #00A99D;
+            }
+        """)
+        
+        session_type_layout = QVBoxLayout(session_type_group)
+        
+        # Crear grupo de botones radio
+        self.session_type_group = QButtonGroup(self)
+        
+        # Opción 1: Desensibilización de recuerdo traumático
+        self.radio_desensitization = QRadioButton("Desensibilización de recuerdo traumático")
+        self.radio_desensitization.setStyleSheet("""
+            QRadioButton {
+                color: white;
+                font-size: 13px;
+                background: transparent;
+                spacing: 8px;
+            }
+            QRadioButton::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QRadioButton::indicator:unchecked {
+                border: 2px solid #555555;
+                border-radius: 8px;
+                background-color: #323232;
+            }
+            QRadioButton::indicator:checked {
+                border: 2px solid #00A99D;
+                border-radius: 8px;
+                background-color: #00A99D;
+            }
+        """)
+        self.session_type_group.addButton(self.radio_desensitization, 1)
+        session_type_layout.addWidget(self.radio_desensitization)
+        
+        # Opción 2: Instalación de creencia positiva
+        self.radio_positive_belief = QRadioButton("Instalación de creencia positiva")
+        self.radio_positive_belief.setStyleSheet("""
+            QRadioButton {
+                color: white;
+                font-size: 13px;
+                background: transparent;
+                spacing: 8px;
+            }
+            QRadioButton::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QRadioButton::indicator:unchecked {
+                border: 2px solid #555555;
+                border-radius: 8px;
+                background-color: #323232;
+            }
+            QRadioButton::indicator:checked {
+                border: 2px solid #00A99D;
+                border-radius: 8px;
+                background-color: #00A99D;
+            }
+        """)
+        self.session_type_group.addButton(self.radio_positive_belief, 2)
+        session_type_layout.addWidget(self.radio_positive_belief)
+        
+        # Opción 3: Regulación emocional / Ansiedad
+        self.radio_emotional_regulation = QRadioButton("Regulación emocional / Ansiedad")
+        self.radio_emotional_regulation.setStyleSheet("""
+            QRadioButton {
+                color: white;
+                font-size: 13px;
+                background: transparent;
+                spacing: 8px;
+            }
+            QRadioButton::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QRadioButton::indicator:unchecked {
+                border: 2px solid #555555;
+                border-radius: 8px;
+                background-color: #323232;
+            }
+            QRadioButton::indicator:checked {
+                border: 2px solid #00A99D;
+                border-radius: 8px;
+                background-color: #00A99D;
+            }
+        """)
+        self.session_type_group.addButton(self.radio_emotional_regulation, 3)
+        session_type_layout.addWidget(self.radio_emotional_regulation)
+        
+        # Opción 4: Otro (con campo de texto)
+        other_layout = QHBoxLayout()
+        
+        self.radio_other = QRadioButton("Otro:")
+        self.radio_other.setStyleSheet("""
+            QRadioButton {
+                color: white;
+                font-size: 13px;
+                background: transparent;
+                spacing: 8px;
+            }
+            QRadioButton::indicator {
+                width: 16px;
+                height: 16px;
+            }
+            QRadioButton::indicator:unchecked {
+                border: 2px solid #555555;
+                border-radius: 8px;
+                background-color: #323232;
+            }
+            QRadioButton::indicator:checked {
+                border: 2px solid #00A99D;
+                border-radius: 8px;
+                background-color: #00A99D;
+            }
+        """)
+        self.session_type_group.addButton(self.radio_other, 4)
+        
+        self.other_text = QLineEdit()
+        self.other_text.setPlaceholderText("Especifique el tipo de sesión...")
+        self.other_text.setStyleSheet("""
+            QLineEdit {
+                padding: 6px;
+                border: 2px solid #555555;
+                border-radius: 4px;
+                font-size: 12px;
+                background-color: #323232;
+                color: white;
+            }
+            QLineEdit:focus {
+                border: 2px solid #00A99D;
+            }
+            QLineEdit::placeholder {
+                color: #AAAAAA;
+            }
+        """)
+        self.other_text.setEnabled(False)  # Inicialmente deshabilitado
+        
+        # Conectar el radio button "Otro" para habilitar/deshabilitar el campo de texto
+        self.radio_other.toggled.connect(self.on_other_toggled)
+        
+        other_layout.addWidget(self.radio_other)
+        other_layout.addWidget(self.other_text)
+        
+        session_type_layout.addLayout(other_layout)
+        
+        # Seleccionar la opción actual
+        self.set_current_selection()
+        
+        layout.addWidget(session_type_group)
+        
+        # === BOTONES DE ACCIÓN ===
+        button_layout = QHBoxLayout()
+        
+        # Botón para guardar
+        save_button = QPushButton("Guardar")
+        save_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00A99D;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #00A99D;
+            }
+            QPushButton:hover {
+                background-color: #00C2B3;
+                border: 2px solid #00C2B3;
+            }
+            QPushButton:pressed {
+                background-color: #008C82;
+                border: 2px solid #008C82;
+            }
+        """)
+        save_button.clicked.connect(self.accept)
+        
+        # Botón para cancelar
+        cancel_button = QPushButton("Cancelar")
+        cancel_button.setStyleSheet("""
+            QPushButton {
+                background-color: #424242;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+                border: 2px solid #424242;
+            }
+            QPushButton:hover {
+                background-color: #555555;
+                border: 2px solid #555555;
+            }
+            QPushButton:pressed {
+                background-color: #333333;
+                border: 2px solid #333333;
+            }
+        """)
+        cancel_button.clicked.connect(self.reject)
+        
+        button_layout.addWidget(save_button)
+        button_layout.addStretch()
+        button_layout.addWidget(cancel_button)
+        
+        layout.addStretch()
+        layout.addLayout(button_layout)
+        
+        # Estilo global del diálogo
+        self.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                          stop: 0 #323232,
+                                          stop: 0.3 #2c2c2c,
+                                          stop: 0.6 #252525,
+                                          stop: 0.8 #1a1a1a,
+                                          stop: 1 #000000);
+                color: #FFFFFF;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+        """)
+    
+    def set_current_selection(self):
+        """Establece la selección actual basada en el objetivo existente"""
+        if not self.current_objetivo:
+            self.radio_desensitization.setChecked(True)
+            return
+            
+        objetivo_lower = self.current_objetivo.lower()
+        
+        if "desensibilización" in objetivo_lower or "traumático" in objetivo_lower:
+            self.radio_desensitization.setChecked(True)
+        elif "instalación" in objetivo_lower or "positiva" in objetivo_lower or "creencia" in objetivo_lower:
+            self.radio_positive_belief.setChecked(True)
+        elif "regulación" in objetivo_lower or "emocional" in objetivo_lower or "ansiedad" in objetivo_lower:
+            self.radio_emotional_regulation.setChecked(True)
+        else:
+            # Es un tipo personalizado
+            self.radio_other.setChecked(True)
+            self.other_text.setText(self.current_objetivo)
+            self.other_text.setEnabled(True)
+    
+    def on_other_toggled(self, checked):
+        """Habilita o deshabilita el campo de texto cuando se selecciona 'Otro'"""
+        self.other_text.setEnabled(checked)
+        if checked:
+            self.other_text.setFocus()
+        else:
+            self.other_text.clear()
+    
+    def get_selected_session_type(self):
+        """Obtiene el tipo de sesión seleccionado"""
+        selected_button = self.session_type_group.checkedButton()
+        selected_id = self.session_type_group.id(selected_button)
+        
+        if selected_id == 1:
+            return "Desensibilización de recuerdo traumático"
+        elif selected_id == 2:
+            return "Instalación de creencia positiva"
+        elif selected_id == 3:
+            return "Regulación emocional / Ansiedad"
+        elif selected_id == 4:
+            # Opción "Otro"
+            other_text = self.other_text.text().strip()
+            return other_text if other_text else "Sin especificar"
+        else:
+            return "Desensibilización de recuerdo traumático"  # Por defecto
     
     
 if __name__ == "__main__":
