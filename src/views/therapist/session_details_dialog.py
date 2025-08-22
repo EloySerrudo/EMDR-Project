@@ -291,7 +291,7 @@ class SessionDetailsDialog(QDialog):
         first_row_layout.addWidget(separator2)
         
         fecha, hora = self.format_datetime_string(self.session_data.get('fecha'))
-        fecha_label = QLabel(f"{fecha}")
+        fecha_label = QLabel(f"Fecha: {fecha}")
         fecha_label.setAlignment(Qt.AlignCenter)
         first_row_layout.addWidget(fecha_label)
         
@@ -299,8 +299,8 @@ class SessionDetailsDialog(QDialog):
         separator3 = QLabel("|")
         separator3.setStyleSheet("color: #555555; font-size: 16px;")
         first_row_layout.addWidget(separator3)
-        
-        hora_label = QLabel(f"{hora}")
+
+        hora_label = QLabel(f"Hora: {hora}")
         hora_label.setAlignment(Qt.AlignCenter)
         first_row_layout.addWidget(hora_label)
         
@@ -329,8 +329,8 @@ class SessionDetailsDialog(QDialog):
             objetivo_style = """
                 QLabel {
                     font-size: 14px; 
-                    font-weight: normal; 
-                    color: #CCCCCC; 
+                    font-weight: bold; 
+                    color: #00A99D; 
                     padding: 0px;
                     background: transparent;
                     border: none;

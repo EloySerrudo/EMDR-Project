@@ -876,7 +876,7 @@ class EMDRControlPanel(QMainWindow):
         therapist_label.setStyleSheet("""
             QLabel {
                 color: white;
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
                 background: transparent;
                 border-radius: 12px;
@@ -891,7 +891,7 @@ class EMDRControlPanel(QMainWindow):
         patient_label.setStyleSheet("""
             QLabel {
                 color: #003454;
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
                 background: transparent;
                 border-radius: 12px;
@@ -904,7 +904,7 @@ class EMDRControlPanel(QMainWindow):
         session_info.setStyleSheet("""
             QLabel {
                 color: #003454;
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
                 background: transparent;
                 border-radius: 12px;
@@ -919,7 +919,7 @@ class EMDRControlPanel(QMainWindow):
             session_type_info.setStyleSheet("""
                 QLabel {
                     color: #003454;
-                    font-size: 16px;
+                    font-size: 14px;
                     font-weight: bold;
                     background: transparent;
                     border-radius: 12px;
