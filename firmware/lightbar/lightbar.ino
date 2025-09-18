@@ -51,7 +51,7 @@ uint32_t color = strips[activeStripIndex].Color(red, green, blue);
 volatile bool lastSendStatus = true;
 
 // Dirección MAC del dispositivo maestro
-uint8_t masterAddress[] = {0xE4, 0x65, 0xB8, 0xA3, 0x7E, 0x4C};  // Reemplazar con la MAC real del maestro
+uint8_t masterAddress[] = {0xE4, 0x65, 0xB8, 0xA3, 0x7E, 0x4C};  // Reemplazar con la MAC actual del maestro
 
 // Función para cambiar a la siguiente tira
 void switchToNextStrip() {
@@ -93,7 +93,8 @@ void initial_test() {
 
 // Callback cuando se envían datos
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    lastSendStatus = (status == ESP_NOW_SEND_SUCCESS);
+  // Indica si el último comando fue enviado con éxito
+  lastSendStatus = (status == ESP_NOW_SEND_SUCCESS);
 }
 
 // Callback para cuando se reciben datos
@@ -181,7 +182,7 @@ void setup() {
   // Inicializar ESP-NOW
   if (esp_now_init() != ESP_OK) {
     digitalWrite(STATUS_LED, HIGH);
-    Serial.println("Error initializing ESP-NOW");
+    Serial.println("Error inicializando el ESP-NOW");
     return;
   }
 
@@ -196,7 +197,7 @@ void setup() {
   
   // Añadir peer
   if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Failed to add peer");
+    Serial.println("Fallo al añadir peer");
     return;
   }
   // Inicialización correcta
@@ -206,9 +207,9 @@ void setup() {
 
   // Mostrar patrón de prueba inicial en la tira activa
   initial_test();
-  
-  Serial.println("EMDR Lightbar ready with ESP-NOW");
-  Serial.print("Active strip: ");
+
+  Serial.println("Estimulador de luz EMDR Lightbar listo con ESP-NOW");
+  Serial.print("Tira activa: ");
   Serial.println(activeStripIndex + 1);
 }
 

@@ -52,7 +52,7 @@ TaskHandle_t adcTaskHandle = NULL;
 TaskHandle_t transmitTaskHandle = NULL;
 
 // MAC del dispositivo maestro
-uint8_t masterAddress[] = {0xE4, 0x65, 0xB8, 0xA3, 0x7E, 0x4C};  // Reemplazar con la MAC real del maestro
+uint8_t masterAddress[] = {0xE4, 0x65, 0xB8, 0xA3, 0x7E, 0x4C};  // Reemplazar con la MAC actual del maestro
 
 // Estructura para enviar los datos de la tarea ADC
 // Debe coincidir con una estructura receptora en el maestro
@@ -67,7 +67,7 @@ typedef struct struct_message {
 
 // Estructura para recibir los datos a través de ESP-NOW
 typedef struct {
-    char cmd;       // 'S': start, 'P': pause, 'A': check connection
+    char cmd;       // 'S': start, 'P': pause, 'A': acknowledge
     uint8_t data1;
     uint8_t data2;
     uint8_t data3;
@@ -80,18 +80,19 @@ typedef struct ack_packet {
     uint8_t status;     // Estado del dispositivo
 } ack_packet_t;
 
-// Create a struct_message called myData
+// Estructura de envío de datos (myData)
 struct_message myData;
 
 // Variable para el último estado de envío ESP-NOW
 volatile bool lastSendStatus = true;
 
-// callback when data is sent
+// Callback cuando los datos son enviados
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  // Indica si el último comando fue enviado con éxito
   lastSendStatus = (status == ESP_NOW_SEND_SUCCESS);
 }
 
-// callback when data is received from master
+// Callback cuando se reciben datos del maestro
 void OnDataReceived(const uint8_t *mac_addr, const uint8_t *incomingData, int data_len) {
     // Verificar si los datos recibidos son del maestro
     if (data_len == sizeof(CommandPacket)) {

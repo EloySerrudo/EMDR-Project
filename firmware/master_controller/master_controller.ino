@@ -1,6 +1,6 @@
 /*
- * ESP32 Coordinador para coordinar la comunicación entre el controlador y la lightbar
- * Y los otros dispositivos.
+ * ESP32 Coordinador para administrar la comunicación entre la aplicación
+ * y los otros dispositivos.
  */
 
  #include <WiFi.h>
@@ -21,9 +21,9 @@
    { 0xCC, 0xDB, 0xA7, 0x92, 0x15, 0xC8 }   // MAC del ESP32 del buzzer. DEVICE_ID: 3
  };
  
- #define NUM_SLAVES (sizeof(slaveAddresses) / sizeof(slaveAddresses[0]))
+ #define NUM_SLAVES (sizeof(slaveAddresses) / sizeof(slaveAddresses[0]))  // Número de dispositivos esclavos
  
- // Control de estado de los esclavos
+ // Arreglo de estado de los esclavos
  bool slaveConnected[NUM_SLAVES] = { false };
  
  // Buffer para reensamblar paquetes para serial
@@ -43,7 +43,7 @@
    uint8_t data3;
  } slave_command_t;
  
- // Estructura para recibir confirmación
+ // Estructura para recibir confirmación (acknowledgment)
  typedef struct ack_packet {
    uint8_t command;
    uint8_t device_id;
@@ -102,7 +102,7 @@
  
  // Callback cuando los datos son enviados
  void onSentEspNowData(const uint8_t *mac_addr, esp_now_send_status_t status) {
-   // Podríamos monitorear el estado de envío si fuera necesario
+   // Indica si el último comando fue enviado con éxito
    lastCommandSent = (status == ESP_NOW_SEND_SUCCESS);
  }
  
@@ -164,7 +164,7 @@
  
    // Inicializar ESP-NOW
    if (esp_now_init() != ESP_OK) {
-     Serial.println("Error initializing ESP-NOW");
+     Serial.println("Error inicializando el ESP-NOW");
      return;
    }
  
@@ -180,9 +180,6 @@
    // Registrar la función de callback para saber el estado del envío
    esp_now_register_recv_cb(onReceivedEspNowData);
    esp_now_register_send_cb(onSentEspNowData);
- 
-   // Identificación del dispositivo
-  //  Serial.println("EMDR Master Controller");
  }
  
  void loop() {
