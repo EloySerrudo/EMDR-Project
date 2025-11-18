@@ -11,13 +11,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 import pyqtgraph as pg
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
 # Importar la clase DatabaseManager
-from src.database.database_manager import DatabaseManager
+from database.database_manager import DatabaseManager
 # Importar el filtro PPG offline y calculador BPM
-from src.utils.signal_processing import OfflinePPGFilter, BPMOfflineCalculation
+from utils.signal_processing import OfflinePPGFilter, BPMOfflineCalculation
 
 
 class SessionDetailsDialog(QDialog):

@@ -1062,6 +1062,7 @@ class PulseTestWindow(QMainWindow):
             if self.acquiring:
                 self.stop_acquisition()
             self.return_to_dashboard.emit()
+            self.close()  # Cerrar la ventana después de emitir la señal
     
     def exit_application(self):
         """Salir de la aplicación"""

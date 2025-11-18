@@ -7,12 +7,9 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-    
 # Importaciones de componentes de vistas
-from src.views.components.selectors import Selector
-from src.views.components.buttons import CustomButton
+from views.components.selectors import Selector
+from views.components.buttons import CustomButton
 
 # Simular Config.speeds para la prueba
 class Config:

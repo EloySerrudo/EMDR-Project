@@ -1,6 +1,50 @@
 # EMDR
 
-Do It Yourself EMDR equipment (lightbar, buzzers and headphones). Firmware and controller app. 
+Do It Yourself EMDR equipment (lightbar, buzzers and headphones). Firmware and controller app.
+
+## Instalación y Uso
+
+### Requisitos previos
+- Python 3.9 o superior
+- Conda (opcional, pero recomendado)
+
+### Instalación
+
+1. **Clonar el repositorio**
+```bash
+git clone <repository-url>
+cd EMDR-Project
+```
+
+2. **Crear y activar entorno virtual** (recomendado)
+```bash
+# Con Conda
+conda create --solver=libmamba -n emdr-2 python=3.9
+conda activate emdr-2
+
+# O con venv
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+```
+
+3. **Instalar dependencias**
+```bash
+pip install -r requirements.txt
+```
+
+### Ejecución
+
+**Ejecutar la aplicación:**
+```bash
+python run.py
+```
+
+**Crear ejecutable:**
+```bash
+pyinstaller --clean emdr_therapy.spec
+```
+
+El ejecutable se generará en la carpeta `dist/`.
 
 ## Hardware
 

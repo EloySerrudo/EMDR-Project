@@ -18,14 +18,11 @@ from PySide6.QtCore import QTimer, Qt, Signal, QObject
 import pyqtgraph as pg
 import qtawesome as qta
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
 # Importaciones para gestión de dispositivos
-from src.models.devices import Devices, KNOWN_SLAVES
+from models.devices import Devices, KNOWN_SLAVES
 
 # Importación del filtro en tiempo real
-from src.utils.signal_processing import OnlinePPGFilter, OnlineEOGFilter, PPGHeartRateCalculator
+from utils.signal_processing import OnlinePPGFilter, OnlineEOGFilter, PPGHeartRateCalculator
 
 # Configuración constantes
 SAMPLE_RATE = 125  # Hz (tasa efectiva: 250 SPS ÷ 2 canales)

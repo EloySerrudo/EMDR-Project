@@ -13,24 +13,21 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon, QPainter, QColor, QBrush, QPen
 import qtawesome as qta
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-    
 # Importaciones de componentes de vistas
-from src.views.components.containers import Container, SwitchContainer
-from src.views.components.selectors import Selector
-from src.views.components.counter import Counter
-from src.views.components.buttons import CustomButton, Switch
-from src.views.components.pyqtSwitch import PyQtSwitch
-from src.views.components.chronometer import Chronometer
+from views.components.containers import Container, SwitchContainer
+from views.components.selectors import Selector
+from views.components.counter import Counter
+from views.components.buttons import CustomButton, Switch
+from views.components.pyqtSwitch import PyQtSwitch
+from views.components.chronometer import Chronometer
 
 # Importaciones de modelos
-from src.models.devices import Devices, KNOWN_SLAVES
-from src.models.config import Config
+from models.devices import Devices, KNOWN_SLAVES
+from models.config import Config
 
 # Importaciones de utilidades
-from src.utils.hiperf_timer import HighPerfTimer
-from src.utils.events import event_system
+from utils.hiperf_timer import HighPerfTimer
+from utils.events import event_system
 
 
 class EMDRPatternVisualizer(QWidget):

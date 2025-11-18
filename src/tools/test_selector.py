@@ -10,9 +10,7 @@ from PySide6.QtGui import QFont
 
 # Importar el Selector personalizado
 # Ajusta la ruta según tu estructura de proyecto
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from src.views.components.selectors import Selector
+from views.components.selectors import Selector
 
 # Simular Config.speeds para la prueba
 class Config:

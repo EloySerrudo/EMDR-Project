@@ -8,7 +8,7 @@ pip install -r requirements.txt
 pip list | findstr "pyside6 pyinstaller numpy"
 
 # Probar aplicación
-python src/main.py
+python run.py
 
 # Crear ejecutable
 pyinstaller --clean emdr_therapy.spec

@@ -11,13 +11,10 @@ from PySide6.QtGui import QFont, QPixmap, QIcon
 from pathlib import Path
 from datetime import datetime  # Añadir esta importación
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
 # Importaciones para componentes específicos
-from src.views.therapist.add_patient_dialog import AddPatientDialog
-from src.database.database_manager import DatabaseManager
-from src.views.therapist.patient_manager import PatientManagerWidget
+from views.therapist.add_patient_dialog import AddPatientDialog
+from database.database_manager import DatabaseManager
+from views.therapist.patient_manager import PatientManagerWidget
 
 
 class TherapistDashboard(QMainWindow):

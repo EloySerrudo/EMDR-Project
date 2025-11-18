@@ -10,11 +10,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
 # Importar la clase DatabaseManager
-from src.database.database_manager import DatabaseManager
+from database.database_manager import DatabaseManager
 
 
 class PatientDetailsDialog(QDialog):

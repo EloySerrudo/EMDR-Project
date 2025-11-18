@@ -10,14 +10,11 @@ from PySide6.QtGui import QFont, QPixmap, QIcon
 from pathlib import Path
 from datetime import datetime
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
 # Importaciones para componentes específicos
-from src.database.database_manager import DatabaseManager
+from database.database_manager import DatabaseManager
 from views.admin.admin_panel import AdminPanel
-from src.views.pulse_test_window import PulseTestWindow
-from src.views.eog_test_window import EOGTestWindow
+from views.admin.pulse_test_window import PulseTestWindow
+from views.eog_test_window import EOGTestWindow
 
 
 class AdminDashboard(QMainWindow):

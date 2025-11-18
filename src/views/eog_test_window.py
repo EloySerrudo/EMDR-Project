@@ -20,14 +20,11 @@ from PySide6.QtGui import QFont, QPixmap, QIcon
 import pyqtgraph as pg
 import qtawesome as qta
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
 # Importaciones del proyecto
-from src.models.devices import Devices
-from src.utils.signal_processing import OnlineEOGFilter
-from src.views.step_fixation import StepFixationThread
-from src.views.linear_smooth_pursuit import LinealSmoothPursuitThread
+from models.devices import Devices
+from utils.signal_processing import OnlineEOGFilter
+from views.step_fixation import StepFixationThread
+from views.linear_smooth_pursuit import LinealSmoothPursuitThread
 
 # Configuración de constantes
 SAMPLE_RATE = 125  # Hz para EOG (mayor frecuencia que para pulso)

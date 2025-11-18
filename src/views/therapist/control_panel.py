@@ -17,16 +17,13 @@ from PySide6.QtGui import QFont, QIcon, QIntValidator, QPixmap
 import pyqtgraph as pg
 import qtawesome as qta
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
 # Importaciones para componentes específicos
-from src.models.devices import Devices, KNOWN_SLAVES
-from src.utils.events import event_system
-from src.controller.emdr_controller import EMDRControllerWidget
-from src.sensor.sensor_monitor import SensorMonitor
-from src.database.database_manager import DatabaseManager
-from src.utils.cleanup_interface import CleanupManager
+from models.devices import Devices, KNOWN_SLAVES
+from utils.events import event_system
+from controller.emdr_controller import EMDRControllerWidget
+from sensor.sensor_monitor import SensorMonitor
+from database.database_manager import DatabaseManager
+from utils.cleanup_interface import CleanupManager
 
 class SignalsObject(QObject):
     device_status_updated = Signal(dict, bool)

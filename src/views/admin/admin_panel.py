@@ -11,11 +11,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon, QColor, QPixmap
 from pathlib import Path
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-
 # Importar el gestor de base de datos
-from src.database.database_manager import DatabaseManager
+from database.database_manager import DatabaseManager
 
 
 class TherapistDialog(QDialog):
@@ -327,8 +324,8 @@ class TherapistDialog(QDialog):
 class AdminPanel(QMainWindow):
     """Panel de administración para gestionar terapeutas"""
     
-    # Señal emitida cuando se solicita cerrar sesión
-    logout_requested = Signal()
+    # Señal para regresar al dashboard
+    return_to_dashboard = Signal()
     
     def __init__(self, username=None):
         super().__init__()
@@ -593,28 +590,38 @@ class AdminPanel(QMainWindow):
         # Footer con botones de navegación
         footer_layout = QHBoxLayout()
         
-        logout_btn = QPushButton("Cerrar Sesión")
-        logout_btn.setFixedSize(134, 43)
-        logout_btn.setStyleSheet("""
+        btn_return = QPushButton("Regresar al Dashboard")
+        btn_return.setFixedSize(220, 43)
+        btn_return.setStyleSheet("""
             QPushButton {
-                background-color: #424242;
+                background-color: #00A99D;
                 color: white;
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-size: 14px;
                 font-weight: bold;
-                border: 2px solid #424242;
+                border-top: 2px solid #00E6D6;
+                border-left: 2px solid #00D4C4;
+                border-right: 2px solid #006B61;
+                border-bottom: 2px solid #005A50;
             }
             QPushButton:hover {
-                background-color: #555555;
-                border: 2px solid #555555;
+                background-color: #00C2B3;
+                border-top: 2px solid #00F5E5;
+                border-left: 2px solid #00E6D6;
+                border-right: 2px solid #007A70;
+                border-bottom: 2px solid #00695F;
             }
             QPushButton:pressed {
-                background-color: #333333;
-                border: 2px solid #333333;
+                background-color: #008C82;
+                border-top: 2px solid #005A50;
+                border-left: 2px solid #006B61;
+                border-right: 2px solid #00C2B3;
+                border-bottom: 2px solid #00D4C4;
+                padding: 12px 18px 8px 22px;
             }
         """)
-        logout_btn.clicked.connect(self.logout)
+        btn_return.clicked.connect(self.return_to_dashboard_clicked)
         
         exit_btn = QPushButton("Salir")
         exit_btn.setFixedSize(134, 43)
@@ -651,7 +658,7 @@ class AdminPanel(QMainWindow):
         
         footer_layout.addWidget(footer_label)
         footer_layout.addStretch()
-        footer_layout.addWidget(logout_btn)
+        footer_layout.addWidget(btn_return)
         footer_layout.addWidget(exit_btn)
         
         main_layout.addLayout(footer_layout)
@@ -771,18 +778,19 @@ class AdminPanel(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"No se pudo eliminar el terapeuta: {str(e)}")
     
-    def logout(self):
-        """Cierra la sesión actual y regresa al login"""
-        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+    def return_to_dashboard_clicked(self):
+        """Manejar clic en botón regresar al dashboard"""
+        winsound.MessageBeep(winsound.MB_ICONQUESTION)
         
         msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Cerrar Sesión")
-        msg_box.setText("¿Está seguro de que desea cerrar la sesión actual?")
+        msg_box.setWindowTitle("Confirmar Regreso")
+        msg_box.setText("¿Está seguro de que desea regresar al Dashboard?")
+        msg_box.setInformativeText("Cualquier cambio no guardado se perderá.")
         msg_box.setIcon(QMessageBox.Question)
         
         # Crear botones personalizados
-        yes_button = msg_box.addButton("Sí", QMessageBox.YesRole)
-        no_button = msg_box.addButton("No", QMessageBox.NoRole)
+        yes_button = msg_box.addButton("Sí, Regresar", QMessageBox.YesRole)
+        no_button = msg_box.addButton("No, Continuar", QMessageBox.NoRole)
         msg_box.setDefaultButton(no_button)
         
         # Aplicar estilo personalizado
@@ -822,8 +830,10 @@ class AdminPanel(QMainWindow):
         msg_box.exec()
         
         if msg_box.clickedButton() == yes_button:
-            # Emitir señal de logout
-            self.logout_requested.emit()
+            # Emitir señal de retorno al dashboard
+            self.return_to_dashboard.emit()
+            # Cerrar la ventana
+            self.close()
     
     def exit_application(self):
         """Cierra completamente la aplicación"""

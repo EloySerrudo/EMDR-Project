@@ -1,9 +1,5 @@
 import sys
-import os
 from PySide6.QtWidgets import QApplication
-
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Importaciones para componentes específicos
 from views.auth.login import LoginWidget
@@ -11,7 +7,7 @@ from views.admin.admin_dashboard import AdminDashboard
 from views.therapist.therapist_dashboard import TherapistDashboard
 
 # Importar e inicializar la base de datos
-from src.database.db_connection import init_db
+from database.db_connection import init_db
 
 def main():
     """Función principal que inicia la aplicación con autenticación"""
