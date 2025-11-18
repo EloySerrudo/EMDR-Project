@@ -20,12 +20,9 @@ from PySide6.QtGui import QFont, QPixmap, QIcon
 import pyqtgraph as pg
 import qtawesome as qta
 
-# Ajustar el path para importaciones absolutas
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
 # Importaciones del proyecto
-from src.models.devices import Devices, KNOWN_SLAVES
-from src.utils.signal_processing import OnlinePPGFilter, PPGHeartRateCalculator
+from models.devices import Devices, KNOWN_SLAVES
+from utils.signal_processing import OnlinePPGFilter, PPGHeartRateCalculator
 
 # Configuración de constantes
 SAMPLE_RATE = 125  # Hz
@@ -114,7 +111,7 @@ class PulseTestWindow(QMainWindow):
         """Configura las propiedades básicas de la ventana"""
         self.setWindowTitle("EMDR Project - Prueba de Pulso Cardíaco")
         # self.setFixedSize(1000, 700)
-        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent / 'resources' / 'emdr_icon.png')))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent.parent.parent / 'resources' / 'emdr_icon.png')))
         
         # Centrar ventana
         self.center_on_screen()
@@ -197,7 +194,7 @@ class PulseTestWindow(QMainWindow):
         logo_label = QLabel()
         
         # Intentar cargar logo desde recursos
-        logo_path = Path(__file__).parent.parent / 'resources' / 'emdr_logo.png'
+        logo_path = Path(__file__).parent.parent.parent / 'resources' / 'emdr_logo.png'
         if logo_path.exists():
             # Usar logo existente
             pixmap = QPixmap(str(logo_path))
